@@ -475,11 +475,12 @@ impl Host {
             return;
         }
         if id == "quit" {
-            // The core writes the state file, then the interface ends the
-            // event loop (`WindowOp::Quit`, plan step S2d(4)). Before
-            // S2d(4) the GPU waits were released and the handoffs stopped
-            // before the write; neither the write nor they wait on the
-            // other.
+            // The core stops the handoffs (a second launch is not taken any
+            // more) and writes the state file, then the interface releases
+            // the GPU waits and ends the event loop (`WindowOp::Quit`, plan
+            // step S2d(4)). Before S2d(4) the GPU waits were released first;
+            // neither the handoffs, the write nor they wait on the other.
+            crate::stop_handoffs();
             self.core.ui_state.flush();
             self.ui_command(messages::UiCommand::Window(messages::WindowOp::Quit));
             return;
@@ -532,7 +533,6 @@ impl Host {
             // Before anything waits on the GPU.
             messages::WindowOp::Quit => {
                 platform::release_gpu_waits();
-                crate::stop_handoffs();
                 let _ = slint::quit_event_loop();
             }
             _ => unreachable!("answered or kept elsewhere"),
