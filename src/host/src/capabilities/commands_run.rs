@@ -19,7 +19,7 @@ use super::{Capability, Handled, Info, Recorded};
 use crate::{
     bindings,
     host::{
-        Event, Host, Reply, RpcError,
+        Core, Event, Reply, RpcError,
         messages::{LeadOp, ReviewKind, ReviewRequest, RunSheet, UiCommand},
         palette::PALETTE,
         review_sheet, string,
@@ -374,36 +374,33 @@ fn in_destructive_menu(path: &[String]) -> bool {
 
 /// Whether the commands of `owner` are a built-in's: the player's own, a
 /// running built-in, or a built-in in standby (its recorded commands).
-fn builtin_owner(host: &Host, owner: u64) -> bool {
+fn builtin_owner(core: &Core, owner: u64) -> bool {
     owner == bindings::HOST
-        || host.core.is_builtin(owner)
-        || host
-            .core
+        || core.is_builtin(owner)
+        || core
             .on_demand
             .held(owner)
-            .is_some_and(|held| host.core.is_builtin_package(&held.origin))
+            .is_some_and(|held| core.is_builtin_package(&held.origin))
 }
 
 /// The manifest id of the plugin whose commands `owner` registered,
 /// running or in standby; `None` for the player's own.
-fn owner_id(host: &Host, owner: u64) -> Option<String> {
+fn owner_id(core: &Core, owner: u64) -> Option<String> {
     if owner == bindings::HOST {
         return None;
     }
-    host.core
-        .plugins
+    core.plugins
         .get(&owner)
         .map(|plugin| plugin.manifest.id.clone())
-        .or_else(|| host.held_id(owner).map(str::to_owned))
+        .or_else(|| core.held_id(owner).map(str::to_owned))
 }
 
 /// The plugins `caller` runs without asking (H4), by manifest id.
-fn trusted_by(host: &Host, caller: u64) -> &[String] {
-    host.core
-        .ui_state
+fn trusted_by(core: &Core, caller: u64) -> &[String] {
+    core.ui_state
         .state
         .trusted_plugins
-        .get(&host.core.plugin_id(caller))
+        .get(&core.plugin_id(caller))
         .map_or(&[], Vec::as_slice)
 }
 
@@ -420,16 +417,16 @@ struct Judged {
 
 /// For a command of `owner`: built in, its plugin's manifest id, trusted
 /// (by a caller that trusts `trusted`).
-fn judge(host: &Host, trusted: &[String], owner: u64) -> (bool, Option<String>, bool) {
-    let builtin = builtin_owner(host, owner);
-    let plugin_id = owner_id(host, owner);
+fn judge(core: &Core, trusted: &[String], owner: u64) -> (bool, Option<String>, bool) {
+    let builtin = builtin_owner(core, owner);
+    let plugin_id = owner_id(core, owner);
     let trusted = !builtin && plugin_id.as_ref().is_some_and(|id| trusted.contains(id));
     (builtin, plugin_id, trusted)
 }
 
 impl Judged {
-    fn new(host: &Host, trusted: &[String], item: Item) -> Self {
-        let (builtin, plugin_id, trusted) = judge(host, trusted, item.owner);
+    fn new(core: &Core, trusted: &[String], item: Item) -> Self {
+        let (builtin, plugin_id, trusted) = judge(core, trusted, item.owner);
         Self {
             item,
             builtin,
@@ -467,13 +464,13 @@ fn trust_offer(steps: &[Judged]) -> Vec<(String, String)> {
 
 /// "Don't ask again" was checked on `caller`'s sheet: it trusts `plugins`
 /// from now on (kept in `ui-state.json`, across restarts).
-fn trust_plugins(host: &mut Host, caller: u64, plugins: &[String]) {
-    let caller_id = host.core.plugin_id(caller);
-    if !host.core.ui_state.state.trust(&caller_id, plugins) {
+fn trust_plugins(core: &mut Core, caller: u64, plugins: &[String]) {
+    let caller_id = core.plugin_id(caller);
+    if !core.ui_state.state.trust(&caller_id, plugins) {
         return;
     }
-    let now = host.core.now_ms();
-    host.core.ui_state.touch(now);
+    let now = core.now_ms();
+    core.ui_state.touch(now);
     // Manifest ids only (README §4.3, Host log).
     crate::diag::log_only(&format!(
         "commands.run: {caller_id} no longer asks before the commands of {}",
@@ -483,37 +480,37 @@ fn trust_plugins(host: &mut Host, caller: u64, plugins: &[String]) {
 
 /// The palette command Ask Again Before Plugin Commands: every caller asks
 /// again before any command of a plugin that is not built in; its OSD line.
-pub(crate) fn ask_again(host: &mut Host) {
+pub(crate) fn ask_again(core: &mut Core) {
     // A sheet open now does not trust anything either.
-    host.core.command_runs.forget_remembered(None);
+    core.command_runs.forget_remembered(None);
     // The open sheet's offer is the interface's (plan step S2f(3)).
-    host.ui_command(UiCommand::ReviewOffer);
-    if host.core.ui_state.state.clear_trust() {
+    core.ui_command(UiCommand::ReviewOffer);
+    if core.ui_state.state.clear_trust() {
         // Written now, not a second later: a crash right after must not
         // bring the trust back.
-        host.core.ui_state.flush();
+        core.ui_state.flush();
         crate::diag::log_only("commands.run: plugin commands ask again");
     }
-    host.show_osd(&i18n::tr("Plugin commands will ask again"));
+    core.show_osd(&i18n::tr("Plugin commands will ask again"));
 }
 
 /// `id` was uninstalled, or replaced from another source: no caller
 /// trusts it any more (written at once, as for [`ask_again`]).
-pub(crate) fn forget_trust(host: &mut Host, id: &str) {
+pub(crate) fn forget_trust(core: &mut Core, id: &str) {
     // Nor does a sheet opened before (it would trust the new source).
-    host.core.command_runs.forget_remembered(Some(id));
+    core.command_runs.forget_remembered(Some(id));
     // Its checkbox no longer names it (and goes when it named only it).
     // The open sheet's offer is the interface's (plan step S2f(3)).
-    host.ui_command(UiCommand::ReviewOffer);
-    if host.core.ui_state.state.forget_trust(id) {
-        host.core.ui_state.flush();
+    core.ui_command(UiCommand::ReviewOffer);
+    if core.ui_state.state.forget_trust(id) {
+        core.ui_state.flush();
     }
 }
 
 /// One row of `commands.list` for a caller that trusts `trusted`.
-fn listed(host: &Host, trusted: &[String], item: &Item) -> Value {
-    let (builtin, _, trusted) = judge(host, trusted, item.owner);
-    let keys = host.core.bindings().labels(item.owner, &item.id);
+fn listed(core: &Core, trusted: &[String], item: &Item) -> Value {
+    let (builtin, _, trusted) = judge(core, trusted, item.owner);
+    let keys = core.bindings().labels(item.owner, &item.id);
     let mut row = json!({
         "id": item.global,
         "label": item.label,
@@ -606,8 +603,8 @@ fn listed_command(items: &[Item], global: &str) -> Result<Item, RpcError> {
 
 /// The listed command with this global id, checked as the palette checks
 /// a row before running it.
-fn runnable(host: &Host, global: &str) -> Result<Item, RpcError> {
-    let item = listed_command(&host.listed_items(), global)?;
+fn runnable(core: &Core, global: &str) -> Result<Item, RpcError> {
+    let item = listed_command(&core.listed_items(), global)?;
     if !item.enabled {
         let mut error = RpcError::new("disabled", format!("{} is disabled", item.label));
         if !item.reason.is_empty() {
@@ -627,8 +624,8 @@ fn runnable(host: &Host, global: &str) -> Result<Item, RpcError> {
 }
 
 /// The shown name of a running plugin.
-pub(crate) fn shown_name(host: &Host, owner: u64) -> String {
-    host.core.plugins.get(&owner).map_or_else(
+pub(crate) fn shown_name(core: &Core, owner: u64) -> String {
+    core.plugins.get(&owner).map_or_else(
         || owner.to_string(),
         |plugin| {
             crate::packages::package_manager::display_name(
@@ -644,17 +641,13 @@ pub(crate) fn shown_name(host: &Host, owner: u64) -> String {
 /// when the caller holds the palette lead (whose ticket this is), else on
 /// the OSD.
 fn perform(
-    host: &mut Host,
+    core: &mut Core,
     caller: u64,
     ticket: &str,
     item: &Item,
     step: Option<(u64, u64)>,
 ) -> Result<(), RpcError> {
-    let holds_lead = host
-        .core
-        .lead
-        .as_ref()
-        .is_some_and(|lead| lead.owner == caller);
+    let holds_lead = core.lead.as_ref().is_some_and(|lead| lead.owner == caller);
     let line = if holds_lead {
         // The strip's icon says who is working: the step and the command.
         match step {
@@ -665,7 +658,7 @@ fn perform(
             None => item.label.clone(),
         }
     } else {
-        let name = shown_name(host, caller);
+        let name = shown_name(core, caller);
         match step {
             Some((step, of)) => i18n::tr_args(
                 "{plugin} · {step}/{of} · {command}",
@@ -680,7 +673,7 @@ fn perform(
     let place = if holds_lead { "strip" } else { "osd" };
     diag!(
         "commands.run: {} ran {} ({place}: {line})",
-        host.core.plugin_id(caller),
+        core.plugin_id(caller),
         item.global
     );
     // In the host log too: what a plugin ran on the user's behalf, for a bug
@@ -689,23 +682,23 @@ fn perform(
     let logged = step.map_or_else(String::new, |(step, of)| format!(" (step {step}/{of})"));
     crate::diag::log_only(&format!(
         "commands.run: {} ran {}{logged}",
-        host.core.plugin_id(caller),
+        core.plugin_id(caller),
         item.global
     ));
     if holds_lead {
         let progress = step.map_or(1., |(step, of)| step as f32 / of.max(1) as f32);
         // The strip is the interface's (plan step S2f(3)).
-        host.ui_command(UiCommand::Lead(LeadOp::Step {
+        core.ui_command(UiCommand::Lead(LeadOp::Step {
             ticket: ticket.to_owned(),
             line,
             progress,
         }));
     } else {
-        host.show_osd(&line);
+        core.show_osd(&line);
     }
     // Run on the caller's behalf: a confirmation goes where the caller's would.
-    host.core.origins.inherit(caller, item.owner);
-    host.execute_command(item.owner, &item.id)
+    core.origins.inherit(caller, item.owner);
+    core.execute_command(item.owner, &item.id)
 }
 
 /// `commands.run` (the order and rules are the SDK's TestHost's, 1.7.16):
@@ -717,7 +710,7 @@ fn perform(
 /// ticket's plan. Without `then`, a command in that plan runs without
 /// asking (its first occurrence used up, even a destructive one); any other
 /// asks as it would alone.
-fn run(host: &mut Host, reply: &Reply, params: &Value) -> Handled {
+fn run(core: &mut Core, reply: &Reply, params: &Value) -> Handled {
     let global = string(params, "id")?;
     let ticket = match &params["ticket"] {
         Value::String(ticket) => ticket.clone(),
@@ -731,75 +724,63 @@ fn run(host: &mut Host, reply: &Reply, params: &Value) -> Handled {
     };
     let step = step(params)?;
     let then = then(params)?;
-    let item = runnable(host, global)?;
+    let item = runnable(core, global)?;
     // The rest of the plan: listed now (their state is checked when each
     // runs; an earlier step may enable a later one).
     let mut plan = vec![item.clone()];
     if let Some(then) = &then {
-        let items = host.listed_items();
+        let items = core.listed_items();
         for global in then {
             plan.push(listed_command(&items, global)?);
         }
     }
-    let trusted = trusted_by(host, reply.owner).to_vec();
+    let trusted = trusted_by(core, reply.owner).to_vec();
     let steps: Vec<Judged> = plan
         .into_iter()
-        .map(|item| Judged::new(host, &trusted, item))
+        .map(|item| Judged::new(core, &trusted, item))
         .collect();
     let plan_asks = steps.iter().any(Judged::dangerous);
-    let now = host.core.now_ms();
+    let now = core.now_ms();
     #[cfg(debug_assertions)]
     {
-        host.check_ui_facts();
-        host.core.check_settled(&[crate::host::outbox::Fact::Sheet]);
+        core.check_settled(&[crate::host::outbox::Fact::Sheet]);
     }
     // A confirmation on the sheet (`dialogs.confirm`, H5): one sheet at a
     // time, as `admit` keeps it among runs; a dead ticket is refused as such.
-    if host.core.confirm_waiting()
-        && host
-            .core
+    if core.confirm_waiting()
+        && core
             .command_runs
             .would_ask(reply.owner, &ticket, global, then.is_some(), plan_asks)
-        && host
-            .core
-            .command_runs
-            .query(reply.owner, &ticket, now)
-            .is_some()
+        && core.command_runs.query(reply.owner, &ticket, now).is_some()
     {
         // The confirmation to answer first comes into view.
-        host.ui_command(crate::host::messages::UiCommand::ShowWaiting);
+        core.ui_command(crate::host::messages::UiCommand::ShowWaiting);
         return Err(RpcError::new(
             "busy",
             "another confirmation is waiting for the user's answer",
         ));
     }
-    let asks = host.core.command_runs.admit(
-        reply.owner,
-        &ticket,
-        global,
-        then.is_some(),
-        plan_asks,
-        now,
-    )?;
+    let asks =
+        core.command_runs
+            .admit(reply.owner, &ticket, global, then.is_some(), plan_asks, now)?;
     if !asks {
         // Nothing asks, or a step of the approved plan (used up now): no
         // sheet, and no new plan is kept.
-        perform(host, reply.owner, &ticket, &item, step)?;
+        perform(core, reply.owner, &ticket, &item, step)?;
         // After the lines the run's interface part writes (a column
         // toggle's window tick), as before (plan step S2f(3),
         // `outbox::Then::Respond`).
-        host.respond_in_order(reply.clone(), Ok(json!({"ran": true})));
+        core.respond_in_order(reply.clone(), Ok(json!({"ran": true})));
         return Ok(None);
     }
-    let query = host
-        .core
+    let query = core
         .command_runs
         .query(reply.owner, &ticket, now)
         .unwrap_or_default()
         .to_owned();
     let (remember, names): (Vec<String>, Vec<String>) = trust_offer(&steps).into_iter().unzip();
-    ask(host, reply, &ticket, &steps, &query, &names);
-    host.core.command_runs.confirming.push(ConfirmedRun {
+    ask(core, reply, &ticket, &steps, &query, &names);
+    core.command_runs.confirming.push(ConfirmedRun {
         reply: reply.clone(),
         ticket,
         global: global.to_owned(),
@@ -819,21 +800,21 @@ fn run(host: &mut Host, reply: &Reply, params: &Value) -> Handled {
 /// with "Don't ask again" checked (remembered only where the sheet would
 /// offer it), anything else Don't Run.
 fn ask(
-    host: &mut Host,
+    core: &mut Core,
     reply: &Reply,
     ticket: &str,
     steps: &[Judged],
     query: &str,
     remember: &[String],
 ) {
-    if host.core.headless {
+    if core.headless {
         let answer = std::env::var("VESTRA_TEST_CONFIRM");
         let yes = matches!(answer.as_deref(), Ok("run" | "always"));
         let always = answer.as_deref() == Ok("always");
         let globals: Vec<&str> = steps.iter().map(|step| step.item.global.as_str()).collect();
         diag!(
             "commands.run: {} asks to run {} (headless: {yes}{})",
-            host.core.plugin_id(reply.owner),
+            core.plugin_id(reply.owner),
             globals.join(", "),
             if always && !remember.is_empty() {
                 ", remember"
@@ -841,8 +822,7 @@ fn ask(
                 ""
             }
         );
-        let _ = host
-            .core
+        let _ = core
             .events
             .send(Event::CommandRunAnswered(reply.clone(), yes, always));
         return;
@@ -858,7 +838,7 @@ fn ask(
         })
         .collect();
     // The sheet is the interface's (`UiCommand::Review`, plan step S2c(5)).
-    host.ui_command(UiCommand::Review(ReviewRequest {
+    core.ui_command(UiCommand::Review(ReviewRequest {
         reply: reply.clone(),
         kind: ReviewKind::CommandRun(RunSheet {
             ticket: ticket.to_owned(),
@@ -892,12 +872,12 @@ fn reason(item: &Item, builtin: bool) -> String {
 /// `then` as the ticket's plan and runs this one if the ticket is still
 /// live and the command still runnable; Don't Run runs nothing, keeps no
 /// plan and trusts nothing. The caller gets the answer either way.
-pub(crate) fn answered(host: &mut Host, reply: Reply, yes: bool, remember: bool) {
-    let Some(run) = host.core.command_runs.answered(&reply) else {
+pub(crate) fn answered(core: &mut Core, reply: Reply, yes: bool, remember: bool) {
+    let Some(run) = core.command_runs.answered(&reply) else {
         return;
     };
     if !yes {
-        host.respond(reply, Ok(json!({"ran": false, "declined": true})));
+        core.respond(reply, Ok(json!({"ran": false, "declined": true})));
         return;
     }
     if remember && !run.remember.is_empty() {
@@ -906,14 +886,13 @@ pub(crate) fn answered(host: &mut Host, reply: Reply, yes: bool, remember: bool)
         let still: Vec<String> = run
             .remember
             .iter()
-            .filter(|id| host.core.trustable_plugin(id))
+            .filter(|id| core.trustable_plugin(id))
             .cloned()
             .collect();
-        trust_plugins(host, reply.owner, &still);
+        trust_plugins(core, reply.owner, &still);
     }
-    let now = host.core.now_ms();
-    let result = if host
-        .core
+    let now = core.now_ms();
+    let result = if core
         .command_runs
         .query(reply.owner, &run.ticket, now)
         .is_none()
@@ -924,15 +903,15 @@ pub(crate) fn answered(host: &mut Host, reply: Reply, yes: bool, remember: bool)
         ))
     } else {
         if let Some(then) = run.then {
-            host.core.command_runs.set_plan(&run.ticket, then);
+            core.command_runs.set_plan(&run.ticket, then);
         }
-        runnable(host, &run.global)
-            .and_then(|item| perform(host, reply.owner, &run.ticket, &item, run.step))
+        runnable(core, &run.global)
+            .and_then(|item| perform(core, reply.owner, &run.ticket, &item, run.step))
             .map(|()| json!({"ran": true}))
     };
     // After the lines the run's interface part writes, as at once (plan
     // step S2f(3)).
-    host.respond_in_order(reply, result);
+    core.respond_in_order(reply, result);
 }
 
 impl Capability for CommandsRun {
@@ -943,31 +922,31 @@ impl Capability for CommandsRun {
         METHODS
     }
     /// Nothing outlives its process: tickets end with it.
-    fn record(&self, _: &Host, _: u64, _: &Value) -> Recorded {
+    fn record(&self, _: &Core, _: u64, _: &Value) -> Recorded {
         Recorded::Nothing
     }
-    fn rekey(&self, host: &mut Host, from: u64, to: u64) {
-        host.core.command_runs.rekey(from, to);
+    fn rekey(&self, core: &mut Core, from: u64, to: u64) {
+        core.command_runs.rekey(from, to);
     }
-    fn revoke(&self, host: &mut Host, owner: u64, _keep_recorded: bool) {
-        host.core.command_runs.revoke(owner);
+    fn revoke(&self, core: &mut Core, owner: u64, _keep_recorded: bool) {
+        core.command_runs.revoke(owner);
     }
-    fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
+    fn handle(&self, core: &mut Core, reply: &Reply, method: &str, params: &Value) -> Handled {
         match method {
             "commands.list" => {
-                let items = host.listed_items();
+                let items = core.listed_items();
                 // `dangerous` as this caller's runs judge it (H4).
-                let trusted = trusted_by(host, reply.owner);
+                let trusted = trusted_by(core, reply.owner);
                 let commands: Vec<Value> = items
                     .iter()
-                    .map(|item| listed(host, trusted, item))
+                    .map(|item| listed(core, trusted, item))
                     .collect();
                 Ok(Some(json!({
-                    "revision": host.core.commands.revision(),
+                    "revision": core.commands.revision(),
                     "commands": commands,
                 })))
             }
-            _ => run(host, reply, params),
+            _ => run(core, reply, params),
         }
     }
 }

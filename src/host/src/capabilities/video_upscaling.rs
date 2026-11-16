@@ -10,7 +10,7 @@
 //! `processing.video` filter, which is not risky either). The GPU's power
 //! use is what the user turns it on for.
 use super::{Capability, Handled, Info, Recorded};
-use crate::host::{Host, Reply, RpcError};
+use crate::host::{Core, Reply, RpcError};
 use crate::playback::backend::Command;
 use serde_json::{Value, json};
 
@@ -27,19 +27,18 @@ impl Capability for VideoUpscaling {
     fn methods(&self) -> &'static [&'static str] {
         METHODS
     }
-    fn record(&self, _: &Host, _: u64, _: &Value) -> Recorded {
+    fn record(&self, _: &Core, _: u64, _: &Value) -> Recorded {
         Recorded::Nothing
     }
-    fn rekey(&self, _: &mut Host, _: u64, _: u64) {}
-    fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
+    fn rekey(&self, _: &mut Core, _: u64, _: u64) {}
+    fn handle(&self, core: &mut Core, reply: &Reply, method: &str, params: &Value) -> Handled {
         // Only the fields the worker reads; the rendering state is the
         // host's, never the plugin's.
-        let mut forwarded = json!({"rendering": host.core.rendering_state()});
+        let mut forwarded = json!({"rendering": core.rendering_state()});
         if method == "video.upscaling.set" {
             forwarded["enabled"] = params["enabled"].clone();
         }
-        host.core
-            .backend
+        core.backend
             .commands
             .send(Command {
                 reply: reply.clone(),
@@ -47,7 +46,7 @@ impl Capability for VideoUpscaling {
                 params: forwarded,
             })
             .map_err(|_| RpcError::new("backend", "playback worker stopped"))?;
-        host.worker_requested(reply.owner);
+        core.worker_requested(reply.owner);
         Ok(None)
     }
 }

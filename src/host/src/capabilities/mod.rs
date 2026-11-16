@@ -11,7 +11,7 @@
 //! [`ALL`] and `uncapable.rs` are the only lists: the dispatch (`lookup`)
 //! is built from them.
 use crate::{
-    host::{Host, Origin, Reply, RpcError},
+    host::{Core, Origin, Reply, RpcError},
     playback::backend::Command,
 };
 use serde_json::Value;
@@ -67,7 +67,7 @@ pub(crate) use palette_lead::{EVENT as LEAD_EVENT, Lead, LeadStatus, StatusState
 pub struct Info {
     /// Its name, the manifest capability it once was: "commands", "ui.mount", ...
     pub name: &'static str,
-    /// Only built-in plugins may use it: `Host::dispatch` and `replay`
+    /// Only built-in plugins may use it: `Core::dispatch` and `replay`
     /// refuse its methods to any other plugin with `capability`, built-in
     /// by provenance (`Core::is_builtin`), never by a manifest field or a
     /// load mode.
@@ -104,65 +104,67 @@ pub enum Recorded {
     Live(&'static str),
 }
 
-/// An area of the API: its methods and their handling.
+/// An area of the API: its methods and their handling. Every method takes
+/// the core alone (plan step S2f(3)): what an area asks of the interface
+/// goes into the core's outbox (`Core::ui_command`).
 pub trait Capability: Sync {
     fn info(&self) -> &'static Info;
     /// The RPC methods it owns; a method has exactly one owner (`tests`).
     fn methods(&self) -> &'static [&'static str];
     /// Serves one of `methods()`, after the built-in check and the text
-    /// resolution of `Host::dispatch`. `Ok(None)`: answered later.
-    fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled;
+    /// resolution of `Core::dispatch`. `Ok(None)`: answered later.
+    fn handle(&self, core: &mut Core, reply: &Reply, method: &str, params: &Value) -> Handled;
     /// What `owner` holds through this capability: calls that recreate its
     /// registrations, or `Live`. `backend` is the playback worker's answer
     /// to `owner.resources` (`{ live, resolvers }`); what the worker holds
     /// (chains, streams, tracks, jobs, upscaling) is judged from its `live`
-    /// list as a whole (`Host::lazy_answer`), so capabilities served there
+    /// list as a whole (`Core::lazy_answer`), so capabilities served there
     /// record `Nothing` here.
-    fn record(&self, host: &Host, owner: u64, backend: &Value) -> Recorded;
+    fn record(&self, core: &Core, owner: u64, backend: &Value) -> Recorded;
     /// A parked owner woke as generation `to`: its entries move. Only
     /// recordable capabilities hold anything for a parked owner; the others
     /// do nothing (an owner holding them is never parked).
-    fn rekey(&self, host: &mut Host, from: u64, to: u64);
-    /// The registry half of stopping `owner` (`Host::stop`): remove its
+    fn rekey(&self, core: &mut Core, from: u64, to: u64);
+    /// The registry half of stopping `owner` (`Core::stop_run`): remove its
     /// entries, or keep them marked recorded when it is parked. What the
-    /// other capabilities hold is still revoked by `Host::stop` itself.
-    fn revoke(&self, _host: &mut Host, _owner: u64, _keep_recorded: bool) {}
+    /// other capabilities hold is still revoked by `Core::stop_run` itself.
+    fn revoke(&self, _core: &mut Core, _owner: u64, _keep_recorded: bool) {}
     /// At `runtime.ready` of a woken owner: its recorded entries that it
     /// did not register again go.
-    fn prune(&self, _host: &mut Host, _owner: u64) {}
+    fn prune(&self, _core: &mut Core, _owner: u64) {}
     /// Replays one recorded call for a parked `owner` of the package
     /// `origin`, at start-up (no process, no reply).
-    fn replay(&self, _host: &mut Host, _owner: u64, _origin: &Origin, _call: &Call) -> Handled {
+    fn replay(&self, _core: &mut Core, _owner: u64, _origin: &Origin, _call: &Call) -> Handled {
         Err(RpcError::new("unsupported", "not a recorded method"))
     }
 }
 
 /// Every capability's registry half of stopping `owner` (`Capability::revoke`).
-pub fn revoke(host: &mut Host, owner: u64, keep_recorded: bool) {
+pub fn revoke(core: &mut Core, owner: u64, keep_recorded: bool) {
     for capability in ALL {
-        capability.revoke(host, owner, keep_recorded);
+        capability.revoke(core, owner, keep_recorded);
     }
 }
 
 /// Every capability's entries of `from` move to `to` (`Capability::rekey`).
-pub fn rekey(host: &mut Host, from: u64, to: u64) {
+pub fn rekey(core: &mut Core, from: u64, to: u64) {
     for capability in ALL {
-        capability.rekey(host, from, to);
+        capability.rekey(core, from, to);
     }
 }
 
 /// Every capability's recorded entries of `owner` not registered again go.
-pub fn prune(host: &mut Host, owner: u64) {
+pub fn prune(core: &mut Core, owner: u64) {
     for capability in ALL {
-        capability.prune(host, owner);
+        capability.prune(core, owner);
     }
 }
 
 /// What `owner` holds: the calls of every capability, or the first `Live`.
-pub fn record(host: &Host, owner: u64, backend: &Value) -> Result<Vec<Call>, &'static str> {
+pub fn record(core: &Core, owner: u64, backend: &Value) -> Result<Vec<Call>, &'static str> {
     let mut calls = Vec::new();
     for capability in ALL {
-        match capability.record(host, owner, backend) {
+        match capability.record(core, owner, backend) {
             Recorded::Nothing => (),
             Recorded::Calls(more) => calls.extend(more),
             Recorded::Live(reason) => return Err(reason),
@@ -176,13 +178,13 @@ pub fn record(host: &Host, owner: u64, backend: &Value) -> Result<Vec<Call>, &'s
 /// events capability's listeners of wake events kept). Only for
 /// `VESTRA_TEST_PARK=all` (host/supervisor/probe.rs), which parks every plugin to
 /// diff its registries; a real park needs [`record`].
-pub fn recordable(host: &Host, owner: u64, backend: &Value) -> Vec<Call> {
+pub fn recordable(core: &Core, owner: u64, backend: &Value) -> Vec<Call> {
     let mut calls = Vec::new();
     for capability in ALL {
-        match capability.record(host, owner, backend) {
+        match capability.record(core, owner, backend) {
             Recorded::Calls(more) => calls.extend(more),
             Recorded::Live(_) if capability.info().name == "events" => {
-                calls.extend(events::wake_calls(host, owner));
+                calls.extend(events::wake_calls(core, owner));
             }
             Recorded::Nothing | Recorded::Live(_) => (),
         }
@@ -193,14 +195,14 @@ pub fn recordable(host: &Host, owner: u64, backend: &Value) -> Vec<Call> {
 /// Replays a recorded call in its area. A recording of a package that is
 /// not built-in (the same id loaded for development or from another
 /// directory) replays nothing built-in-only.
-pub fn replay(host: &mut Host, owner: u64, origin: &Origin, call: &Call) -> Handled {
+pub fn replay(core: &mut Core, owner: u64, origin: &Origin, call: &Call) -> Handled {
     let route = lookup(&call.method);
     let capability = route
         .and_then(|route| route.owner)
         .ok_or_else(|| RpcError::new("unsupported", "unknown method"))?;
-    let builtin = host.core.is_builtin_package(origin);
+    let builtin = core.is_builtin_package(origin);
     route.map_or(Ok(()), |route| route.check_caller(builtin))?;
-    capability.replay(host, owner, origin, call)
+    capability.replay(core, owner, origin, call)
 }
 
 /// Every area.
@@ -263,10 +265,10 @@ impl Route {
         }
         Ok(())
     }
-    pub fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
+    pub fn handle(&self, core: &mut Core, reply: &Reply, method: &str, params: &Value) -> Handled {
         match self.owner {
-            Some(capability) => capability.handle(host, reply, method, params),
-            None => uncapable::handle(host, reply, method, params),
+            Some(capability) => capability.handle(core, reply, method, params),
+            None => uncapable::handle(core, reply, method, params),
         }
     }
 }
@@ -309,10 +311,9 @@ pub fn lookup(method: &str) -> Option<Route> {
 
 /// Hands a request to the playback worker; a stopped worker is `backend`.
 /// What the plugin holds there may change with it: a run that may still go
-/// to standby has the worker asked again (`Host::worker_requested`).
-fn forward(host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
-    host.core
-        .backend
+/// to standby has the worker asked again (`Core::worker_requested`).
+fn forward(core: &mut Core, reply: &Reply, method: &str, params: &Value) -> Handled {
+    core.backend
         .commands
         .send(Command {
             reply: reply.clone(),
@@ -320,16 +321,15 @@ fn forward(host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Hand
             params: params.clone(),
         })
         .map_err(|_| RpcError::new("backend", "playback worker stopped"))?;
-    host.worker_requested(reply.owner);
+    core.worker_requested(reply.owner);
     Ok(None)
 }
 
 /// Hands a request to the playback worker; a stopped worker is `host`
 /// (subtitles, snapshots, jobs, video view and render). As `forward`, what
 /// the plugin holds there is asked again.
-fn forward_media(host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
-    host.core
-        .backend
+fn forward_media(core: &mut Core, reply: &Reply, method: &str, params: &Value) -> Handled {
+    core.backend
         .commands
         .send(Command {
             reply: reply.clone(),
@@ -337,14 +337,13 @@ fn forward_media(host: &mut Host, reply: &Reply, method: &str, params: &Value) -
             params: params.clone(),
         })
         .map_err(anyhow::Error::from)?;
-    host.worker_requested(reply.owner);
+    core.worker_requested(reply.owner);
     Ok(None)
 }
 
-/// The running plugin a request came from (`Host::dispatch` checked it).
-fn plugin<'a>(host: &'a Host, reply: &Reply) -> std::result::Result<&'a crate::Plugin, RpcError> {
-    host.core
-        .plugins
+/// The running plugin a request came from (`Core::dispatch` checked it).
+fn plugin<'a>(core: &'a Core, reply: &Reply) -> std::result::Result<&'a crate::Plugin, RpcError> {
+    core.plugins
         .get(&reply.owner)
         .ok_or_else(|| RpcError::new("disabled", "plugin no longer running"))
 }
@@ -380,7 +379,7 @@ mod tests {
     }
 
     /// `commands.run` and `palette.lead` are refused to a plugin that is not
-    /// built-in, live (`Host::dispatch`) and replayed (`replay`); every
+    /// built-in, live (`Core::dispatch`) and replayed (`replay`); every
     /// other area is open to every plugin.
     #[test]
     fn built_in_only_capabilities_are_refused_to_other_plugins() {

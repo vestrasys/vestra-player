@@ -307,7 +307,7 @@ impl Host {
                 (playing && ((fullscreen && idle) || windowed)).into(),
             )?;
             Ok(
-                json!({"shellGeneration":self.shell_generation,"fullscreen":fullscreen,"maximized":maximized,"logicalWidth":viewport.width,"logicalHeight":viewport.height,"videoArea":{"width":video.0,"height":video.1},"menuOpen":self.menu_open,"dialogOpen":self.core.dialog_busy,"nativeActive":native.map(|facts|facts.active),"nativeUnavailable":self.native_unavailable,"slots":snapshot,"backdrop":self.backdrop_state(),"pictureInPicture":self.pip_state()}),
+                json!({"shellGeneration":self.shell_generation,"fullscreen":fullscreen,"maximized":maximized,"logicalWidth":viewport.width,"logicalHeight":viewport.height,"videoArea":{"width":video.0,"height":video.1},"menuOpen":self.menu_open,"dialogOpen":self.core.dialog_busy,"nativeActive":native.map(|facts|facts.active),"nativeUnavailable":self.native_unavailable,"slots":snapshot,"backdrop":self.backdrop_state(),"pictureInPicture":self.pip_shown()}),
             )
         })();
         // The slots' containers show their panels (a column opened, a tab
@@ -449,15 +449,38 @@ impl Host {
             self.ui_report(UiReport::UiFacts(Box::new(facts)));
         }
     }
+    /// Debug builds: where the driver hands a turn to the core (an event of
+    /// the core, the core's steps, the panel-restart step), the core's
+    /// copies of the interface's state are the interface's: its facts, its
+    /// tabs and its record of the batching window (plan step S2f(3)). Core
+    /// code takes no `Host`, so the checks run here, not at the reads: the
+    /// interface does not run inside a core turn, and a read inside it
+    /// checks that no command that would change what it reads waits in the
+    /// outbox (`Core::check_settled`).
+    #[cfg(debug_assertions)]
+    pub(crate) fn check_copies(&self) {
+        self.check_ui_facts();
+        self.check_panel_tabs();
+        self.check_handed();
+    }
     /// Debug builds: the core's copy of the interface's facts is the
-    /// interface's wherever core code reads it (plan step S2f(1)), and the
-    /// current tabs the core derives from it are the interface's. Removed
-    /// with the in-place delivery (plan S3a).
+    /// interface's (plan step S2f(1)), and the current tabs the core derives
+    /// from it are the interface's (`check_copies`). Removed with the
+    /// in-place delivery (plan S3a).
     #[cfg(debug_assertions)]
     pub(crate) fn check_ui_facts(&self) {
+        let mut now = self.ui_facts_now();
+        // A stopped plugin's confirmation that a waiting `DropConfirm`
+        // drops: the core's copy is ahead (plan step S2f(3),
+        // `UiDialog::revoke`).
+        if now
+            .sheet
+            .is_some_and(|sheet| sheet.confirm && self.core.drop_pending(sheet.owner))
+        {
+            now.sheet = None;
+        }
         debug_assert_eq!(
-            self.core.ui_facts,
-            self.ui_facts_now(),
+            self.core.ui_facts, now,
             "the core's interface facts are behind the interface"
         );
         for column in Column::ALL {
@@ -480,17 +503,9 @@ impl Host {
         );
     }
     /// A report of the UI reaches the core (rule R3), delivered in place on
-    /// this thread until plan step S3a. Plan step S2c(1): the window facts;
-    /// S2c(3): the mount reports and the `ui.setMount` result
-    /// (host/mounts.rs); S2c(4): the `settings.set` and `settings.show`
-    /// results; S2c(5): the tabs with the facts, `layout.set`'s result, a
-    /// sheet's confirmation and a confirmation that failed to show, and
-    /// where the user acted (`Acted`); S2c(7): the interface's part of the
-    /// state file (`Remembered`) and a complete file drop (`Drop`); S2d(1):
-    /// the view requests' and picture-in-picture's results (`Answered`),
-    /// and the video area (`AreaFitted`, `VideoArea`); S2f(1): the core's
-    /// part of the UI's events (`Event`, `Input`). The other reports follow
-    /// in later steps.
+    /// this thread until plan step S3a: the interface's facts first, then
+    /// the core's side (`Core::report`), then what the core issued for it
+    /// is carried out (plan step S2f(3), `outbox.rs`).
     pub(crate) fn ui_report(&mut self, report: UiReport) {
         // Plan step S2f(1): the interface's facts reach the core before
         // anything the core does for this report reads them.
@@ -498,18 +513,39 @@ impl Host {
         if !matches!(report, UiReport::UiFacts(_) | UiReport::FrameShown(_)) {
             self.report_ui_facts();
         }
+        self.core.report(report);
+        // Plan step S2f(3): what the core issued for this report is carried
+        // out now, before the interface goes on.
+        self.drain_outbox();
+    }
+}
+impl Core {
+    /// The core's side of a report of the interface (rule R3; plan step
+    /// S2f(3)): handled in place where the interface sends it
+    /// (`Host::ui_report`), which then drains what it issued. Plan step
+    /// S2c(1): the window facts; S2c(3): the mount reports and the
+    /// `ui.setMount` result (host/mounts.rs); S2c(4): the `settings.set` and
+    /// `settings.show` results; S2c(5): the tabs with the facts,
+    /// `layout.set`'s result, a sheet's confirmation and a confirmation that
+    /// failed to show, and where the user acted (`Acted`); S2c(7): the
+    /// interface's part of the state file (`Remembered`) and a complete
+    /// file drop (`Drop`); S2d(1): the view requests' and
+    /// picture-in-picture's results (`Answered`), and the video area
+    /// (`AreaFitted`, `VideoArea`); S2f(1): the core's part of the UI's
+    /// events (`Event`, `Input`) and the interface's facts (`UiFacts`).
+    pub(crate) fn report(&mut self, report: UiReport) {
         match report {
-            UiReport::UiFacts(facts) => self.core.ui_facts = *facts,
+            UiReport::UiFacts(facts) => self.ui_facts = *facts,
             // Plan step S2f(2): a video frame was shown (`power_tick`).
-            UiReport::FrameShown(at) => self.core.last_frame = Some(at),
+            UiReport::FrameShown(at) => self.last_frame = Some(at),
             UiReport::WindowFacts(facts) => {
                 // A value older than the one applied is skipped (module
                 // `messages`: a coalesced snapshot can overtake a handoff).
                 // The core broadcasts `window.state` from the facts (R9): its
                 // conditions and triggers are evaluated first (`broadcast`);
                 // a value with only the tabs changed broadcasts nothing.
-                if self.core.apply_facts(*facts) {
-                    let facts = self.core.window_facts.clone();
+                if self.apply_facts(*facts) {
+                    let facts = self.window_facts.clone();
                     self.broadcast("window.state", facts);
                 }
             }
@@ -522,21 +558,19 @@ impl Host {
                 handoff,
                 confirm_failed,
             } => {
-                let changed = handoff.is_some_and(|facts| self.core.apply_facts(*facts));
-                (self.core.dialog_busy, self.core.confirm_open) = dialog_flags_after(
-                    (self.core.dialog_busy, self.core.confirm_open),
-                    confirm_failed,
-                );
+                let changed = handoff.is_some_and(|facts| self.apply_facts(*facts));
+                (self.dialog_busy, self.confirm_open) =
+                    dialog_flags_after((self.dialog_busy, self.confirm_open), confirm_failed);
                 self.respond(reply, result);
                 if changed {
-                    let facts = self.core.window_facts.clone();
+                    let facts = self.window_facts.clone();
                     self.broadcast("window.state", facts);
                 }
             }
-            UiReport::Acted { owner, origin } => self.core.act(owner, origin),
+            UiReport::Acted { owner, origin } => self.act(owner, origin),
             // Plan step S2c(7): the interface's part of the state file, and
             // a complete file drop.
-            UiReport::Remembered { state, at } => self.core.remember(*state, at),
+            UiReport::Remembered { state, at } => self.remember(*state, at),
             UiReport::Drop(drop) => self.deliver_drop(drop),
             // Plan step S2d(1): `window.setVideoArea` fitted, and the size
             // the layout shows.
@@ -544,19 +578,18 @@ impl Host {
                 reply,
                 video,
                 result,
-            } => self.core.area_fitted(reply, video, result),
+            } => self.area_fitted(reply, video, result),
             UiReport::VideoArea { size, now } => self.answer_video_area(size, now),
             // Plan step S2d(2): the change the batching window holds.
-            UiReport::Batching(held) => self.core.handed = held,
+            UiReport::Batching(held) => self.handed = held,
             // Plan step S2f(1): the core's part of the UI's events.
             UiReport::Event(event) => self.core_ui_event(event),
             UiReport::Input(input) => self.core_input(input),
             _ => unreachable!("not reported until plan step S2f or S3a"),
         }
-        // Plan step S2f(3): what the core issued for this report is carried
-        // out now, before the interface goes on.
-        self.drain_outbox();
     }
+}
+impl Host {
     /// The fullscreen title strip (`title-strip.slint`): it applies to the
     /// fullscreen main window where the system shows no title bar there
     /// (`platform::FULLSCREEN_TITLE_STRIP`), not in picture-in-picture; it

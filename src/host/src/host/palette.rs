@@ -139,13 +139,16 @@ impl Host {
     /// The commands the open palette lists: from the interface's copies
     /// of the tables (rule R8; `refresh_menu` took the newest).
     pub(crate) fn palette_items(&self) -> Vec<Item> {
-        self.items_of(&self.registry.shown_entries(), &self.labels())
+        self.core
+            .items_of(&self.registry.shown_entries(), &self.labels())
     }
+}
+impl Core {
     /// The commands the palette lists, from the core's own tables: what
     /// `commands.list` answers and `commands.run` checks against.
     pub(crate) fn listed_items(&self) -> Vec<Item> {
-        let bindings = self.core.bindings();
-        self.items_of(&self.core.commands.shown_entries(), &|owner, id| {
+        let bindings = self.bindings();
+        self.items_of(&self.commands.shown_entries(), &|owner, id| {
             bindings.label(owner, id)
         })
     }
@@ -155,16 +158,18 @@ impl Host {
         entries: &[commands::CommandSnapshot],
         labels: &dyn Fn(u64, &str) -> Option<String>,
     ) -> Vec<Item> {
-        let names = self.core.plugin_names();
+        let names = self.plugin_names();
         let name = |id: &str| {
             names
                 .get(id)
                 .cloned()
-                .or_else(|| self.core.on_demand.name_of(id).map(str::to_owned))
+                .or_else(|| self.on_demand.name_of(id).map(str::to_owned))
                 .unwrap_or_else(|| id.to_owned())
         };
         command_palette::items(entries, &name, labels)
     }
+}
+impl Host {
     /// The lead was set, changed or cleared (`palette.lead`): an open
     /// palette shows it now; `moved` (it came or went) places the cursor
     /// again.
@@ -353,6 +358,8 @@ impl Host {
             self.close_menu();
         }
     }
+}
+impl Core {
     /// The core's part of a palette row (`UiInput::Command`, plan step
     /// S2f(1)): the window it came from is recorded, the command runs.
     pub(crate) fn palette_command(
@@ -362,7 +369,7 @@ impl Host {
         origin: Option<origins::Origin>,
     ) {
         if let Some(origin) = origin {
-            self.core.act(owner, origin);
+            self.act(owner, origin);
         }
         if let Err(error) = self.execute_command(owner, id) {
             diag!("palette execute: {:?}", error);
@@ -372,7 +379,7 @@ impl Host {
     /// the user activated the status (Enter on the status row, the strip's
     /// Stop), which stops the running request.
     pub(crate) fn lead_event(&mut self, query: String, keep: bool, status: bool) {
-        let Some(lead) = &self.core.lead else {
+        let Some(lead) = &self.lead else {
             return;
         };
         let owner = lead.owner;
@@ -381,11 +388,11 @@ impl Host {
         // Vestra's consent, the commands it runs) go to its sheet, with the
         // request box, even after the holder's own window was shown.
         self.act(owner, origins::Origin::Lead);
-        let now = self.core.now_ms();
-        let ticket = self.core.command_runs.mint(owner, &query, now);
+        let now = self.now_ms();
+        let ticket = self.command_runs.mint(owner, &query, now);
         // A new request: its end state shows even when it is the same as
         // the last one's (the same failure twice in a row).
-        if let Some(lead) = self.core.lead.as_mut() {
+        if let Some(lead) = self.lead.as_mut() {
             lead.ended = None;
         }
         input_trace::follow(&format!("palette lead to plugin {owner} (keep {keep})"));
@@ -397,6 +404,8 @@ impl Host {
                 "data": {"query": query, "keep": keep, "ticket": ticket, "status": status}}),
         );
     }
+}
+impl Host {
     pub(crate) fn palette_action(&mut self, action: PaletteAction) {
         if self.menu_mode != MenuMode::Palette {
             return;

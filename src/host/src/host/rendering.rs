@@ -305,14 +305,14 @@ impl Rendering {
     }
 }
 
-impl Host {
+impl Core {
     pub(crate) fn rendering_dispatch(
         &mut self,
         method: &str,
         params: &Value,
     ) -> std::result::Result<Value, RpcError> {
         match method {
-            "rendering.state" => Ok(self.core.rendering_state()),
+            "rendering.state" => Ok(self.rendering_state()),
             "rendering.setPreference" => {
                 let preference = params["preference"]
                     .as_str()
@@ -320,8 +320,8 @@ impl Host {
                     .ok_or_else(|| {
                         RpcError::new("invalid", "preference must be auto, gpu or software")
                     })?;
-                self.core.rendering.set_preference(preference)?;
-                Ok(self.core.rendering_state())
+                self.rendering.set_preference(preference)?;
+                Ok(self.rendering_state())
             }
             "rendering.restart" => self.restart_player().map(|()| Value::Null),
             _ => Err(RpcError::new("unsupported", "unknown rendering method")),
@@ -330,7 +330,7 @@ impl Host {
     /// Start a new player now (it waits for this one's instance lock), then
     /// quit as the Quit command does.
     fn restart_player(&mut self) -> std::result::Result<(), RpcError> {
-        if self.core.headless {
+        if self.headless {
             return Err(RpcError::new(
                 "unsupported",
                 "a player without windows does not restart",
@@ -338,15 +338,14 @@ impl Host {
         }
         if let Some(why) = restart_refused(
             RESTARTING.load(Ordering::Acquire),
-            self.core.rendering.restarted_at,
+            self.rendering.restarted_at,
             std::time::Instant::now(),
         ) {
             return Err(RpcError::new("busy", why));
         }
         let exe = std::env::current_exe()
             .map_err(|error| RpcError::new("failed", format!("the player's path: {error}")))?;
-        let mut command =
-            relaunch_command(&exe, &self.core.rendering.relaunch, &self.core.last_source);
+        let mut command = relaunch_command(&exe, &self.rendering.relaunch, &self.last_source);
         diag!("restart: {command:?}");
         // Windows: the new player may take the foreground from this one.
         platform::allow_handoff_foreground();
@@ -359,7 +358,7 @@ impl Host {
             child.id()
         );
         crate::stop_handoffs();
-        self.core.ui_state.flush();
+        self.ui_state.flush();
         // Quitting: nothing may wait on a GPU frame any more (§11.6).
         platform::release_gpu_waits();
         // After this request's reply went out.

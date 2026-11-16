@@ -4,13 +4,13 @@ use super::*;
 /// Command Palette: Ask Again Before Plugin Commands (Ask Vestra UX step 4).
 pub(crate) const ASK_AGAIN: &str = "ask-again";
 
-impl Host {
+impl Core {
     pub(crate) fn execute_command(
         &mut self,
         owner: u64,
         id: &str,
     ) -> std::result::Result<(), RpcError> {
-        let execution = match self.core.commands.resolve_execution(owner, id) {
+        let execution = match self.commands.resolve_execution(owner, id) {
             Ok(execution) => execution,
             Err(error) => {
                 // A plugin held after a fault (supervisor.md §7): a click shows why,
@@ -18,7 +18,7 @@ impl Host {
                 if let commands::CommandError::Disabled {
                     reason: Some(reason),
                 } = &error
-                    && self.core.commands.held(owner)
+                    && self.commands.held(owner)
                 {
                     diag!("supervisor: {id} of a held plugin: \"{reason}\"");
                     self.show_osd(&reason.clone());
@@ -36,8 +36,7 @@ impl Host {
     /// The host's own commands (`host_declarations`) and the core actions.
     pub(crate) fn register_host_commands(&mut self) -> Result<()> {
         for (id, declaration, state) in Self::host_declarations() {
-            self.core
-                .bindings_mut()
+            self.bindings_mut()
                 .declare(
                     bindings::HOST,
                     id,
@@ -47,16 +46,15 @@ impl Host {
                     false,
                 )
                 .map_err(anyhow::Error::msg)?;
-            self.core
-                .commands
+            self.commands
                 .register(bindings::HOST, "host", id.into(), 1, declaration, state)
                 .map_err(|e| anyhow::anyhow!("{e}"))?;
         }
-        self.core.host_revision = 1;
-        for (id, declaration) in core_actions::declarations(self.core.step_seconds()) {
+        self.host_revision = 1;
+        for (id, declaration) in core_actions::declarations(self.step_seconds()) {
             self.register_core_action(id, declaration)?;
         }
-        self.core.core_action_states();
+        self.core_action_states();
         Ok(())
     }
     /// The host's own commands (owner 0): toggle, enter and leave
@@ -163,8 +161,7 @@ impl Host {
         id: &str,
         declaration: commands::Declaration,
     ) -> Result<()> {
-        self.core
-            .bindings_mut()
+        self.bindings_mut()
             .declare(
                 bindings::HOST,
                 id,
@@ -175,13 +172,12 @@ impl Host {
             )
             .map_err(anyhow::Error::msg)?;
         let state = core_actions::state(id, &core_actions::Facts::default(), false);
-        self.core
-            .commands
+        self.commands
             .register(
                 bindings::HOST,
                 "host",
                 id.into(),
-                self.core.host_revision.max(1),
+                self.host_revision.max(1),
                 declaration,
                 state,
             )
@@ -189,19 +185,19 @@ impl Host {
     }
     /// The seek menu titles carry the step: re-register them when it changes.
     pub(crate) fn step_seek_changed(&mut self, before: f64) {
-        let after = self.core.step_seconds();
+        let after = self.step_seconds();
         if after == before {
             return;
         }
         for (id, declaration) in core_actions::declarations(after) {
             if id == "seek-backward" || id == "seek-forward" {
-                let _ = self.core.commands.remove(bindings::HOST, id);
+                let _ = self.commands.remove(bindings::HOST, id);
                 if let Err(error) = self.register_core_action(id, declaration) {
                     diag!("host.error core action {id}: {error}");
                 }
             }
         }
-        self.core.core_action_states();
+        self.core_action_states();
     }
     /// Run a core action for a binding, the menu or `host.run`. `reply` (a
     /// plugin's `host.run`) is answered when it finished. `Ok(true)` means
@@ -234,7 +230,7 @@ impl Host {
                 Err(RpcError::new("unavailable", "the player has no window"))
             };
         }
-        let facts = self.core.core_facts();
+        let facts = self.core_facts();
         let state = core_actions::state(action, &facts, false);
         if !state.enabled {
             return Err(RpcError::new(
@@ -244,7 +240,6 @@ impl Host {
         }
         if matches!(action, "previous" | "next") {
             let (provider, ..) = self
-                .core
                 .sequence
                 .ok_or_else(|| RpcError::new("unavailable", "no sequence provider"))?;
             self.send(
@@ -256,25 +251,24 @@ impl Host {
             ));
             return Ok(true);
         }
-        if core_actions::exclusive(action) && !self.core.actions_busy.insert(action.to_owned()) {
+        if core_actions::exclusive(action) && !self.actions_busy.insert(action.to_owned()) {
             // The same action is still running: this trigger is dropped.
             return Ok(true);
         }
-        self.core.core_action_states();
+        self.core_action_states();
         let reply = reply.cloned().unwrap_or(Reply {
             owner: bindings::HOST,
             id: 0,
         });
-        self.core
-            .backend
+        self.backend
             .commands
             .send(Command {
                 reply,
                 method: "host.action".into(),
                 // `queuedUs`: a slow way to the worker is logged (`stall.rs`).
                 params: json!({"action":action,"queuedUs":super::stall::clock_us(),
-                    "step":step.unwrap_or_else(|| self.core.step_seconds()),
-                    "keyframes":self.core.step_keyframes(),
+                    "step":step.unwrap_or_else(|| self.step_seconds()),
+                    "keyframes":self.step_keyframes(),
                     "sequence":{"next":facts.next,"previous":facts.previous}}),
             })
             .map_err(|_| RpcError::new("backend", "playback worker stopped"))?;
@@ -287,7 +281,7 @@ impl Host {
         action: &str,
         result: std::result::Result<Value, RpcError>,
     ) {
-        self.core.actions_busy.remove(action);
+        self.actions_busy.remove(action);
         match &result {
             Ok(value) => {
                 if let Some(text) = value["osd"].as_str() {
@@ -298,7 +292,7 @@ impl Host {
             Err(error) if reply.owner == bindings::HOST => self.show_osd(&error.message),
             Err(_) => {}
         }
-        self.core.core_action_states();
+        self.core_action_states();
         if reply.owner != bindings::HOST {
             self.respond(reply, result.map(|_| Value::Null));
         }
@@ -315,6 +309,8 @@ impl Host {
             }));
         }
     }
+}
+impl Host {
     /// The interface's side of `UiCommand::Osd` (plan step S2d(4)).
     pub(crate) fn osd_command(&mut self, op: messages::OsdOp) {
         match op {
@@ -447,6 +443,8 @@ impl Host {
             origin: Some(origins::Origin::Main),
         }));
     }
+}
+impl Core {
     /// The core's part of a message's button (`UiInput::Command`, plan step
     /// S2f(1)): the window it came from is recorded, the command runs.
     pub(crate) fn osd_command_run(
@@ -456,7 +454,7 @@ impl Host {
         origin: Option<origins::Origin>,
     ) {
         if let Some(origin) = origin {
-            self.core.act(owner, origin);
+            self.act(owner, origin);
         }
         if let Err(error) = self.execute_command(owner, id) {
             diag!("osd action {id}: {}", error.message);
@@ -498,7 +496,7 @@ impl Host {
             // step S2d(4)). Before S2d(4) the GPU waits were released first;
             // neither the handoffs, the write nor they wait on the other.
             crate::stop_handoffs();
-            self.core.ui_state.flush();
+            self.ui_state.flush();
             self.ui_command(messages::UiCommand::Window(messages::WindowOp::Quit));
             return;
         }
@@ -511,9 +509,7 @@ impl Host {
     /// S2d(4)); "a window exists" is the interface's fact (`UiFacts::shell`, plan
     /// step S2f(1)).
     pub(crate) fn window_command(&mut self, id: &str) -> bool {
-        #[cfg(debug_assertions)]
-        self.check_ui_facts();
-        if self.core.ui_facts.shell.is_none() {
+        if self.ui_facts.shell.is_none() {
             return false;
         }
         let change = match id {
@@ -529,6 +525,8 @@ impl Host {
         }
         true
     }
+}
+impl Host {
     /// The interface's side of the one-way `WindowOp`s (plan step S2d(4)).
     pub(crate) fn window_op(&mut self, op: messages::WindowOp) {
         match op {
@@ -693,6 +691,17 @@ pub(crate) fn migrate_fullscreen_escape(
         overlay.entry(KEY.into()).or_default().push("Escape".into());
     }
     true
+}
+
+impl Host {
+    /// The host's own commands (`Core::host_declarations`) under the name
+    /// the tests read them by, kept when the declarations moved to the core
+    /// (plan step S2f(3)).
+    #[cfg(test)]
+    pub(crate) fn host_declarations()
+    -> Vec<(&'static str, commands::Declaration, commands::CommandState)> {
+        Core::host_declarations()
+    }
 }
 
 #[cfg(test)]

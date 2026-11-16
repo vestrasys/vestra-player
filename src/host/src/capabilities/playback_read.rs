@@ -1,7 +1,7 @@
 //! `playback.read`: what is playing, the position, chapters, devices, stats
 //! and timeline marks; the playback worker answers most of it.
 use super::{Capability, Handled, Info, Recorded, forward};
-use crate::host::{Host, Reply};
+use crate::host::{Core, Reply};
 use serde_json::Value;
 
 pub struct PlaybackRead;
@@ -24,23 +24,20 @@ impl Capability for PlaybackRead {
     fn methods(&self) -> &'static [&'static str] {
         METHODS
     }
-    fn record(&self, _: &Host, _: u64, _: &Value) -> Recorded {
+    fn record(&self, _: &Core, _: u64, _: &Value) -> Recorded {
         Recorded::Nothing
     }
-    fn rekey(&self, _: &mut Host, _: u64, _: u64) {}
-    fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
+    fn rekey(&self, _: &mut Core, _: u64, _: u64) {}
+    fn handle(&self, core: &mut Core, reply: &Reply, method: &str, params: &Value) -> Handled {
         match method {
-            "timeline.marks" => host
-                .core
+            "timeline.marks" => core
                 .timeline_dispatch(reply.owner, method, params)
                 .map(Some),
             _ => {
                 if method == "source.state" {
-                    host.core
-                        .source_state_replies
-                        .insert((reply.owner, reply.id));
+                    core.source_state_replies.insert((reply.owner, reply.id));
                 }
-                forward(host, reply, method, params)
+                forward(core, reply, method, params)
             }
         }
     }

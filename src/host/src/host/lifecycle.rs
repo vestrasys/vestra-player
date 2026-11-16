@@ -29,12 +29,12 @@ pub(crate) fn activation_outcome(
     }
 }
 
-impl Host {
+impl Core {
     pub(crate) fn activation_tick(&mut self) {
-        let owners = self.core.plugins.keys().copied().collect::<Vec<_>>();
-        let now = self.core.now_ms();
+        let owners = self.plugins.keys().copied().collect::<Vec<_>>();
+        let now = self.now_ms();
         for owner in owners {
-            let status = match self.core.activation_status(owner, now) {
+            let status = match self.activation_status(owner, now) {
                 Ok(status) => status,
                 Err(error) => {
                     diag!("activation status: {error}");
@@ -50,11 +50,11 @@ impl Host {
                     activation::Status::Failed { message } => message,
                     _ => "activation timed out".into(),
                 };
-                self.core.record_failure(owner, &message);
+                self.record_failure(owner, &message);
                 // The core stops it (when it timed out too, never
                 // retried): `Terminate`.
-                self.core.supervisor.set_now(now);
-                self.core.supervisor.process_failed(Pid(owner), message);
+                self.supervisor.set_now(now);
+                self.supervisor.process_failed(Pid(owner), message);
                 self.supervisor_run();
             }
         }
@@ -68,7 +68,7 @@ impl Host {
         }
         // Validate before spawning, preventing duplicate plugin activation side effects.
         let candidate = manifest::read_development(directory)?;
-        if self.core.running(&candidate.id).is_some() {
+        if self.running(&candidate.id).is_some() {
             bail!("plugin already running: {}", candidate.id);
         }
         // Built-in plugins are developed with `--plugin`, so a reserved id
@@ -81,33 +81,26 @@ impl Host {
                 candidate.id
             );
         }
-        if self.core.owners_exhausted() {
+        if self.owners_exhausted() {
             bail!("plugin owner identities exhausted");
         }
-        self.core
-            .now_ms()
+        self.now_ms()
             .checked_add(timeout_ms)
             .ok_or_else(|| anyhow::anyhow!("activation deadline overflow"))?;
-        self.core.dev_loading = Some(directory.to_owned());
+        self.dev_loading = Some(directory.to_owned());
         let spec =
             crate::supervisor::UnitSpec::new(&candidate.id, crate::supervisor::Class::Development)
                 .start_timeout(timeout_ms);
-        let unit = self.core.supervisor.add_unit(spec);
-        if self
-            .core
-            .supervisor
-            .unit(unit)
-            .is_some_and(|u| u.job.is_none())
-        {
+        let unit = self.supervisor.add_unit(spec);
+        if self.supervisor.unit(unit).is_some_and(|u| u.job.is_none()) {
             // A unit of this id still stopping or busy keeps it: as an enable.
-            self.core.supervisor.set_enabled(unit, true);
+            self.supervisor.set_enabled(unit, true);
             let _ = self
-                .core
                 .supervisor
                 .start(unit, crate::supervisor::Cause::Enable);
         }
         let started = self.start_now(&candidate.id);
-        self.core.dev_loading = None;
+        self.dev_loading = None;
         started.map_err(|error| anyhow::anyhow!(error.message))
     }
     /// Runs the core now for a package RPC that starts plugin `id` and
@@ -115,10 +108,9 @@ impl Host {
     /// development load): the error of a spawn that failed meanwhile, as
     /// today's synchronous start returned it.
     pub(crate) fn start_now(&mut self, id: &str) -> std::result::Result<(), RpcError> {
-        let outer = self.core.start_error.replace((id.to_owned(), None));
+        let outer = self.start_error.replace((id.to_owned(), None));
         self.supervisor_run();
-        let error =
-            std::mem::replace(&mut self.core.start_error, outer).and_then(|(_, error)| error);
+        let error = std::mem::replace(&mut self.start_error, outer).and_then(|(_, error)| error);
         error.map_or(Ok(()), Err)
     }
     /// A running plugin stops after a failure the Host found (a malformed
@@ -126,12 +118,12 @@ impl Host {
     /// (`Stop{Failed, then: Inactive}`: listed stopped, as today's
     /// `disable(Failed)` without a recorded failure).
     pub(crate) fn stop_failed(&mut self, owner: u64) {
-        if let Some(unit) = self.core.supervisor.by_pid(Pid(owner))
-            && self.core.supervisor.process_of(&self.core.unit_id(unit)) == Some(Pid(owner))
+        if let Some(unit) = self.supervisor.by_pid(Pid(owner))
+            && self.supervisor.process_of(&self.unit_id(unit)) == Some(Pid(owner))
         {
-            let now = self.core.now_ms();
-            self.core.supervisor.set_now(now);
-            let _ = self.core.supervisor.stop(
+            let now = self.now_ms();
+            self.supervisor.set_now(now);
+            let _ = self.supervisor.stop(
                 unit,
                 crate::supervisor::StopReason::Failed,
                 crate::supervisor::Then::Inactive,
@@ -149,9 +141,9 @@ impl Host {
         cause: crate::supervisor::ExitCause,
         text: Option<String>,
     ) {
-        let now = self.core.now_ms();
-        self.core.supervisor.set_now(now);
-        self.core.supervisor.process_exited(Pid(owner), cause, text);
+        let now = self.now_ms();
+        self.supervisor.set_now(now);
+        self.supervisor.process_exited(Pid(owner), cause, text);
         self.supervisor_run();
         // An exit sends no stop: its run is cleaned up here.
         self.exit_cleanup(owner);
@@ -161,7 +153,7 @@ impl Host {
     /// a bug (its unit does not run it), reported, and stopped here as
     /// before (a `debug_assert!` stops a debug build).
     fn stopped_anyway(&mut self, owner: u64) {
-        if self.core.plugins.contains_key(&owner) {
+        if self.plugins.contains_key(&owner) {
             debug_assert!(false, "running plugin {owner} not stopped by its unit");
             diag!("supervisor: running plugin {owner} not stopped by its unit");
             self.stop_process(owner, StopReason::Failed, Duration::from_millis(300));
@@ -182,17 +174,16 @@ impl Host {
         // Process exit commonly follows an explicit disable. The first revoke
         // owns cleanup: a duplicate notification must not cancel its id=0
         // rebuild, clear another instance, or repeat backend/resource cleanup.
-        if !self.core.plugins.contains_key(&owner) {
+        if !self.plugins.contains_key(&owner) {
             return;
         }
-        self.core
-            .archive_activation(owner, "plugin disabled before activation completed");
+        self.archive_activation(owner, "plugin disabled before activation completed");
         self.on_demand_forget(owner);
-        self.core.held_mounts.forget(owner);
-        self.core.warnings.edit().remove(&owner);
+        self.held_mounts.forget(owner);
+        self.warnings.edit().remove(&owner);
         // Panels kept over an earlier crash of this plugin are this run's
         // (moved at its spawn; `panel_restart.rs`).
-        let id = self.core.plugin_id(owner);
+        let id = self.plugin_id(owner);
         self.adopt_panels(&id, owner);
         capabilities::revoke(self, owner, park);
         // A run the supervisor restarts by itself after a fault keeps its
@@ -200,7 +191,7 @@ impl Host {
         // compile now, none when its restart mounts them again. Any other
         // stop ends such a wait: its panels go below as before (a parked
         // run's tabs stay placeholders).
-        let kept = if !park && !self.core.headless && self.core.auto_restarting(owner) {
+        let kept = if !park && !self.headless && self.auto_restarting(owner) {
             self.keep_panels(owner)
         } else {
             self.restart_over(&id);
@@ -210,7 +201,6 @@ impl Host {
         // (sidebar-tabs.md), its panel in the shell if it is compiled; the
         // others go.
         let gone = self
-            .core
             .mounts
             .values()
             .filter(|m| m.plugin == owner && !(park && m.recorded))
@@ -218,11 +208,10 @@ impl Host {
             .map(|m| m.spec.owner)
             .collect::<Vec<_>>();
         if self
-            .core
             .sequence
             .is_some_and(|(provider, ..)| provider == owner)
         {
-            self.core.sequence = None;
+            self.sequence = None;
             self.rebroadcast_source();
         }
         // The interface's part (K3; plan step S2d(3)): its gone panels, with
@@ -231,45 +220,43 @@ impl Host {
         // failed menu close's `host.error`, as before).
         let panels = gone
             .iter()
-            .filter_map(|key| self.core.mounts.get(key).map(|m| (*key, m.spec.slot)))
-            .collect();
-        self.ui_command(UiCommand::Panels(PanelsOp::Gone(panels)));
+            .filter_map(|key| self.mounts.get(key).map(|m| (*key, m.spec.slot)))
+            .collect::<Vec<_>>();
+        // None: nothing to tell (plan step S2f(3): an empty `Gone` would
+        // wait in the outbox for nothing and keep the core's copy of the
+        // columns marked unsettled).
+        if !panels.is_empty() {
+            self.ui_command(UiCommand::Panels(PanelsOp::Gone(panels)));
+        }
         self.ui_command(UiCommand::RevokeOwner { owner, park });
-        if self.core.info_panels.remove(&owner).is_some() {
+        if self.info_panels.remove(&owner).is_some() {
             self.info_panels_changed();
         }
-        self.core.power.remove_owner(owner);
+        self.power.remove_owner(owner);
         // Its timeline layer and window settings stay through a standby,
         // held under `owner` until it wakes (`rekey`) or its standby ends
         // (`revoke`); a stop after a fault, and every other stop, removes them.
         if !keeps_shown_state(park, reason) {
-            self.core.timeline.remove_owner(owner);
-            self.core.on_top.remove(owner);
-            self.core.cursor_playing.remove(owner);
+            self.timeline.remove_owner(owner);
+            self.on_top.remove(owner);
+            self.cursor_playing.remove(owner);
         }
-        let step = self.core.step_seconds();
-        if self.core.step_seek.remove(&owner).is_some() {
+        let step = self.step_seconds();
+        if self.step_seek.remove(&owner).is_some() {
             self.step_seek_changed(step);
         }
-        self.core.mount_queue.retain(|c| c.reply.owner != owner);
+        self.mount_queue.retain(|c| c.reply.owner != owner);
         // One the interface's batching window holds: the core cancels it
         // there (plan step S2d(2)).
-        #[cfg(debug_assertions)]
-        self.check_handed();
-        if self
-            .core
-            .handed
-            .as_ref()
-            .is_some_and(|h| h.reply.owner == owner)
-        {
-            self.core.handed = None;
+        if self.handed.as_ref().is_some_and(|h| h.reply.owner == owner) {
+            self.handed = None;
             self.ui_command(UiCommand::CancelMount(MountCancel::Owner(owner)));
         }
         for key in gone {
-            if self.core.mounts.remove(&key).is_none() {
+            if self.mounts.remove(&key).is_none() {
                 continue;
             }
-            self.core.mount_queue.push_front(MountChange {
+            self.mount_queue.push_front(MountChange {
                 reply: Reply { owner, id: 0 },
                 key,
                 contribution: None,
@@ -279,7 +266,7 @@ impl Host {
         // The worker drops its shader lists too (`diagnostics.rs`).
         self.plugin_shaders_gone(owner);
         // Parked: the worker keeps its resolvers (recorded).
-        let _ = self.core.backend.commands.send(Command {
+        let _ = self.backend.commands.send(Command {
             reply: Reply { owner, id: 0 },
             method: if park {
                 "owner.parked"
@@ -293,11 +280,11 @@ impl Host {
         // loop: the reaper thread's, which reports `Event::Reaped`; until
         // then (and the playback worker's `BackendCleaned`) the unit is
         // deactivating, and every start of it waits (supervisor.md).
-        if let Some(mut plugin) = self.core.plugins.remove(&owner) {
-            self.core.plugins_revision += 1;
+        if let Some(mut plugin) = self.plugins.remove(&owner) {
+            self.plugins_revision += 1;
             plugin.set_stop_reason(reason);
             plugin.set_stop_wait(grace);
-            self.core.reaper.reap(owner, plugin);
+            self.reaper.reap(owner, plugin);
         }
         // Its trigger conditions stay; a fault forgets "entered" (T13).
         self.triggers_stopped(&id, reason);
@@ -310,7 +297,6 @@ impl Host {
             return;
         };
         let failed = self
-            .core
             .plugins
             .get_mut(&owner)
             .and_then(|plugin| plugin.send(message).err());
@@ -326,12 +312,12 @@ impl Host {
     /// every member restarts with it (`restart_shared`), this one included,
     /// instead of this one stopping for good.
     pub(crate) fn transport_failed(&mut self, owner: u64, error: &anyhow::Error) {
-        let Some(plugin) = self.core.plugins.get(&owner) else {
+        let Some(plugin) = self.plugins.get(&owner) else {
             return;
         };
         diag!("plugin {owner} ({}) transport: {error}", plugin.manifest.id);
         let runner = plugin.shared_runner();
-        if runner.is_some() && self.core.shared.as_ref().map(|s| s.link.id) == runner {
+        if runner.is_some() && self.shared.as_ref().map(|s| s.link.id) == runner {
             self.restart_shared(&format!(
                 "{}'s queue is full: the runner reads no input",
                 plugin.manifest.id
@@ -365,11 +351,10 @@ impl Host {
             // What a plugin parked at start-up is compared with (`wake_missed`).
             self.note_announced(event, &data);
         }
-        let now = self.core.now_ms();
-        self.core.supervisor.set_now(now);
+        let now = self.now_ms();
+        self.supervisor.set_now(now);
         let mut failed = Vec::new();
         for (owner, plugin) in self
-            .core
             .plugins
             .iter_mut()
             .filter(|(_, p)| p.subscriptions.contains_key(event))
@@ -377,16 +362,16 @@ impl Host {
             // A plugin woken for a wake event receives the held one at its
             // ready: a newer one waits behind it, never before (§6.9; the
             // core holds it while its start is waking).
-            if wake && self.core.supervisor.waking(Pid(*owner)).is_some() {
+            if wake && self.supervisor.waking(Pid(*owner)).is_some() {
                 let trigger = capabilities::wake_trigger(event, &data);
-                self.core.supervisor.wake(Pid(*owner), &trigger);
+                self.supervisor.wake(Pid(*owner), &trigger);
                 continue;
             }
             // A source event to a running listener is a wake trigger sent
             // now: it counts as use and cancels a standby on its way, so
             // the process is not stopped under its handler (§4.9).
             if wake && capabilities::SOURCE_EVENTS.contains(&event) {
-                self.core.supervisor.delivering(Pid(*owner));
+                self.supervisor.delivering(Pid(*owner));
             }
             if let Err(error) = plugin.send(json!({"event":event,"data":data})) {
                 failed.push((*owner, error));
@@ -399,6 +384,8 @@ impl Host {
         // woken to receive it (lazy activation §6.9).
         self.wake_listeners(event, &data);
     }
+}
+impl Host {
     /// The interface's side of `UiCommand::RevokeOwner` (K3; plan step
     /// S2d(3)): what it keeps of a stopped run goes, in `stop_run`'s
     /// order: the input slots naming it, its OSD buttons, its panel menu,

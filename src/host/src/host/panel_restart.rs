@@ -177,17 +177,16 @@ pub(crate) fn coming(state: &crate::supervisor::UnitState, starts: bool) -> Comi
     }
 }
 
-impl Host {
+impl Core {
     /// `stop_run` of a run that the supervisor restarts: its panels stay
     /// (dimmed, with the line) instead of going. The keys kept. Core code
     /// on the core's record (plan step S2f(2)); the interface draws the
     /// lines (`PanelsOp::Restarting`).
     pub(crate) fn keep_panels(&mut self, owner: u64) -> BTreeSet<u64> {
-        let Some(plugin) = self.core.plugins.get(&owner) else {
+        let Some(plugin) = self.plugins.get(&owner) else {
             return BTreeSet::new();
         };
         let keys = self
-            .core
             .mounts
             .values()
             .filter(|m| m.plugin == owner)
@@ -204,26 +203,20 @@ impl Host {
             "shell: {id} restarts after a fault; its {} panel(s) stay meanwhile",
             keys.len()
         );
-        self.core.restarts.keep(&id, owner, keys.clone(), text);
+        self.restarts.keep(&id, owner, keys.clone(), text);
         self.restarts_changed(None, true);
         keys
     }
     /// Plugin `id`'s kept panels move to its run `to` (at its spawn, or at
     /// its first `ui.mount`, whichever comes first).
     pub(crate) fn adopt_panels(&mut self, id: &str, to: u64) {
-        if self
-            .core
-            .restarts
-            .owner_of(id)
-            .is_none_or(|owner| owner == to)
-        {
+        if self.restarts.owner_of(id).is_none_or(|owner| owner == to) {
             return;
         }
-        let from = self.core.restarts.owner_of(id).unwrap_or(to);
+        let from = self.restarts.owner_of(id).unwrap_or(to);
         // A key the new run holds already (it cannot, before its first
         // mount) would be overwritten: such a kept panel goes instead.
         let clashing = self
-            .core
             .restarts
             .plugins
             .get(id)
@@ -231,19 +224,16 @@ impl Host {
                 r.keys
                     .iter()
                     .copied()
-                    .filter(|&key| self.core.mounts.contains_key(&rekey_panel(key, to)))
+                    .filter(|&key| self.mounts.contains_key(&rekey_panel(key, to)))
                     .collect::<Vec<_>>()
             })
             .unwrap_or_default();
         for key in clashing {
-            self.core.restarts.done(key);
+            self.restarts.done(key);
             self.restarts_changed(None, false);
             self.drop_panels(from, vec![key]);
         }
-        let moves = self
-            .core
-            .restarts
-            .move_to(id, to, |key| rekey_panel(key, to));
+        let moves = self.restarts.move_to(id, to, |key| rekey_panel(key, to));
         if moves.is_empty() {
             return;
         }
@@ -254,7 +244,7 @@ impl Host {
     /// Panel `key` was mounted again by its restarted run, or went: the
     /// line goes (`UiInput::PanelBack`, from the interface's batch).
     pub(crate) fn panel_back(&mut self, key: u64) {
-        if self.core.restarts.done(key) {
+        if self.restarts.done(key) {
             self.restarts_changed(Some(key), true);
         }
     }
@@ -264,11 +254,11 @@ impl Host {
     /// `back` and `redraw` as there; a copy that did not change and asks
     /// for nothing is not sent.
     fn restarts_changed(&mut self, back: Option<u64>, redraw: bool) {
-        let lines = self.core.restarts.lines();
-        if lines == self.core.restart_lines_sent && back.is_none() && !redraw {
+        let lines = self.restarts.lines();
+        if lines == self.restart_lines_sent && back.is_none() && !redraw {
             return;
         }
-        self.core.restart_lines_sent = lines.clone();
+        self.restart_lines_sent = lines.clone();
         self.ui_command(super::messages::UiCommand::Panels(
             super::messages::PanelsOp::Restarting {
                 lines,
@@ -277,6 +267,8 @@ impl Host {
             },
         ));
     }
+}
+impl Host {
     /// The interface's side of `PanelsOp::Restarting` (plan step S2f(2)).
     pub(crate) fn restarting_command(
         &mut self,
@@ -366,34 +358,44 @@ impl Host {
             }
         }
     }
-    /// The kept panels follow their plugins' restarts (every tick): moved
-    /// to a restarted run, done once mounted again, gone when no restart
-    /// comes or the restarted run did not mount them again in time. A core
-    /// step on the core's record, the supervisor, the runs and the mounts
-    /// (plan step S2f(2)), still called at its point of the windowed tick;
-    /// the interface's parts go as `PanelsOp` commands.
+}
+impl Host {
+    /// The core's panel-restart step at its point of the windowed tick
+    /// (between the two halves of the core's turn): a hand-over to the core
+    /// (plan step S2f(1)), then what it asked of the interface (plan step
+    /// S2f(3)).
     pub(crate) fn panel_restart_tick(&mut self) {
         if self.core.restarts.plugins.is_empty() {
             return;
         }
-        // A hand-over to the core (plan step S2f(1)).
         self.report_ui_facts();
-        let mounts = &self.core.mounts;
-        self.core.restarts.prune(|key| mounts.contains_key(&key));
+        #[cfg(debug_assertions)]
+        self.check_copies();
+        self.core.panel_restart_tick();
+        self.drain_outbox();
+    }
+}
+impl Core {
+    /// The kept panels follow their plugins' restarts (every tick): moved
+    /// to a restarted run, done once mounted again, gone when no restart
+    /// comes or the restarted run did not mount them again in time. A core
+    /// step on the core's record, the supervisor, the runs and the mounts
+    /// (plan step S2f(2)), still called at its point of the windowed tick
+    /// (`Host::panel_restart_tick`); the interface's parts go as
+    /// `PanelsOp` commands.
+    pub(crate) fn panel_restart_tick(&mut self) {
+        if self.restarts.plugins.is_empty() {
+            return;
+        }
+        let mounts = &self.mounts;
+        self.restarts.prune(|key| mounts.contains_key(&key));
         self.restarts_changed(None, false);
-        let now = self.core.now_ms();
-        let ids = self
-            .core
-            .restarts
-            .plugins
-            .keys()
-            .cloned()
-            .collect::<Vec<_>>();
+        let now = self.now_ms();
+        let ids = self.restarts.plugins.keys().cloned().collect::<Vec<_>>();
         for id in ids {
-            let state = self.core.supervisor.by_id(&id).and_then(|unit| {
-                let u = self.core.supervisor.unit(unit)?;
+            let state = self.supervisor.by_id(&id).and_then(|unit| {
+                let u = self.supervisor.unit(unit)?;
                 let starts = self
-                    .core
                     .supervisor
                     .job(unit)
                     .is_some_and(crate::supervisor::Job::will_start);
@@ -402,10 +404,10 @@ impl Host {
             match state.unwrap_or(Coming::No) {
                 Coming::Waiting => {}
                 Coming::Running { pid, ready } => {
-                    if self.core.plugins.contains_key(&pid) {
+                    if self.plugins.contains_key(&pid) {
                         self.adopt_panels(&id, pid);
                     }
-                    let Some(entry) = self.core.restarts.plugins.get_mut(&id) else {
+                    let Some(entry) = self.restarts.plugins.get_mut(&id) else {
                         continue;
                     };
                     if !ready || entry.owner != pid {
@@ -430,8 +432,8 @@ impl Host {
                     );
                     let mut released = Vec::new();
                     for &key in &stale {
-                        self.core.restarts.done(key);
-                        if let Some(mount) = self.core.mounts.get(&key) {
+                        self.restarts.done(key);
+                        if let Some(mount) = self.mounts.get(&key) {
                             released.push((mount.plugin, mount_view(mount.spec.slot)));
                         }
                     }
@@ -454,14 +456,14 @@ impl Host {
     /// the wait ends; `stop_run` removes (or keeps as placeholders) its
     /// panels as any of its own.
     pub(crate) fn restart_over(&mut self, id: &str) {
-        if self.core.restarts.forget(id).is_some() {
+        if self.restarts.forget(id).is_some() {
             self.restarts_changed(None, true);
         }
     }
     /// No restart of plugin `id` comes: its kept panels go, as a stopped
     /// plugin's do.
     pub(crate) fn give_up_panels(&mut self, id: &str) {
-        let Some(entry) = self.core.restarts.forget(id) else {
+        let Some(entry) = self.restarts.forget(id) else {
             return;
         };
         self.restarts_changed(None, false);
@@ -471,19 +473,12 @@ impl Host {
         );
         self.drop_panels(entry.owner, entry.keys.into_iter().collect());
     }
-    /// A change of panel `key` waits to be applied: the core's record
-    /// (`Core::mount_pending`, plan step S2d(2)).
-    pub(crate) fn mount_pending(&self, key: u64) -> bool {
-        #[cfg(debug_assertions)]
-        self.check_handed();
-        self.core.mount_pending(key)
-    }
     /// Remove panels `keys` of run `owner` (queued: one change for them),
     /// as `stop_run` removes a stopped run's.
     pub(crate) fn drop_panels(&mut self, owner: u64, keys: Vec<u64>) {
         let keys = keys
             .into_iter()
-            .filter(|key| self.core.mounts.contains_key(key))
+            .filter(|key| self.mounts.contains_key(key))
             .collect::<Vec<_>>();
         if keys.is_empty() {
             return;
@@ -492,17 +487,17 @@ impl Host {
         // the floating window, the policy and the tabs, the shell's slots.
         let panels = keys
             .iter()
-            .filter_map(|key| self.core.mounts.get(key).map(|m| (*key, m.spec.slot)))
+            .filter_map(|key| self.mounts.get(key).map(|m| (*key, m.spec.slot)))
             .collect();
         self.ui_command(super::messages::UiCommand::Panels(
             super::messages::PanelsOp::Gone(panels),
         ));
         for key in keys {
-            if self.core.mounts.remove(&key).is_none() {
+            if self.mounts.remove(&key).is_none() {
                 continue;
             }
-            self.core.mount_queue.retain(|c| c.key != key);
-            self.core.mount_queue.push_front(MountChange {
+            self.mount_queue.retain(|c| c.key != key);
+            self.mount_queue.push_front(MountChange {
                 reply: Reply { owner, id: 0 },
                 key,
                 contribution: None,

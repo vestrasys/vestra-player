@@ -653,7 +653,7 @@ pub fn remote_images(text: &str, base: Option<&str>) -> Vec<String> {
     found
 }
 
-impl Host {
+impl Core {
     /// `ui.markdownScan { text, base }` → `{ images: [address…] }`.
     pub(crate) fn markdown_scan(&self, params: &Value) -> std::result::Result<Value, RpcError> {
         let doc = parse_wire(params)?;

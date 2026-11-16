@@ -2,7 +2,7 @@
 use super::{Capability, Handled, Info, Recorded};
 use crate::{
     host::{
-        Host, Reply, RpcError,
+        Core, Reply, RpcError,
         messages::{OsdButtons, OsdOp, UiCommand},
     },
     i18n,
@@ -34,38 +34,35 @@ impl Capability for UiOsd {
     fn methods(&self) -> &'static [&'static str] {
         METHODS
     }
-    fn record(&self, host: &Host, owner: u64, _: &Value) -> Recorded {
-        if host.core.info_panels.contains_key(&owner) {
+    fn record(&self, core: &Core, owner: u64, _: &Value) -> Recorded {
+        if core.info_panels.contains_key(&owner) {
             return Recorded::Live("an OSD panel");
         }
         #[cfg(debug_assertions)]
         {
-            host.check_ui_facts();
-            host.core
-                .check_settled(&[crate::host::outbox::Fact::OsdButtons(owner)]);
+            core.check_settled(&[crate::host::outbox::Fact::OsdButtons(owner)]);
         }
         // Its buttons run its commands while the message shows.
-        if host.core.ui_facts.osd_buttons == Some(owner) {
+        if core.ui_facts.osd_buttons == Some(owner) {
             return Recorded::Live("an OSD message with actions");
         }
         Recorded::Nothing
     }
-    fn rekey(&self, _: &mut Host, _: u64, _: u64) {}
-    fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
+    fn rekey(&self, _: &mut Core, _: u64, _: u64) {}
+    fn handle(&self, core: &mut Core, reply: &Reply, method: &str, params: &Value) -> Handled {
         match method {
-            "osd.show" => show(host, reply, params)?,
-            _ => panel(host, reply, params)?,
+            "osd.show" => show(core, reply, params)?,
+            _ => panel(core, reply, params)?,
         }
         Ok(Some(Value::Null))
     }
 }
 
-fn show(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<(), RpcError> {
+fn show(core: &mut Core, reply: &Reply, params: &Value) -> std::result::Result<(), RpcError> {
     // A template in the plugin's language: translated with its
     // catalog, then formatted with `args` (i18n.md §5).
     i18n::valid_args(&params["args"]).map_err(RpcError::invalid)?;
-    let text = host
-        .core
+    let text = core
         .plugin_sentence(reply.owner, &params["text"], &params["args"])?
         .replace(['\n', '\r'], " ");
     if text.trim().is_empty() || text.chars().count() > OSD_MESSAGE_CHARS {
@@ -76,11 +73,11 @@ fn show(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<(
     let owner = reply.owner;
     let actions = parse_actions(
         &params["actions"],
-        |title| host.core.plugin_sentence(owner, title, &Value::Null),
-        |id| host.core.commands.get(owner, id).is_some(),
+        |title| core.plugin_sentence(owner, title, &Value::Null),
+        |id| core.commands.get(owner, id).is_some(),
     )?;
     // "A shell exists" is the interface's fact (plan step S2f(3)).
-    if host.core.ui_facts.shell.is_none() {
+    if core.ui_facts.shell.is_none() {
         return Err(RpcError::new("unavailable", "native shell unavailable"));
     }
     let actions = (!actions.is_empty()).then(|| {
@@ -92,7 +89,7 @@ fn show(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<(
         }
     });
     // The interface shows it (`UiCommand::Osd`, plan step S2d(4)).
-    host.ui_command(UiCommand::Osd(OsdOp::Show {
+    core.ui_command(UiCommand::Osd(OsdOp::Show {
         text,
         from: Some(owner),
         actions,
@@ -139,19 +136,17 @@ fn parse_actions(
         .collect()
 }
 
-fn panel(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<(), RpcError> {
+fn panel(core: &mut Core, reply: &Reply, params: &Value) -> std::result::Result<(), RpcError> {
     // "A shell exists" is the interface's fact (plan step S2f(3)).
-    if host.core.ui_facts.shell.is_none() {
+    if core.ui_facts.shell.is_none() {
         return Err(RpcError::new("unavailable", "native shell unavailable"));
     }
     match &params["text"] {
         Value::Null => {
-            host.core.info_panels.remove(&reply.owner);
+            core.info_panels.remove(&reply.owner);
         }
         text if text.is_string() || i18n::text::is_text(text) => {
-            let mut text = host
-                .core
-                .plugin_sentence(reply.owner, text, &params["args"])?;
+            let mut text = core.plugin_sentence(reply.owner, text, &params["args"])?;
             // Cut after translation: the plugin cannot measure
             // the translated lines.
             match &params["maxColumns"] {
@@ -173,11 +168,11 @@ fn panel(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<
                     "osd panel allows {OSD_PANEL_LINES} lines, {OSD_PANEL_BYTES} bytes"
                 )));
             }
-            host.core.info_panels.insert(reply.owner, text);
+            core.info_panels.insert(reply.owner, text);
         }
         _ => return Err(RpcError::invalid("text requires string or null")),
     }
-    host.info_panels_changed();
+    core.info_panels_changed();
     Ok(())
 }
 

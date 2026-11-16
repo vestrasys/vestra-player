@@ -3,7 +3,7 @@
 //! reads and writes the interface's state and reports what the core has to
 //! do (`UiReport::Event`, `UiReport::Input`), delivered in place at the
 //! point where the core's work ran before; every other event is the
-//! core's (`core_event`).
+//! core's (`Core::handle`).
 use super::messages::{CommandFrom, PluginLine, UiEvent, UiInput, UiReport};
 use super::*;
 
@@ -15,17 +15,21 @@ impl Host {
                 // The interface's facts as the core reads them (plan step
                 // S2f(1)).
                 self.report_ui_facts();
-                self.core_event(event);
+                #[cfg(debug_assertions)]
+                self.check_copies();
+                self.core.handle(event);
                 // What the core issued for it is carried out now (plan step
                 // S2f(3), `outbox.rs`).
                 self.drain_outbox();
             }
         }
     }
+}
+impl Core {
     /// An event of the core: a plugin, the playback worker, the reaper, the
     /// spawner, the recorder, the settings check, a dialog's thread. What it
     /// asks of the interface waits in the outbox (plan step S2f(3)).
-    pub(crate) fn core_event(&mut self, event: Event) {
+    pub(crate) fn handle(&mut self, event: Event) {
         // What a process said before the Host has it (its spawn on the
         // spawn thread is not answered yet) waits for it (`worker.rs`).
         let from_process = super::supervisor::worker::from_process(&event);
@@ -37,23 +41,23 @@ impl Host {
         }
         match event {
             Event::Prepared(owner, message, prepared) => {
-                self.core.prepared = message["id"].as_u64().map(|id| (owner, id, prepared));
-                self.core_event(Event::Request(owner, message));
-                self.core.prepared = None;
+                self.prepared = message["id"].as_u64().map(|id| (owner, id, prepared));
+                self.handle(Event::Request(owner, message));
+                self.prepared = None;
             }
             Event::Request(owner, message) => {
-                if !self.core.plugins.contains_key(&owner) {
+                if !self.plugins.contains_key(&owner) {
                     return;
                 }
                 // On-demand start: a plugin that asks for something is in use.
-                let now = self.core.now_ms();
-                self.core.supervisor.touch(Pid(owner), now);
+                let now = self.now_ms();
+                self.supervisor.touch(Pid(owner), now);
                 if let Some(event) = message["event"].as_str() {
                     diag!("runtime {owner} {event}: {}", message["data"]);
-                    let now = self.core.now_ms();
+                    let now = self.now_ms();
                     let result = match event {
-                        "runtime.ready" => self.core.supervisor.activation_ready(Pid(owner), now),
-                        "runtime.failed" => self.core.supervisor.activation_failed(
+                        "runtime.ready" => self.supervisor.activation_ready(Pid(owner), now),
+                        "runtime.failed" => self.supervisor.activation_failed(
                             Pid(owner),
                             message["data"].to_string().chars().take(512).collect(),
                             now,
@@ -64,7 +68,7 @@ impl Host {
                         diag!("activation runtime event: {error}");
                     }
                     self.activation_tick();
-                    if event == "runtime.ready" && self.core.plugins.contains_key(&owner) {
+                    if event == "runtime.ready" && self.plugins.contains_key(&owner) {
                         self.unit_ready(owner);
                     }
                     return;
@@ -76,26 +80,23 @@ impl Host {
                             id: request.id,
                         };
                         if matches!(request.method.as_str(), "ui.open" | "ui.mount") {
-                            let now = self.core.now_ms();
+                            let now = self.now_ms();
                             if matches!(
-                                self.core.activation_status(owner, now),
+                                self.activation_status(owner, now),
                                 Ok(activation::Status::Pending { .. })
                             ) {
-                                if let Err(error) = self.core.supervisor.activation_ui_begin(
-                                    Pid(owner),
-                                    reply.id,
-                                    now,
-                                ) {
+                                if let Err(error) =
+                                    self.supervisor
+                                        .activation_ui_begin(Pid(owner), reply.id, now)
+                                {
                                     self.respond(
                                         reply,
                                         Err(RpcError::new("activation", error.to_string())),
                                     );
                                     return;
                                 }
-                                self.core
-                                    .supervisor
-                                    .activation_ui_wait(Pid(owner), reply.id);
-                                self.core.ui_begun(owner);
+                                self.supervisor.activation_ui_wait(Pid(owner), reply.id);
+                                self.ui_begun(owner);
                             }
                         }
                         // Built-in plugins claim panel slots, the sequence and resolvers first (slot_claims).
@@ -106,13 +107,12 @@ impl Host {
                                 | "sequence.set"
                                 | "sourceResolvers.register"
                                 | "sourceResolvers.unregister"
-                        ) && !self.core.headless
+                        ) && !self.headless
                         {
-                            let builtin = self.core.is_builtin(owner);
-                            let starting = self.core.builtins_starting();
-                            if self.core.held_mounts.holds(owner, builtin, starting) {
-                                self.core
-                                    .held_mounts
+                            let builtin = self.is_builtin(owner);
+                            let starting = self.builtins_starting();
+                            if self.held_mounts.holds(owner, builtin, starting) {
+                                self.held_mounts
                                     .hold(owner, (reply, request.method, request.params));
                                 return;
                             }
@@ -130,20 +130,17 @@ impl Host {
                 self.action_done(reply, &action, result)
             }
             Event::Reply(reply, mut result) => {
-                if self
-                    .core
-                    .source_state_replies
-                    .remove(&(reply.owner, reply.id))
+                if self.source_state_replies.remove(&(reply.owner, reply.id))
                     && let Ok(state) = &mut result
                 {
-                    self.core.patch_source(state);
+                    self.patch_source(state);
                 }
                 self.respond(reply, result)
             }
             Event::Broadcast(event, mut data) => {
                 if event == "source.state" {
-                    self.core.patch_source(&mut data);
-                    let previous = std::mem::replace(&mut self.core.last_source, data.clone());
+                    self.patch_source(&mut data);
+                    let previous = std::mem::replace(&mut self.last_source, data.clone());
                     // The interface's copy follows at once (plan step
                     // S2c(7)), before anything below reads it.
                     self.source_shown();
@@ -152,11 +149,7 @@ impl Host {
                         .lock()
                         .unwrap_or_else(std::sync::PoisonError::into_inner) = data.clone();
                     if previous["phase"] != data["phase"] {
-                        diag!(
-                            "source: phase {} at +{} ms",
-                            data["phase"],
-                            self.core.now_ms()
-                        );
+                        diag!("source: phase {} at +{} ms", data["phase"], self.now_ms());
                         input_trace::mark(&format!(
                             "host loop: source.state phase={}",
                             data["phase"]
@@ -168,14 +161,14 @@ impl Host {
                             data["paused"]
                         ));
                     }
-                    self.core.timeline_source(&previous, &data);
+                    self.timeline_source(&previous, &data);
                     // What it shows is the core's to decide (plan step
                     // S2d(4)): the interface shows it.
-                    let shown = self.core.source_display_next();
+                    let shown = self.source_display_next();
                     self.ui_command(messages::UiCommand::Snapshot(messages::UiSnapshot::Source(
                         shown,
                     )));
-                    self.core.core_action_states();
+                    self.core_action_states();
                     // The discrete source events this state adds, after it:
                     // a listener of both reads the state first.
                     let derived = crate::source_events::derive(&previous, &data);
@@ -184,14 +177,14 @@ impl Host {
                         diag!(
                             "source: {name} {} at +{} ms",
                             data["state"]["stamp"]["generation"],
-                            self.core.now_ms()
+                            self.now_ms()
                         );
                         self.broadcast(name, data);
                     }
                     return;
                 }
                 if event == "resolvers.fileTypes" {
-                    self.core.file_types = data["fileTypes"].clone();
+                    self.file_types = data["fileTypes"].clone();
                 }
                 self.broadcast(&event, data)
             }
@@ -205,8 +198,8 @@ impl Host {
             Event::SettingsChecked(serial, result) => self.settings_checked(serial, result),
             Event::ConfirmDone(reply, confirmed, checked) => {
                 self.ui_command(messages::UiCommand::Activity);
-                self.core.dialog_busy = false;
-                self.core.confirm_open = false;
+                self.dialog_busy = false;
+                self.confirm_open = false;
                 self.respond(reply, Ok(json!({"confirmed":confirmed,"checked":checked})));
             }
             Event::SourceLocate(reply, fields) => {
@@ -216,7 +209,7 @@ impl Host {
             }
             Event::SourceLocated(reply, mut fields, path) => {
                 self.ui_command(messages::UiCommand::Activity);
-                self.core.dialog_busy = false;
+                self.dialog_busy = false;
                 match path.as_deref().map(|path| path.to_str()) {
                     None => self.respond(reply, Ok(Value::Null)),
                     Some(None) => self.respond(
@@ -228,15 +221,14 @@ impl Host {
                     ),
                     Some(Some(path)) => {
                         fields["path"] = json!(path);
-                        let sent =
-                            self.core
-                                .backend
-                                .commands
-                                .send(crate::playback::backend::Command {
-                                    reply: reply.clone(),
-                                    method: "owner.sourceLocated".into(),
-                                    params: fields,
-                                });
+                        let sent = self
+                            .backend
+                            .commands
+                            .send(crate::playback::backend::Command {
+                                reply: reply.clone(),
+                                method: "owner.sourceLocated".into(),
+                                params: fields,
+                            });
                         if sent.is_err() {
                             self.respond(
                                 reply,
@@ -248,7 +240,7 @@ impl Host {
             }
             Event::DialogDone(reply, paths) => {
                 self.ui_command(messages::UiCommand::Activity);
-                self.core.dialog_busy = false;
+                self.dialog_busy = false;
                 self.respond(
                     reply,
                     Ok(json!({"cancelled":paths.is_none(),"paths":paths.unwrap_or_default()})),
@@ -257,21 +249,16 @@ impl Host {
             Event::Exited(owner) => {
                 // Its stdout closed: its process is gone, so its stop sends
                 // no `runtime.stop`.
-                if let Some(plugin) = self.core.plugins.get_mut(&owner) {
+                if let Some(plugin) = self.plugins.get_mut(&owner) {
                     plugin.set_exited();
                 }
                 // Still running: the process ended without being stopped.
-                self.core.record_failure(owner, "plugin process exited");
+                self.record_failure(owner, "plugin process exited");
                 self.process_ended(owner, crate::supervisor::ExitCause::Exited, None)
             }
             Event::Runner(runner, message) => self.runner_event(runner, &message),
             Event::RunnerExited(runner) => {
-                if self
-                    .core
-                    .shared
-                    .as_ref()
-                    .is_some_and(|s| s.link.id == runner)
-                {
+                if self.shared.as_ref().is_some_and(|s| s.link.id == runner) {
                     self.restart_shared("the shared runner exited");
                 }
             }
@@ -280,18 +267,18 @@ impl Host {
             Event::Recorded(owner, serial, result) => self.recorded(owner, serial, result),
             Event::OutOfMemory(owner) => {
                 diag!("plugin {owner}: its JavaScript heap ran out of memory");
-                self.core.supervisor.process_out_of_memory(Pid(owner));
+                self.supervisor.process_out_of_memory(Pid(owner));
             }
             Event::BackendCleaned(owner) => self.unit_cleaned(owner),
             Event::RuntimeFault(owner, error) => {
                 diag!("plugin {owner}: {error}");
-                let now = self.core.now_ms();
-                let _ = self.core.supervisor.activation_failed(
+                let now = self.now_ms();
+                let _ = self.supervisor.activation_failed(
                     Pid(owner),
                     error.chars().take(512).collect(),
                     now,
                 );
-                self.core.record_failure(owner, &error);
+                self.record_failure(owner, &error);
                 self.process_ended(
                     owner,
                     crate::supervisor::ExitCause::Fault,
@@ -301,6 +288,8 @@ impl Host {
             ui => unreachable!("{:?} is the interface's (`ui_event`)", ui.label()),
         }
     }
+}
+impl Host {
     /// The interface's part of one of the 26 UI-originated events (plan
     /// step S2f(1)). Where the core has work, it is reported at the point
     /// where it ran before: the event itself (`UiReport::Event`) or what
@@ -602,7 +591,7 @@ impl Host {
                 self.policy.activity(self.core.now_ms());
                 self.report_event(Event::CommandRunAnswered(reply, yes, remember));
             }
-            core => unreachable!("{:?} is the core's (`core_event`)", core.label()),
+            core => unreachable!("{:?} is the core's (`Core::handle`)", core.label()),
         }
     }
     /// Report a UI event whose core part needs only the event
@@ -618,12 +607,14 @@ impl Host {
         let floating = self.floating.as_ref().map(|floating| floating.generation);
         origins::of_generation(generation, self.shell_generation, floating)
     }
+}
+impl Core {
     /// The core's part of a UI event the interface reported whole
     /// (`UiReport::Event`, plan step S2f(1)).
     pub(crate) fn core_ui_event(&mut self, event: UiEvent) {
         match event.into_event() {
             #[cfg(feature = "producer-audio")]
-            Event::PhysicalInput(_, params) => self.core.physical_input(params),
+            Event::PhysicalInput(_, params) => self.physical_input(params),
             Event::MainClosed => self.host_command("quit"),
             Event::ViewClosed(owner, view) => {
                 self.send(owner, json!({"event":"ui.closed","data":{"view":view}}));
@@ -648,7 +639,7 @@ impl Host {
                 origin,
             } => {
                 if let Some(origin) = origin {
-                    self.core.act(owner, origin);
+                    self.act(owner, origin);
                 }
                 if let Err(error) = self.execute_command(owner, &id) {
                     diag!("menu execute: {:?}", error);
@@ -659,14 +650,14 @@ impl Host {
                 owner,
                 id,
                 origin,
-            } => match self.core.commands.resolve_execution(owner, &id) {
+            } => match self.commands.resolve_execution(owner, &id) {
                 // A key never fails silently: the command's reason shows.
                 Err(commands::CommandError::Disabled {
                     reason: Some(reason),
                 }) => self.show_osd(&reason),
                 _ => {
                     if let Some(origin) = origin {
-                        self.core.act(owner, origin);
+                        self.act(owner, origin);
                     }
                     if let Err(error) = self.execute_command(owner, &id) {
                         diag!("binding execute: {error:?}");
@@ -699,8 +690,7 @@ impl Host {
             } => self.lead_event(query, keep, status),
             UiInput::MenuReset => {
                 #[cfg(feature = "producer-audio")]
-                self.core
-                    .physical_revoke(producer_input::RevokeReason::Menu);
+                self.physical_revoke(producer_input::RevokeReason::Menu);
             }
             UiInput::PageShown(owner) => self.page_shown(owner),
             UiInput::TabShown(owner) => self.panel_shown(owner),
@@ -713,28 +703,29 @@ impl Host {
             }
             UiInput::Line(PluginLine::HostError(data)) => self.broadcast("host.error", data),
             UiInput::WindowTick { fullscreen } => {
-                self.core.host_command_states(fullscreen);
-                self.core.backdrop_cover_art();
+                self.host_command_states(fullscreen);
+                self.backdrop_cover_art();
             }
-            UiInput::ColumnCommands(states) => self.core.column_command_states(states),
+            UiInput::ColumnCommands(states) => self.column_command_states(states),
             UiInput::MountTick => self.release_held_mounts(),
             UiInput::PanelBack(key) => self.panel_back(key),
             // Plan step S2f(3): the interface shows a `dialogs.confirm` as a
             // system dialog; busy before it shows.
             UiInput::SystemConfirm => {
-                self.core.dialog_busy = true;
-                self.core.confirm_open = true;
+                self.dialog_busy = true;
+                self.confirm_open = true;
                 #[cfg(feature = "producer-audio")]
-                self.core
-                    .physical_revoke(producer_input::RevokeReason::Dialog);
+                self.physical_revoke(producer_input::RevokeReason::Dialog);
             }
             UiInput::MountRetry(changes) => {
                 for change in changes.into_iter().rev() {
-                    self.core.mount_queue.push_front(change);
+                    self.mount_queue.push_front(change);
                 }
             }
         }
     }
+}
+impl Host {
     /// A plugin line the interface's work produced (design §5.3, group E):
     /// reported at the point where the interface wrote it before, so the
     /// core writes it at the same place on the wire (R6, plan step

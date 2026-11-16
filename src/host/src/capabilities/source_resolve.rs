@@ -2,7 +2,7 @@
 //! (source_resolvers.rs, in the playback worker).
 use super::{Call, Capability, Handled, Info, Recorded, forward};
 use crate::host::Origin;
-use crate::host::{Host, Reply, RpcError};
+use crate::host::{Core, Reply, RpcError};
 use crate::playback::backend::Command;
 use serde_json::Value;
 
@@ -25,7 +25,7 @@ impl Capability for SourceResolve {
         METHODS
     }
     /// Its resolvers, as the playback worker answered `owner.resources`.
-    fn record(&self, _: &Host, _: u64, backend: &Value) -> Recorded {
+    fn record(&self, _: &Core, _: u64, backend: &Value) -> Recorded {
         Recorded::Calls(
             backend["resolvers"]
                 .as_array()
@@ -36,26 +36,25 @@ impl Capability for SourceResolve {
         )
     }
     /// The worker moves its resolvers and their waiting resolutions.
-    fn rekey(&self, host: &mut Host, from: u64, to: u64) {
-        let _ = host.core.backend.commands.send(Command {
+    fn rekey(&self, core: &mut Core, from: u64, to: u64) {
+        let _ = core.backend.commands.send(Command {
             reply: Reply { owner: from, id: 0 },
             method: "owner.rekey".into(),
             params: serde_json::json!({ "to": to }),
         });
     }
-    fn prune(&self, host: &mut Host, owner: u64) {
-        let _ = host.core.backend.commands.send(Command {
+    fn prune(&self, core: &mut Core, owner: u64) {
+        let _ = core.backend.commands.send(Command {
             reply: Reply { owner, id: 0 },
             method: "owner.prune".into(),
             params: Value::Null,
         });
     }
-    fn replay(&self, host: &mut Host, owner: u64, _: &Origin, call: &Call) -> Handled {
+    fn replay(&self, core: &mut Core, owner: u64, _: &Origin, call: &Call) -> Handled {
         if call.method != "sourceResolvers.register" {
             return Err(RpcError::new("unsupported", "not a recorded method"));
         }
-        host.core
-            .backend
+        core.backend
             .commands
             .send(Command {
                 reply: Reply { owner, id: 0 },
@@ -65,16 +64,15 @@ impl Capability for SourceResolve {
             .map_err(|_| RpcError::new("backend", "playback worker stopped"))?;
         Ok(None)
     }
-    fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
+    fn handle(&self, core: &mut Core, reply: &Reply, method: &str, params: &Value) -> Handled {
         match method {
             "sourceResolvers.respond" => {
                 // The request it answers is no longer in flight.
-                host.core
-                    .resolution_answered(reply.owner, params["requestId"].as_u64());
-                forward(host, reply, method, params)
+                core.resolution_answered(reply.owner, params["requestId"].as_u64());
+                forward(core, reply, method, params)
             }
             "sourceResolvers.register" | "sourceResolvers.unregister" => {
-                forward(host, reply, method, params)
+                forward(core, reply, method, params)
             }
             _ => Err(RpcError::new("unsupported", "unknown method")),
         }

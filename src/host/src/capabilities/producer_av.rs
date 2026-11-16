@@ -1,6 +1,6 @@
 //! `producer.av`: streams a plugin generates itself (producer.rs).
 use super::{Capability, Handled, Info, Recorded, forward};
-use crate::host::{Host, Reply};
+use crate::host::{Core, Reply};
 use serde_json::Value;
 
 pub struct ProducerAv;
@@ -23,11 +23,11 @@ impl Capability for ProducerAv {
     fn methods(&self) -> &'static [&'static str] {
         METHODS
     }
-    fn record(&self, _: &Host, _: u64, _: &Value) -> Recorded {
+    fn record(&self, _: &Core, _: u64, _: &Value) -> Recorded {
         Recorded::Nothing
     }
-    fn rekey(&self, _: &mut Host, _: u64, _: u64) {}
-    fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
-        forward(host, reply, method, params)
+    fn rekey(&self, _: &mut Core, _: u64, _: u64) {}
+    fn handle(&self, core: &mut Core, reply: &Reply, method: &str, params: &Value) -> Handled {
+        forward(core, reply, method, params)
     }
 }

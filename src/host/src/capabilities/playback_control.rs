@@ -3,7 +3,7 @@
 use super::{Capability, Handled, Info, Recorded, forward};
 use crate::{
     core_actions,
-    host::{Host, Reply, RpcError, string},
+    host::{Core, Reply, RpcError, string},
     i18n, input_trace,
 };
 use serde_json::{Value, json};
@@ -38,11 +38,10 @@ impl Capability for PlaybackControl {
         METHODS
     }
     /// What it holds in the playback worker is answered there (`owner.resources`).
-    fn record(&self, host: &Host, owner: u64, _: &Value) -> Recorded {
-        if host.core.step_seek.contains_key(&owner)
-            || host.core.power.holds(owner)
-            || host
-                .core
+    fn record(&self, core: &Core, owner: u64, _: &Value) -> Recorded {
+        if core.step_seek.contains_key(&owner)
+            || core.power.holds(owner)
+            || core
                 .sequence
                 .is_some_and(|(provider, ..)| provider == owner)
         {
@@ -50,8 +49,8 @@ impl Capability for PlaybackControl {
         }
         Recorded::Nothing
     }
-    fn rekey(&self, _: &mut Host, _: u64, _: u64) {}
-    fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
+    fn rekey(&self, _: &mut Core, _: u64, _: u64) {}
+    fn handle(&self, core: &mut Core, reply: &Reply, method: &str, params: &Value) -> Handled {
         match method {
             "player.setStepSeek" => {
                 let seconds = params["seconds"]
@@ -63,40 +62,38 @@ impl Capability for PlaybackControl {
                     Value::Bool(keyframes) => *keyframes,
                     _ => return Err(RpcError::invalid("keyframes must be a boolean")),
                 };
-                let before = host.core.step_seconds();
-                host.core.step_writes += 1;
-                host.core
-                    .step_seek
-                    .insert(reply.owner, (host.core.step_writes, seconds, keyframes));
-                host.step_seek_changed(before);
+                let before = core.step_seconds();
+                core.step_writes += 1;
+                core.step_seek
+                    .insert(reply.owner, (core.step_writes, seconds, keyframes));
+                core.step_seek_changed(before);
                 Ok(Some(Value::Null))
             }
             "power.preventSleep" => {
-                host.core
-                    .power
+                core.power
                     .request(reply.owner, params["mode"].as_str().unwrap_or(""))
                     .map_err(RpcError::invalid)?;
-                host.core.power_tick();
+                core.power_tick();
                 Ok(Some(Value::Null))
             }
             "sequence.set" => {
-                if let Some((provider, ..)) = host.core.sequence
+                if let Some((provider, ..)) = core.sequence
                     && provider != reply.owner
                 {
-                    let holder = host.core.plugin_id(provider);
+                    let holder = core.plugin_id(provider);
                     let text = i18n::tr_args(
                         "Previous/Next not taken over: provided by {}",
                         &json!([holder]),
                     );
-                    return Err(host.refuse_taken(
+                    return Err(core.refuse_taken(
                         reply.owner,
                         RpcError::sequence_taken(&holder),
                         text,
                     ));
                 }
-                host.core.clear_warning(reply.owner, "sequence-taken");
+                core.clear_warning(reply.owner, "sequence-taken");
                 let flags = &params["flags"];
-                host.core.sequence = if flags.is_null() {
+                core.sequence = if flags.is_null() {
                     None
                 } else {
                     let flag = |key: &str| {
@@ -106,13 +103,12 @@ impl Capability for PlaybackControl {
                     };
                     Some((reply.owner, flag("canNext")?, flag("canPrevious")?))
                 };
-                host.rebroadcast_source();
+                core.rebroadcast_source();
                 Ok(Some(Value::Null))
             }
             "sequence.step" => {
                 let direction = string(params, "direction")?;
-                let (provider, next, previous) = host
-                    .core
+                let (provider, next, previous) = core
                     .sequence
                     .ok_or_else(|| RpcError::new("unavailable", "no sequence provider"))?;
                 let allowed = match direction {
@@ -126,7 +122,7 @@ impl Capability for PlaybackControl {
                         format!("cannot go {direction}"),
                     ));
                 }
-                host.send(
+                core.send(
                     provider,
                     json!({"event":"sequence.step","data":{"direction":direction}}),
                 );
@@ -153,7 +149,7 @@ impl Capability for PlaybackControl {
                         reply.owner
                     ));
                 }
-                forward(host, reply, method, params)
+                forward(core, reply, method, params)
             }
         }
     }

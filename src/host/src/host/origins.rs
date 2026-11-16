@@ -563,7 +563,7 @@ mod tests {
         assert!(
             after(
                 include_str!("../capabilities/ui_dialog.rs"),
-                "let request = host",
+                "let request = core",
                 8
             )
             .contains("== Some(&Origin::Lead)")

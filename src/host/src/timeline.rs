@@ -223,10 +223,10 @@ impl Timeline {
     }
 }
 
-impl Host {
+impl Core {
     pub(super) fn timeline_tick(&mut self) {
-        let now = self.core.now_ms();
-        if let Some(lists) = self.core.timeline.due(now) {
+        let now = self.now_ms();
+        if let Some(lists) = self.timeline.due(now) {
             self.broadcast("timeline.changed", lists);
         }
     }

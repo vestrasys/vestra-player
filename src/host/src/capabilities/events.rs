@@ -1,6 +1,6 @@
 //! `events`: the player's events pushed to a plugin as they happen.
 use super::{Call, Capability, Handled, Info, Recorded};
-use crate::host::{Host, Origin, Reply, RpcError, string};
+use crate::host::{Core, Origin, Reply, RpcError, string};
 use serde_json::{Value, json};
 
 pub struct Events;
@@ -88,8 +88,8 @@ fn reasons(why: &Value) -> Vec<String> {
 
 /// `owner`'s listeners of wake events as recorded calls (its other
 /// listeners left out).
-pub(super) fn wake_calls(host: &Host, owner: u64) -> Vec<Call> {
-    let Some(plugin) = host.core.plugins.get(&owner) else {
+pub(super) fn wake_calls(core: &Core, owner: u64) -> Vec<Call> {
+    let Some(plugin) = core.plugins.get(&owner) else {
         return Vec::new();
     };
     plugin
@@ -110,8 +110,8 @@ impl Capability for Events {
     /// A listener is a receiver the host pushes to (§3.2); a mirror is not:
     /// the SDK reads the state again when the plugin starts (§3.1). A
     /// listener of a wake event is recorded instead (§6.9).
-    fn record(&self, host: &Host, owner: u64, _: &Value) -> Recorded {
-        let Some(plugin) = host.core.plugins.get(&owner) else {
+    fn record(&self, core: &Core, owner: u64, _: &Value) -> Recorded {
+        let Some(plugin) = core.plugins.get(&owner) else {
             return Recorded::Nothing;
         };
         let listened = plugin
@@ -126,19 +126,19 @@ impl Capability for Events {
         if listened.is_empty() {
             return Recorded::Nothing;
         }
-        Recorded::Calls(wake_calls(host, owner))
+        Recorded::Calls(wake_calls(core, owner))
     }
     /// The woken plugin subscribes again itself.
-    fn rekey(&self, host: &mut Host, from: u64, _: u64) {
-        host.core.on_demand.wakes.remove(&from);
+    fn rekey(&self, core: &mut Core, from: u64, _: u64) {
+        core.on_demand.wakes.remove(&from);
     }
     /// A parked plugin keeps its wake events; otherwise they go.
-    fn revoke(&self, host: &mut Host, owner: u64, keep_recorded: bool) {
+    fn revoke(&self, core: &mut Core, owner: u64, keep_recorded: bool) {
         if !keep_recorded {
-            host.core.on_demand.wakes.remove(&owner);
+            core.on_demand.wakes.remove(&owner);
             return;
         }
-        let Some(plugin) = host.core.plugins.get(&owner) else {
+        let Some(plugin) = core.plugins.get(&owner) else {
             return;
         };
         let wakes = plugin
@@ -149,29 +149,28 @@ impl Capability for Events {
             .collect::<std::collections::BTreeSet<_>>();
         if !wakes.is_empty() {
             // What it last had of each, while start-up mutes them.
-            host.note_parked_listener(owner, &wakes);
-            host.core.on_demand.wakes.insert(owner, wakes);
+            core.note_parked_listener(owner, &wakes);
+            core.on_demand.wakes.insert(owner, wakes);
         }
     }
-    fn replay(&self, host: &mut Host, owner: u64, _: &Origin, call: &Call) -> Handled {
+    fn replay(&self, core: &mut Core, owner: u64, _: &Origin, call: &Call) -> Handled {
         let event = string(&call.params, "event")?;
         if call.method != "events.subscribe" || !WAKE_EVENTS.contains(&event) {
             return Err(RpcError::new("unsupported", "not a recorded method"));
         }
-        host.core
-            .on_demand
+        core.on_demand
             .wakes
             .entry(owner)
             .or_default()
             .insert(event.to_owned());
         Ok(None)
     }
-    fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
+    fn handle(&self, core: &mut Core, reply: &Reply, method: &str, params: &Value) -> Handled {
         let event = string(params, "event")?;
         if !EVENTS.contains(&event) {
             return Err(RpcError::new("unsupported", "unknown event"));
         }
-        let plugin = host.core.plugins.get_mut(&reply.owner).unwrap();
+        let plugin = core.plugins.get_mut(&reply.owner).unwrap();
         if method == "events.subscribe" {
             // Again for the same event replaces the mark: the SDK switches
             // between mirror and listener as listeners come and go.

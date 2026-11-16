@@ -257,7 +257,7 @@ pub fn hit(
     None
 }
 
-impl Host {
+impl Core {
     pub(crate) fn drops_dispatch(
         &mut self,
         owner: u64,
@@ -269,7 +269,7 @@ impl Host {
                 let id = string(params, "id")?;
                 let extensions =
                     parse_extensions(&params["extensions"]).map_err(RpcError::invalid)?;
-                let taken = self.core.drops.provide(Provider {
+                let taken = self.drops.provide(Provider {
                     owner,
                     id: id.into(),
                     extensions,
@@ -277,8 +277,7 @@ impl Host {
                 if !taken.is_empty() {
                     diag!(
                         "drops: {} already provided for {taken:?}; the earlier provider keeps them",
-                        self.core
-                            .plugins
+                        self.plugins
                             .get(&owner)
                             .map_or("?", |p| p.manifest.id.as_str())
                     );
@@ -286,7 +285,7 @@ impl Host {
                 Ok(Value::Null)
             }
             "drops.withdraw" => {
-                self.core.drops.withdraw(owner, string(params, "id")?);
+                self.drops.withdraw(owner, string(params, "id")?);
                 Ok(Value::Null)
             }
             "drops.listen" => {
@@ -294,15 +293,17 @@ impl Host {
                     .as_bool()
                     .ok_or_else(|| RpcError::invalid("listen requires a boolean"))?;
                 if listen {
-                    self.core.drops.panels.insert(owner);
+                    self.drops.panels.insert(owner);
                 } else {
-                    self.core.drops.panels.remove(&owner);
+                    self.drops.panels.remove(&owner);
                 }
                 Ok(Value::Null)
             }
             _ => Err(RpcError::new("unsupported", "unknown drops method")),
         }
     }
+}
+impl Host {
     /// A completed drop: the interface finds the panel under the pointer
     /// and hands the drop to the core (`UiReport::Drop`; plan step
     /// S2c(7)), which delivers it (`deliver_drop`).
@@ -393,6 +394,8 @@ impl Host {
             modifiers,
         }));
     }
+}
+impl Core {
     /// The core delivers a complete drop from its registry: to the panel
     /// under the pointer if it listens, else by extension to the providers
     /// (plan step S2c(7)).
@@ -409,7 +412,7 @@ impl Host {
                 .collect::<Vec<_>>()
         );
         if let Some((owner, (x, y))) = panel
-            && self.core.drops.panels.contains(&owner)
+            && self.drops.panels.contains(&owner)
         {
             self.send(
                 owner,
@@ -417,7 +420,7 @@ impl Host {
             );
             return;
         }
-        for (owner, id, paths) in self.core.drops.groups(&paths) {
+        for (owner, id, paths) in self.drops.groups(&paths) {
             self.send(
                 owner,
                 json!({"event":"drops.drop","data":{"id":id,"paths":paths,"modifiers":modifiers}}),

@@ -6,7 +6,7 @@
 //! are `jobs.start` / `jobs.check` with `parts` (`media_control.rs`).
 use super::{Capability, Handled, Info, Recorded, forward_media, plugin};
 use crate::host::{
-    Host, Reply, RpcError,
+    Core, Reply, RpcError,
     messages::{DialogPurpose, UiCommand},
 };
 use serde_json::{Value, json};
@@ -33,34 +33,34 @@ impl Capability for MediaSources {
     fn methods(&self) -> &'static [&'static str] {
         METHODS
     }
-    fn record(&self, _: &Host, _: u64, _: &Value) -> Recorded {
+    fn record(&self, _: &Core, _: u64, _: &Value) -> Recorded {
         Recorded::Nothing
     }
-    fn rekey(&self, _: &mut Host, _: u64, _: u64) {}
-    fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
+    fn rekey(&self, _: &mut Core, _: u64, _: u64) {}
+    fn handle(&self, core: &mut Core, reply: &Reply, method: &str, params: &Value) -> Handled {
         if !SOURCES.contains(&method) {
             return Err(RpcError::new("unsupported", "unknown method"));
         }
-        forward_with_store(host, reply, method, params)
+        forward_with_store(core, reply, method, params)
     }
 }
 
 /// Forward to the playback worker with the plugin's own store key as
 /// `store` (overwriting whatever the plugin sent).
 pub(super) fn forward_with_store(
-    host: &mut Host,
+    core: &mut Core,
     reply: &Reply,
     method: &str,
     params: &Value,
 ) -> Handled {
-    let key = crate::playback::media_sources::store_key(&plugin(host, reply)?.data_key);
+    let key = crate::playback::media_sources::store_key(&plugin(core, reply)?.data_key);
     let mut params = match params {
         Value::Null => json!({}),
         Value::Object(_) => params.clone(),
         _ => return Err(RpcError::invalid("object required")),
     };
     params["store"] = json!(key);
-    forward_media(host, reply, method, &params)
+    forward_media(core, reply, method, &params)
 }
 
 /// The shortest time between two Locate dialogs of one plugin.
@@ -72,17 +72,17 @@ static LAST_LOCATE: std::sync::Mutex<std::collections::BTreeMap<u64, std::time::
 /// (`fields`: `store`, `token`, `name`, `directory`); its choice goes back to
 /// the playback worker (`Event::SourceLocated`).
 pub(crate) fn locate_dialog(
-    host: &mut Host,
+    core: &mut Core,
     reply: &Reply,
     fields: Value,
 ) -> std::result::Result<(), RpcError> {
-    if host.core.headless {
+    if core.headless {
         return Err(RpcError::new(
             "unavailable",
             "native dialogs require a running native window",
         ));
     }
-    if host.core.dialog_busy {
+    if core.dialog_busy {
         return Err(RpcError::new("busy", "a native dialog is already open"));
     }
     // One dialog per plugin every few seconds: a plugin cannot put up one
@@ -110,11 +110,10 @@ pub(crate) fn locate_dialog(
     // `dialogs.open`'s, as the interface chooses (`origins::dialog_place`;
     // `UiCommand::OpenDialog`, plan step S2f(3)); its choice comes back as
     // `Event::SourceLocated`.
-    host.core.dialog_busy = true;
+    core.dialog_busy = true;
     #[cfg(feature = "producer-audio")]
-    host.core
-        .physical_revoke(crate::playback::producer_input::RevokeReason::Dialog);
-    host.ui_command(UiCommand::OpenDialog {
+    core.physical_revoke(crate::playback::producer_input::RevokeReason::Dialog);
+    core.ui_command(UiCommand::OpenDialog {
         reply: reply.clone(),
         purpose: DialogPurpose::Locate(fields),
     });

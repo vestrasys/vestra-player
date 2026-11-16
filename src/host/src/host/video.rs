@@ -292,6 +292,8 @@ impl Host {
             video: !self.video_absent,
         }
     }
+}
+impl Core {
     /// `window.setPictureInPicture { on }` (R-W5): answered once the system
     /// window has opened or closed. From fullscreen the player leaves
     /// fullscreen first. Plan step S2d: the core checks `on` and sends
@@ -312,6 +314,8 @@ impl Host {
         }));
         Ok(None)
     }
+}
+impl Host {
     /// The interface's side of `WindowOp::Pip` (plan step S2d): an answer
     /// the state machine gives at once (a refusal, or nothing to change) is
     /// reported now; otherwise `pip_tick` reports it when the system window
@@ -424,7 +428,7 @@ impl Host {
             match effect {
                 pip::Effect::Respond(reply, result) => self.pip_answered(reply, result),
                 pip::Effect::Action(action, step) => {
-                    if let Err(error) = self.run_core_action_with(action, None, step) {
+                    if let Err(error) = self.core.run_core_action_with(action, None, step) {
                         diag!("pip: {action}: {}", error.message);
                     }
                     // What the core's action asked of the interface (plan

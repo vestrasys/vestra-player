@@ -5,7 +5,7 @@ use crate::{
     commands,
     conditions::Conditions,
     core_actions,
-    host::{Host, Origin, Reply, RpcError, string},
+    host::{Core, Origin, Reply, RpcError, string},
     i18n, input_trace,
 };
 use serde_json::{Value, json};
@@ -32,12 +32,12 @@ impl Capability for Commands {
     }
     /// Each command as its plugin registered it, with its last state (never
     /// busy: a busy command keeps its plugin running, `Host::lazy_idle`).
-    fn record(&self, host: &Host, owner: u64, _: &Value) -> Recorded {
-        if host.core.commands.unsent(owner) {
+    fn record(&self, core: &Core, owner: u64, _: &Value) -> Recorded {
+        if core.commands.unsent(owner) {
             return Recorded::Live("a command without its registration");
         }
-        let calls = host
-            .core.commands
+        let calls = core
+            .commands
             .sent_of(owner)
             .into_iter()
             .map(|(id, revision, sent)| {
@@ -54,37 +54,37 @@ impl Capability for Commands {
             .collect();
         Recorded::Calls(calls)
     }
-    fn rekey(&self, host: &mut Host, from: u64, to: u64) {
-        if let Err(error) = host.core.commands.rekey(from, to) {
+    fn rekey(&self, core: &mut Core, from: u64, to: u64) {
+        if let Err(error) = core.commands.rekey(from, to) {
             diag!("lazy: commands of {from}: {error}");
         }
-        host.core.bindings_mut().rekey(from, to);
+        core.bindings_mut().rekey(from, to);
     }
-    fn revoke(&self, host: &mut Host, owner: u64, keep_recorded: bool) {
+    fn revoke(&self, core: &mut Core, owner: u64, keep_recorded: bool) {
         if keep_recorded {
-            host.core.commands.mark_recorded(owner);
+            core.commands.mark_recorded(owner);
         } else {
-            let _ = host.core.commands.remove_owner(owner);
-            host.core.bindings_mut().remove_owner(owner);
+            let _ = core.commands.remove_owner(owner);
+            core.bindings_mut().remove_owner(owner);
         }
     }
-    fn prune(&self, host: &mut Host, owner: u64) {
-        match host.core.commands.remove_recorded(owner) {
+    fn prune(&self, core: &mut Core, owner: u64) {
+        match core.commands.remove_recorded(owner) {
             Ok(gone) => {
                 for id in gone {
-                    host.core.bindings_mut().remove(owner, &id);
+                    core.bindings_mut().remove(owner, &id);
                 }
             }
             Err(error) => diag!("lazy: commands of {owner}: {error}"),
         }
     }
-    fn replay(&self, host: &mut Host, owner: u64, origin: &Origin, call: &Call) -> Handled {
+    fn replay(&self, core: &mut Core, owner: u64, origin: &Origin, call: &Call) -> Handled {
         match call.method.as_str() {
-            "commands.register" => register(host, owner, origin, &call.params).map(|()| None),
+            "commands.register" => register(core, owner, origin, &call.params).map(|()| None),
             _ => Err(RpcError::new("unsupported", "not a recorded method")),
         }
     }
-    fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
+    fn handle(&self, core: &mut Core, reply: &Reply, method: &str, params: &Value) -> Handled {
         match method {
             "host.run" => {
                 let action = string(params, "action")?;
@@ -95,7 +95,7 @@ impl Capability for Commands {
                 // SDK 1.5.19: one step seek of another step (tiers 2–4).
                 let step = core_actions::run_step(action, &params["seconds"])
                     .map_err(RpcError::invalid)?;
-                if !host.run_core_action_with(action, Some(reply), step)? {
+                if !core.run_core_action_with(action, Some(reply), step)? {
                     return Ok(None);
                 }
                 Ok(Some(Value::Null))
@@ -103,46 +103,43 @@ impl Capability for Commands {
             // Player 0.7.6 (`plugin.commands.keys`): the caller's own
             // commands and the player's (`host/<id>`, SDK 1.6.16), never
             // another plugin's; changes come as the `commands.keys` event.
-            "commands.keys" => Ok(Some(host.command_keys(reply.owner))),
+            "commands.keys" => Ok(Some(core.command_keys(reply.owner))),
             "commands.unregister" => {
                 let id = string(params, "id")?;
-                host.core
-                    .commands
+                core.commands
                     .remove(reply.owner, id)
                     .map_err(|e| RpcError::new(e.code(), e.to_string()))?;
-                host.core.bindings_mut().remove(reply.owner, id);
+                core.bindings_mut().remove(reply.owner, id);
                 // An open menu is the interface's (plan step S2f(1)).
-                host.ui_command(crate::host::messages::UiCommand::RefreshMenu);
+                core.ui_command(crate::host::messages::UiCommand::RefreshMenu);
                 Ok(Some(Value::Null))
             }
-            _ => register_or_update(host, reply, method, params).map(Some),
+            _ => register_or_update(core, reply, method, params).map(Some),
         }
     }
 }
 
 /// `commands.register` and `commands.update`.
 fn register_or_update(
-    host: &mut Host,
+    core: &mut Core,
     reply: &Reply,
     method: &str,
     params: &Value,
 ) -> std::result::Result<Value, RpcError> {
-    let origin = plugin(host, reply)?.origin();
+    let origin = plugin(core, reply)?.origin();
     if method == "commands.register" {
-        register(host, reply.owner, &origin, params)?;
+        register(core, reply.owner, &origin, params)?;
     } else {
         let (id, revision, state) = parsed(&origin, params)?;
         let conditions = conditions(params)?;
-        host.core
-            .commands
+        core.commands
             .update(reply.owner, id, revision, state)
             .map_err(|e| RpcError::new("command", e.to_string()))?;
-        refresh_conditions(host);
-        host.core
-            .commands
+        refresh_conditions(core);
+        core.commands
             .set_conditions(reply.owner, id, conditions)
             .map_err(|e| RpcError::new(e.code(), e.to_string()))?;
-        host.core.commands.note_sent(
+        core.commands.note_sent(
             reply.owner,
             id,
             None,
@@ -150,7 +147,7 @@ fn register_or_update(
             params["when"].clone(),
         );
     }
-    Ok(json!({"revision":host.core.commands.revision()}))
+    Ok(json!({"revision":core.commands.revision()}))
 }
 
 /// The id, revision and state of a register or update; the disabled reason
@@ -181,7 +178,7 @@ fn parsed<'a>(
 /// A `commands.register` of `owner`'s, from its package `origin`: sent by
 /// its running plugin, or replayed from its recording (lazy activation).
 fn register(
-    host: &mut Host,
+    core: &mut Core,
     owner: u64,
     origin: &Origin,
     params: &Value,
@@ -244,24 +241,21 @@ fn register(
     // Everything that can refuse the registration (bindings parsed and not
     // repeated, the id, path, conflict and limits) is checked by the
     // registry before it changes; what follows only records it.
-    host.core
-        .commands
+    core.commands
         .register(owner, &origin.id, id.into(), revision, declaration, state)
         .map_err(|e| RpcError::new(e.code(), e.to_string()))?;
-    refresh_conditions(host);
-    host.core
-        .commands
+    refresh_conditions(core);
+    core.commands
         .set_conditions(owner, id, conditions)
         .map_err(|e| RpcError::new(e.code(), e.to_string()))?;
-    host.core.commands.note_sent(
+    core.commands.note_sent(
         owner,
         id,
         Some(params["declaration"].clone()),
         params["state"].clone(),
         params["when"].clone(),
     );
-    host.core
-        .bindings_mut()
+    core.bindings_mut()
         .declare(owner, id, &origin.id, &bindings, panel, repeat)
         .map_err(RpcError::invalid)?;
     Ok(())
@@ -280,9 +274,9 @@ fn conditions(params: &Value) -> std::result::Result<Option<Conditions>, RpcErro
 /// `appearance.changed`, and the playback worker's subtitle track,
 /// `Host::triggers_subtitle`), and before a command's conditions are first
 /// evaluated.
-pub(crate) fn refresh_conditions(host: &mut Host) {
-    let facts = host.condition_facts();
-    host.core.commands.set_facts(facts);
+pub(crate) fn refresh_conditions(core: &mut Core) {
+    let facts = core.condition_facts();
+    core.commands.set_facts(facts);
 }
 
 /// `declaration.button`: `{ icon, order }`, the icon a name of the icon
