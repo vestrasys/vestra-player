@@ -17,8 +17,10 @@
 //! S2d(1): [`UiCommand::View`] with the view requests' [`UiReport::Answered`],
 //! [`WindowOp::VideoArea`] with [`UiReport::AreaFitted`] and
 //! [`UiReport::VideoArea`], [`WindowOp::Pip`]; S2d(2): [`UiReport::Batching`],
-//! [`UiCommand::CancelMount`], [`UiSnapshot::StartupSettled`]), S3a moves the
-//! core to its own thread.
+//! [`UiCommand::CancelMount`], [`UiSnapshot::StartupSettled`]; S2d(3):
+//! [`UiCommand::RevokeOwner`], [`UiCommand::Panels`], [`UiCommand::DropConfirm`],
+//! [`SettingsOp::OwnerGone`], [`SettingsOp::Rekeyed`]), S3a moves the core to
+//! its own thread.
 //!
 //! Each variant names the rows of the design's method table (§5.1, "row
 //! 36") and the rules it serves. A variant is one of two kinds:
@@ -123,13 +125,24 @@ pub(crate) enum UiCommand {
     /// key or a menu through `host_command`): open the palette in the main
     /// window.
     OpenPalette,
-    /// A plugin stopped: its views, mounts, OSD buttons, floating window
-    /// and shell properties go (K3; `stop_run`). `park`: it went to
-    /// standby, its sidebar tabs stay as recorded placeholders.
+    /// A plugin stopped (K3; `stop_run`; plan step S2d(3)): the interface
+    /// drops what it keeps of the run: the input slots naming it, its OSD
+    /// buttons, its panel menu, its images, its picture-in-picture, its
+    /// tool windows. `park`: it went to standby (its recorded tabs stay;
+    /// the core leaves them out of the panels it sends as
+    /// [`PanelsOp::Gone`]).
     RevokeOwner { owner: u64, park: bool },
     /// A woken or restarted plugin's interface moves to its new owner
-    /// generation (panels, views, settings pages).
+    /// generation. Not sent as built in plan step S2d(3): the interface's
+    /// rekeys carry the keys and pages they move ([`PanelsOp::Rekeyed`],
+    /// [`SettingsOp::Rekeyed`]), sent where the core moved its own.
     RekeyOwner { from: u64, to: u64 },
+    /// Panels leave or change owner (plan step S2d(3)): the interface's part
+    /// of the core's removals and rekeys of mount records.
+    Panels(PanelsOp),
+    /// A plugin stopped while its `dialogs.confirm` waits on the sheet
+    /// (`ui.dialog`'s revoke; plan step S2d(3)): the sheet ends unanswered.
+    DropConfirm { owner: u64 },
     /// A view shows its initial properties again: `ui.mount` (row 40, at
     /// the request, before the batching window) and `settings.register`
     /// (row 83a). Row patches apply on them (`seq` 0), so the interface
@@ -147,6 +160,28 @@ pub(crate) enum UiCommand {
     /// interface drops it if its window holds it and reports
     /// [`UiReport::Batching`]; the core has cleared its record already.
     CancelMount(MountCancel),
+}
+
+/// See [`UiCommand::Panels`].
+pub(crate) enum PanelsOp {
+    /// Panels of a stopped run, or kept panels whose restart never came
+    /// (`stop_run`, `drop_panels`), with their slots, in the core's order:
+    /// the floating window closes if it shows one, they leave the panel
+    /// policy (the tabs are reported), and a slot whose last panel left is
+    /// hidden in the shell.
+    Gone(Vec<(u64, composition::Slot)>),
+    /// A placeholder tab goes (`ui.mount`'s revoke and prune): it leaves the
+    /// panel policy (the tabs are reported).
+    PlaceholderGone(u64),
+    /// Run `from`'s panels are run `to`'s now, under the keys `keys`
+    /// (old, new), in the core's order (`rekey_panels`): the policy, the
+    /// drawn panels, the floating window, the columns and the input slots
+    /// follow, and the tabs are reported.
+    Rekeyed {
+        from: u64,
+        to: u64,
+        keys: Vec<(u64, u64)>,
+    },
 }
 
 /// See [`UiCommand::CancelMount`].
@@ -262,6 +297,13 @@ pub(crate) enum SettingsOp {
     /// `settings.show` (row 83d; stream B): answered with the window's
     /// open error.
     Show { reply: Reply, params: Value },
+    /// Pages of `owner` left the registry (its stop for good, or the
+    /// recorded pages its woken run did not register again; plan step
+    /// S2d(3)): an open window is rebuilt.
+    OwnerGone { owner: u64 },
+    /// A woken plugin's pages `serials` belong to run `to` now (plan step
+    /// S2d(3)): an open window's callbacks follow.
+    Rekeyed { serials: Vec<u64>, to: u64 },
 }
 
 pub(crate) enum WindowOp {
@@ -1067,6 +1109,8 @@ mod tests {
                 SettingsOp::Removed { .. } => "Settings.Removed",
                 SettingsOp::Set { .. } => "Settings.Set",
                 SettingsOp::Show { .. } => "Settings.Show",
+                SettingsOp::OwnerGone { .. } => "Settings.OwnerGone",
+                SettingsOp::Rekeyed { .. } => "Settings.Rekeyed",
             },
             UiCommand::Window(op) => match op {
                 WindowOp::VideoArea { .. } => "Window.VideoArea",
@@ -1109,6 +1153,12 @@ mod tests {
             UiCommand::RekeyOwner { .. } => "RekeyOwner",
             UiCommand::ResetWrites { .. } => "ResetWrites",
             UiCommand::CancelMount(_) => "CancelMount",
+            UiCommand::Panels(op) => match op {
+                PanelsOp::Gone(_) => "Panels.Gone",
+                PanelsOp::PlaceholderGone(_) => "Panels.PlaceholderGone",
+                PanelsOp::Rekeyed { .. } => "Panels.Rekeyed",
+            },
+            UiCommand::DropConfirm { .. } => "DropConfirm",
         }
     }
 
@@ -1259,6 +1309,44 @@ mod tests {
         assert!(held(4).replaces(&UiReport::Batching(None)));
         for other in every_report() {
             assert!(!held(3).replaces(&other) && !other.replaces(&held(3)));
+        }
+    }
+
+    /// What plan step S2d(3) added: the interface's parts of a stop, a
+    /// revoke and a rekey are ordered and never collapse.
+    #[test]
+    fn the_owner_and_panel_commands_are_ordered() {
+        let added = [
+            UiCommand::Panels(PanelsOp::Gone(vec![(28, composition::Slot::Sidebar)])),
+            UiCommand::Panels(PanelsOp::PlaceholderGone(28)),
+            UiCommand::Panels(PanelsOp::Rekeyed {
+                from: 7,
+                to: 8,
+                keys: vec![(28, 32)],
+            }),
+            UiCommand::DropConfirm { owner: 7 },
+            UiCommand::Settings(SettingsOp::OwnerGone { owner: 7 }),
+            UiCommand::Settings(SettingsOp::Rekeyed {
+                serials: vec![1],
+                to: 8,
+            }),
+        ];
+        let names: Vec<_> = added.iter().map(command_name).collect();
+        assert_eq!(
+            names,
+            [
+                "Panels.Gone",
+                "Panels.PlaceholderGone",
+                "Panels.Rekeyed",
+                "DropConfirm",
+                "Settings.OwnerGone",
+                "Settings.Rekeyed"
+            ]
+        );
+        for command in &added {
+            for other in added.iter().chain(every_command().iter()) {
+                assert!(!command.replaces(other) && !other.replaces(command));
+            }
         }
     }
 

@@ -1,5 +1,6 @@
 //! A plugin's life in the host: activation, loading, disabling, sending
 //! and broadcasting.
+use super::messages::{MountCancel, PanelsOp, UiCommand};
 use super::*;
 
 /// What a plugin wrote that the host shows by itself (its timeline layer,
@@ -216,31 +217,6 @@ impl Host {
             .filter(|m| !kept.contains(&m.spec.owner))
             .map(|m| m.spec.owner)
             .collect::<Vec<_>>();
-        {
-            let mut input = self.input.borrow_mut();
-            if input.bottom == Some(owner) {
-                input.bottom = None;
-            }
-            if input.sidebar == Some(owner) {
-                input.sidebar = None;
-            }
-            if input.adjust == Some(owner) {
-                input.adjust = None;
-            }
-        }
-        // Each gone tab's column before it goes.
-        let tabs_before = gone
-            .iter()
-            .map(|key| {
-                self.core
-                    .mounts
-                    .get(key)
-                    .filter(|m| m.spec.slot.tabbed())
-                    .and_then(|m| policy_slot(m.spec.slot))
-                    .map(|slot| self.policy.panels(slot))
-                    .unwrap_or_default()
-            })
-            .collect::<Vec<_>>();
         if self
             .core
             .sequence
@@ -249,25 +225,19 @@ impl Host {
             self.core.sequence = None;
             self.rebroadcast_source();
         }
-        self.drop_osd_actions(owner);
+        // The interface's part (K3; plan step S2d(3)): its gone panels, with
+        // their slots, then what it keeps of the run. Nothing the core does
+        // below reads it, and none of it writes a line to a plugin (but a
+        // failed menu close's `host.error`, as before).
+        let panels = gone
+            .iter()
+            .filter_map(|key| self.core.mounts.get(key).map(|m| (*key, m.spec.slot)))
+            .collect();
+        self.ui_command(UiCommand::Panels(PanelsOp::Gone(panels)));
+        self.ui_command(UiCommand::RevokeOwner { owner, park });
         if self.core.info_panels.remove(&owner).is_some() {
             self.info_panels_changed();
         }
-        // The floating window opens again without this panel (`sync_floating`).
-        if self
-            .floating
-            .as_ref()
-            .is_some_and(|f| gone.iter().any(|key| f.owners.contains(key)))
-        {
-            self.close_floating();
-        }
-        if matches!(&self.menu_mode, MenuMode::Panel(menu_owner, _) if *menu_owner == owner) {
-            self.close_menu();
-        }
-        for key in &gone {
-            self.policy.remove_owner(*key);
-        }
-        self.report_tabs();
         self.power.remove_owner(owner);
         // Its timeline layer and window settings stay through a standby,
         // held under `owner` until it wakes (`rekey`) or its standby ends
@@ -277,8 +247,6 @@ impl Host {
             self.core.on_top.remove(owner);
             self.core.cursor_playing.remove(owner);
         }
-        self.images.release_owner(owner);
-        self.pip.remove_owner(owner);
         let step = self.core.step_seconds();
         if self.core.step_seek.remove(&owner).is_some() {
             self.step_seek_changed(step);
@@ -295,21 +263,11 @@ impl Host {
             .is_some_and(|h| h.reply.owner == owner)
         {
             self.core.handed = None;
-            self.ui_command(super::messages::UiCommand::CancelMount(
-                super::messages::MountCancel::Owner(owner),
-            ));
+            self.ui_command(UiCommand::CancelMount(MountCancel::Owner(owner)));
         }
-        for (key, tabs_before) in gone.into_iter().zip(tabs_before) {
-            let Some(mount) = self.core.mounts.remove(&key) else {
+        for key in gone {
+            if self.core.mounts.remove(&key).is_none() {
                 continue;
-            };
-            // Another tab of its column stays shown until the shell is rebuilt.
-            let last_tab = tabs_before.iter().all(|&o| o == key);
-            if let Some(shell) = &self.shell
-                && let Some(property) = mount.spec.slot.visible_property()
-                && (!mount.spec.slot.tabbed() || last_tab)
-            {
-                let _ = shell.set_property(property, false.into());
             }
             self.core.mount_queue.push_front(MountChange {
                 reply: Reply { owner, id: 0 },
@@ -331,17 +289,6 @@ impl Host {
             .into(),
             params: Value::Null,
         });
-        let keys: Vec<_> = self
-            .views
-            .keys()
-            .filter(|(key, _)| *key == owner)
-            .cloned()
-            .collect();
-        for key in keys {
-            if let Some(view) = self.views.remove(&key) {
-                let _ = view.instance.hide();
-            }
-        }
         // Waiting for graceful disposal/killing belongs off the Slint event
         // loop: the reaper thread's, which reports `Event::Reaped`; until
         // then (and the playback worker's `BackendCleaned`) the unit is
@@ -451,6 +398,42 @@ impl Host {
         // A plugin in standby that listens to a low-frequency event is
         // woken to receive it (lazy activation §6.9).
         self.wake_listeners(event, &data);
+    }
+    /// The interface's side of `UiCommand::RevokeOwner` (K3; plan step
+    /// S2d(3)): what it keeps of a stopped run goes, in `stop_run`'s
+    /// order: the input slots naming it, its OSD buttons, its panel menu,
+    /// its images, its picture-in-picture (a pending request of it is
+    /// dropped unanswered, as before), its tool windows.
+    pub(crate) fn revoke_owner(&mut self, owner: u64) {
+        {
+            let mut input = self.input.borrow_mut();
+            if input.bottom == Some(owner) {
+                input.bottom = None;
+            }
+            if input.sidebar == Some(owner) {
+                input.sidebar = None;
+            }
+            if input.adjust == Some(owner) {
+                input.adjust = None;
+            }
+        }
+        self.drop_osd_actions(owner);
+        if matches!(&self.menu_mode, MenuMode::Panel(menu_owner, _) if *menu_owner == owner) {
+            self.close_menu();
+        }
+        self.images.release_owner(owner);
+        self.pip.remove_owner(owner);
+        let keys: Vec<_> = self
+            .views
+            .keys()
+            .filter(|(key, _)| *key == owner)
+            .cloned()
+            .collect();
+        for key in keys {
+            if let Some(view) = self.views.remove(&key) {
+                let _ = view.instance.hide();
+            }
+        }
     }
 }
 impl Core {

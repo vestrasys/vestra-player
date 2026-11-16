@@ -181,8 +181,20 @@ impl Host {
         if self.preparing.is_none() {
             if let Some(change) = self.core.mount_command().map(mount_change) {
                 let preparing = unannounced([&change]);
+                // Handed over, not yet in the window: its `ui.preparing` goes
+                // out first (a full pipe can stop its plugin right there,
+                // `transport_failed`, and `stop_run` cancels the record), so
+                // the debug check of the record waits until the window has it.
+                #[cfg(debug_assertions)]
+                {
+                    self.handing_over = true;
+                }
                 if !preparing.is_empty() {
                     self.ui_report(UiReport::MountPreparing(preparing));
+                }
+                #[cfg(debug_assertions)]
+                {
+                    self.handing_over = false;
                 }
                 self.set_preparing(Some((Instant::now(), change)));
             }
@@ -343,10 +355,15 @@ impl Host {
         }
     }
     /// Debug builds: the core's record of the change the batching window
-    /// holds is the window's wherever the core reads it (plan step S2d(2)).
-    /// Removed with the in-place delivery (plan S3a).
+    /// holds is the window's at the core's reads of it (plan step S2d(2)),
+    /// except while a change is being handed over (`handing_over`: the
+    /// record is set, the window not yet). Removed with the in-place
+    /// delivery (plan S3a).
     #[cfg(debug_assertions)]
     pub(crate) fn check_handed(&self) {
+        if self.handing_over {
+            return;
+        }
         let window = self
             .preparing
             .as_ref()
@@ -487,6 +504,11 @@ impl Host {
             // Plan step S2d(2): the core cancels the change the batching
             // window holds; start-up settled.
             UiCommand::CancelMount(cancel) => self.cancel_mount(cancel),
+            // Plan step S2d(3): a stopped run's interface part, panels that
+            // leave or move, a stopped plugin's waiting sheet.
+            UiCommand::RevokeOwner { owner, park: _ } => self.revoke_owner(owner),
+            UiCommand::Panels(op) => self.panels_command(op),
+            UiCommand::DropConfirm { owner } => self.drop_confirm_of(owner),
             UiCommand::Snapshot(UiSnapshot::StartupSettled(settled)) => {
                 self.startup_panels = settled;
             }

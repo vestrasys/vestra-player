@@ -591,6 +591,8 @@ fn player() -> Result<()> {
         views: BTreeMap::new(),
         shell: None,
         preparing: None,
+        #[cfg(debug_assertions)]
+        handing_over: false,
         mount_singly: 0,
         mount_events,
         mount_input,

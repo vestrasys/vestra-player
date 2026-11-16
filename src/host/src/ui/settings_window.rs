@@ -794,6 +794,10 @@ impl Host {
                     confirm_failed: false,
                 });
             }
+            // Plan step S2d(3): the interface's part of the pages' revoke,
+            // prune and rekey.
+            SettingsOp::OwnerGone { .. } => self.settings.changed(),
+            SettingsOp::Rekeyed { serials, to } => self.settings.rekey(&serials, to),
         }
     }
     /// `settings.set` in the interface (row 83c): the value goes into the
