@@ -15,6 +15,7 @@
 //! one process per selected file for "Open" on a multiple selection, and
 //! each of those hands its file over separately (`single_instance`).
 #![forbid(unsafe_code)]
+use crate::host::messages::{UiCommand, UiSnapshot};
 use crate::host::*;
 use crate::supervisor::activation;
 use serde_json::json;
@@ -69,19 +70,32 @@ impl Host {
     /// UI thread when it is mounted, and one landing just after playback
     /// began stalled it. Plugins whose start waits behind the built-ins are
     /// not waited for: a panel of theirs costs its own compile only.
+    ///
+    /// Plan step S2d(2): the decision is the core's (`Core::startup_panels`),
+    /// from its own queues and its record of the change the interface's
+    /// batching window holds (`Core::handed`); the interface's columns get
+    /// it as `UiSnapshot::StartupSettled` when it turns true.
     pub(super) fn open_files_tick(&mut self) {
-        if !self.startup_panels && self.core.now_ms() >= SETTLE_LIMIT.as_millis() as u64 {
+        let before = self.core.startup_panels;
+        if !self.core.startup_panels && self.core.now_ms() >= SETTLE_LIMIT.as_millis() as u64 {
             // A start that never settles (a plugin retried after a crash)
             // keeps no later file waiting.
-            self.startup_panels = true;
+            self.core.startup_panels = true;
         }
-        if !self.startup_panels {
-            self.startup_panels = self.core.mount_queue.is_empty()
-                && self.preparing.is_none()
+        if !self.core.startup_panels {
+            #[cfg(debug_assertions)]
+            self.check_handed();
+            self.core.startup_panels = self.core.mount_queue.is_empty()
+                && self.core.handed.is_none()
                 && self.core.held_mounts.is_empty()
                 && self.startup_has_settled();
         }
-        let settled = self.startup_panels
+        if self.core.startup_panels != before {
+            self.ui_command(UiCommand::Snapshot(UiSnapshot::StartupSettled(
+                self.core.startup_panels,
+            )));
+        }
+        let settled = self.core.startup_panels
             && self.core.packages_started()
             && !self.core.builtin_first_run_queued()
             && {

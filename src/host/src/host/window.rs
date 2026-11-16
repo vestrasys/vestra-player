@@ -468,7 +468,9 @@ impl Host {
                 result,
             } => self.core.area_fitted(reply, video, result),
             UiReport::VideoArea { size, now } => self.answer_video_area(size, now),
-            _ => unreachable!("not reported before plan step S2d"),
+            // Plan step S2d(2): the change the batching window holds.
+            UiReport::Batching(held) => self.core.handed = held,
+            _ => unreachable!("not reported until plan step S2d(3), S2d(4) or S3a"),
         }
     }
     /// The fullscreen title strip (`title-strip.slint`): it applies to the

@@ -552,6 +552,19 @@ pub(crate) struct Core {
     /// (`UiReport::AreaFitted`; plan step S2d), answered once the layout
     /// shows their size (`UiReport::VideoArea`) or a second after.
     pub(crate) area_replies: Vec<AreaReply>,
+    /// The mount change the interface's batching window holds (plan step
+    /// S2d(2)): set when the core hands one over (`mount_command`),
+    /// replaced by the interface's `UiReport::Batching`, cleared when the
+    /// core cancels it (`UiCommand::CancelMount`). The core's checks of
+    /// pending mount changes read it, not the window.
+    pub(crate) handed: Option<mounts::HandedMount>,
+    /// The plugins' start-up panels are in place: start-up settled with no
+    /// mount left to apply (`open_files_tick`, a core step; a file given at
+    /// launch opens only then, so no panel's compile lands on early
+    /// playback). The interface keeps a copy for its columns
+    /// (`Host::startup_panels`, `UiSnapshot::StartupSettled`; plan step
+    /// S2d(2)).
+    pub(crate) startup_panels: bool,
     /// On-demand start: the Host's side of standby, wake and
     /// classification (`supervisor/`, supervisor.md §4). Moved from `Host`
     /// in plan step S2c as its last field, so it drops after every other
@@ -639,13 +652,8 @@ pub(crate) struct Host {
     /// Panels kept while their plugin restarts after a crash
     /// (`panel_restart.rs`).
     pub(crate) restarts: panel_restart::Restarts,
-    /// The plugins' start-up panels are in place: start-up settled with no
-    /// mount left to apply (`open_files_tick`; a file given at launch opens
-    /// only then, so no panel's compile lands on early playback). Still
-    /// here after plan step S2c(7): `open_files_tick` (a core step) decides
-    /// it from the core's queues and the interface's batching window, and
-    /// the interface reads it for its columns; that coupling gets its
-    /// explicit pair in plan step S2d.
+    /// The interface's copy of `Core::startup_panels` (plan step S2d(2);
+    /// `UiSnapshot::StartupSettled`): its columns read it (`current_in`).
     pub(crate) startup_panels: bool,
     /// Panels whose file did not compile when they were first shown
     /// (reported to their plugin): left out until they mount again.

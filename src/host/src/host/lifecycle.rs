@@ -284,12 +284,20 @@ impl Host {
             self.step_seek_changed(step);
         }
         self.core.mount_queue.retain(|c| c.reply.owner != owner);
+        // One the interface's batching window holds: the core cancels it
+        // there (plan step S2d(2)).
+        #[cfg(debug_assertions)]
+        self.check_handed();
         if self
-            .preparing
+            .core
+            .handed
             .as_ref()
-            .is_some_and(|(_, c)| c.reply.owner == owner)
+            .is_some_and(|h| h.reply.owner == owner)
         {
-            self.preparing = None;
+            self.core.handed = None;
+            self.ui_command(super::messages::UiCommand::CancelMount(
+                super::messages::MountCancel::Owner(owner),
+            ));
         }
         for (key, tabs_before) in gone.into_iter().zip(tabs_before) {
             let Some(mount) = self.core.mounts.remove(&key) else {

@@ -16,8 +16,9 @@
 //! [`WindowOp::OnTop`], [`UiReport::Remembered`] and [`UiReport::Drop`];
 //! S2d(1): [`UiCommand::View`] with the view requests' [`UiReport::Answered`],
 //! [`WindowOp::VideoArea`] with [`UiReport::AreaFitted`] and
-//! [`UiReport::VideoArea`], [`WindowOp::Pip`]), S3a moves the core to its
-//! own thread.
+//! [`UiReport::VideoArea`], [`WindowOp::Pip`]; S2d(2): [`UiReport::Batching`],
+//! [`UiCommand::CancelMount`], [`UiSnapshot::StartupSettled`]), S3a moves the
+//! core to its own thread.
 //!
 //! Each variant names the rows of the design's method table (§5.1, "row
 //! 36") and the rules it serves. A variant is one of two kinds:
@@ -140,6 +141,21 @@ pub(crate) enum UiCommand {
     /// (plan step S2c(6); design §7, K8): the `stale` check and the write
     /// it guards are one step of the UI-bound stream.
     ResetWrites { owner: u64, view: String },
+    /// The core cancels the mount change the interface's batching window
+    /// holds (plan step S2d(2)): the host's own removal of a panel, given
+    /// way to its plugin's mount, or every change of a stopped plugin. The
+    /// interface drops it if its window holds it and reports
+    /// [`UiReport::Batching`]; the core has cleared its record already.
+    CancelMount(MountCancel),
+}
+
+/// See [`UiCommand::CancelMount`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum MountCancel {
+    /// The host's own removal (an unmount with id 0) of panel `key`.
+    Removal { key: u64 },
+    /// Any change of a stopped plugin (its owner generation).
+    Owner(u64),
 }
 
 /// The core's tables and values the UI shows. Each is the whole value at
@@ -173,6 +189,10 @@ pub(crate) enum UiSnapshot {
     /// while playing, picture-in-picture's playback, the first draws'
     /// crash guard.
     LastSource(Arc<Value>),
+    /// The plugins' start-up panels are in place (plan step S2d(2);
+    /// `Core::startup_panels`, decided in `open_files_tick`): the
+    /// interface's columns stop waiting for their remembered tabs.
+    StartupSettled(bool),
 }
 
 /// See [`UiSnapshot::Source`].
@@ -483,6 +503,12 @@ pub(crate) enum UiReport {
     /// The core's window facts are measured earlier in the same tick, so
     /// they cannot stand in for it without moving the reply a tick later.
     VideoArea { size: (f64, f64), now: u64 },
+    /// The mount change the interface's batching window holds now, or none
+    /// (plan step S2d(2)): sent where the window opens, closes, takes a
+    /// failed batch's first change again, or drops one the core
+    /// cancelled. The core replaces its record (`Core::handed`), which it
+    /// also sets itself when it hands a change over. Last value wins.
+    Batching(Option<super::mounts::HandedMount>),
     /// Mount changes left the batching queue: the core sends their
     /// `ui.preparing` (`phase: preparing`) lines, in this order. Only
     /// changes not announced before (a failed batch's changes are put back
@@ -676,6 +702,7 @@ impl UiReport {
                 | (Self::FrameShown(_), Self::FrameShown(_))
                 | (Self::Remembered { .. }, Self::Remembered { .. })
                 | (Self::VideoArea { .. }, Self::VideoArea { .. })
+                | (Self::Batching(_), Self::Batching(_))
         )
     }
 }
@@ -1023,6 +1050,7 @@ mod tests {
                 UiSnapshot::Source(_) => "Source",
                 UiSnapshot::CursorAutoHide(_) => "CursorAutoHide",
                 UiSnapshot::LastSource(_) => "LastSource",
+                UiSnapshot::StartupSettled(_) => "StartupSettled",
             },
             UiCommand::View(op) => match op.kind {
                 ViewKind::Open { .. } => "View.Open",
@@ -1080,6 +1108,7 @@ mod tests {
             UiCommand::RevokeOwner { .. } => "RevokeOwner",
             UiCommand::RekeyOwner { .. } => "RekeyOwner",
             UiCommand::ResetWrites { .. } => "ResetWrites",
+            UiCommand::CancelMount(_) => "CancelMount",
         }
     }
 
@@ -1096,6 +1125,7 @@ mod tests {
             UiReport::Remembered { .. } => "Remembered",
             UiReport::Drop(_) => "Drop",
             UiReport::VideoArea { .. } => "VideoArea",
+            UiReport::Batching(_) => "Batching",
             UiReport::Event(event) => event.0.label().0,
         }
     }
@@ -1192,6 +1222,43 @@ mod tests {
         assert!(area(641.).replaces(&area(640.)));
         for other in every_report() {
             assert!(!area(640.).replaces(&other) && !other.replaces(&area(640.)));
+        }
+    }
+
+    /// What plan step S2d(2) added: a cancellation is ordered, start-up
+    /// settled and the batching window's change are values that replace
+    /// only an older one of their kind.
+    #[test]
+    fn a_cancel_is_ordered_and_the_settled_and_batching_values_coalesce() {
+        let cancels = [
+            UiCommand::CancelMount(MountCancel::Removal { key: 28 }),
+            UiCommand::CancelMount(MountCancel::Owner(7)),
+        ];
+        for cancel in &cancels {
+            assert_eq!(command_name(cancel), "CancelMount");
+            for other in cancels.iter().chain(every_command().iter()) {
+                assert!(!cancel.replaces(other) && !other.replaces(cancel));
+            }
+        }
+        let settled = |on| UiCommand::Snapshot(UiSnapshot::StartupSettled(on));
+        assert_eq!(command_name(&settled(true)), "StartupSettled");
+        assert!(settled(true).replaces(&settled(false)));
+        for other in every_command() {
+            assert!(!settled(true).replaces(&other) && !other.replaces(&settled(true)));
+        }
+        let held = |id| {
+            UiReport::Batching(Some(super::super::mounts::HandedMount {
+                reply: reply(id),
+                key: 28,
+                slot: Some(composition::Slot::Sidebar),
+                call: json!({}),
+            }))
+        };
+        assert_eq!(report_name(&held(3)), "Batching");
+        assert!(UiReport::Batching(None).replaces(&held(3)));
+        assert!(held(4).replaces(&UiReport::Batching(None)));
+        for other in every_report() {
+            assert!(!held(3).replaces(&other) && !other.replaces(&held(3)));
         }
     }
 

@@ -575,6 +575,9 @@ fn player() -> Result<()> {
         drops: Default::default(),
         ui_state,
         area_replies: Vec::new(),
+        handed: None,
+        // Headless runs mount nothing.
+        startup_panels: headless,
         // Made above, before the clock, as before plan step S2c moved it
         // from `Host`.
         on_demand,
