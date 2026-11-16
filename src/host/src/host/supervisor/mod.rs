@@ -1715,6 +1715,11 @@ impl Host {
             return;
         }
         self.core.on_demand.next_check = now + CHECK_MS;
+        // What this step asked of the interface so far (a park, a column
+        // toggle of the test switch) is carried out first, so the checks
+        // below read the interface's facts as they are now (plan step
+        // S2f(3)).
+        self.drain_outbox();
         // Busy runs: their declared work ends when the Host's checks pass
         // (O(busy runs) every `CHECK_MS`).
         let busy = self.core.on_demand.work.keys().copied().collect::<Vec<_>>();

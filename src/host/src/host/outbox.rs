@@ -126,7 +126,10 @@ impl Core {
 /// its report outside a failure of its own (a Slint call that fails): the
 /// UI-bound replies (`UiReport::Answered`, with `layout.set`'s
 /// `window.state`), the window tick a column toggle runs, the open options
-/// window's `ui.error` lines of a page registered again.
+/// window's `ui.error` lines of a page registered again. A column toggle
+/// and `layout.set` can also write another plugin's `ui.error`: a panel
+/// they bring into view whose file does not compile is reported to its
+/// plugin then (`show_panel`).
 pub(crate) fn writes_lines(command: &UiCommand) -> bool {
     use super::messages::{LayoutOp, WindowOp};
     matches!(
