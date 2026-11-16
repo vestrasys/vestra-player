@@ -1023,8 +1023,8 @@ impl Core {
         let now = self.now_ms();
         self.package_list_at(now)
     }
-    /// [`Host::package_list`] as at `now` (the supervisor's clock): the
-    /// same `now` as [`Host::packages_key`]'s when they are compared.
+    /// [`Core::package_list`] as at `now` (the supervisor's clock): the
+    /// same `now` as [`Core::packages_key`]'s when they are compared.
     pub(crate) fn package_list_at(&mut self, now: u64) -> Value {
         let mut list = BTreeMap::<String, Value>::new();
         self.supervisor.set_now(now);
