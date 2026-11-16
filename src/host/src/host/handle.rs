@@ -228,6 +228,9 @@ impl Host {
                 if event == "source.state" {
                     self.core.patch_source(&mut data);
                     let previous = std::mem::replace(&mut self.core.last_source, data.clone());
+                    // The interface's copy follows at once (plan step
+                    // S2c(7)), before anything below reads it.
+                    self.source_shown();
                     // What a restart after a lost GPU device reopens.
                     *LAST_SOURCE
                         .lock()
@@ -250,8 +253,12 @@ impl Host {
                         ));
                     }
                     self.core.timeline_source(&previous, &data);
-                    self.backdrop_source();
-                    self.update_title();
+                    // What it shows is the core's to decide (plan step
+                    // S2d(4)): the interface shows it.
+                    let shown = self.core.source_display_next();
+                    self.ui_command(messages::UiCommand::Snapshot(messages::UiSnapshot::Source(
+                        shown,
+                    )));
                     self.core.core_action_states();
                     // The discrete source events this state adds, after it:
                     // a listener of both reads the state first.
@@ -296,8 +303,8 @@ impl Host {
                     return;
                 }
                 self.policy.set_sidebar_width(width);
-                self.ui_state.state.sidebar = Some(ui_state::Sidebar { width });
-                self.ui_state.touch(self.core.now_ms());
+                self.remembered.sidebar = Some(ui_state::Sidebar { width });
+                self.remember(self.core.now_ms());
             }
             Event::BarButton(generation, token) => self.bar_click(generation, &token),
             Event::BarMore(generation, x, y) => self.bar_more(generation, x, y),
@@ -361,8 +368,8 @@ impl Host {
                 self.policy.set_adjust_width(width);
                 let mut slot = self.adjust_slot();
                 slot.width = self.policy.adjust_user_width();
-                self.ui_state.state.adjust_slot = Some(slot);
-                self.ui_state.touch(self.core.now_ms());
+                self.remembered.adjust_slot = Some(slot);
+                self.remember(self.core.now_ms());
             }
             Event::AdjustDismiss(generation) => {
                 if generation == self.shell_generation {

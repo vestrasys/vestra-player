@@ -225,6 +225,88 @@ pub(crate) fn drain(
     handled
 }
 
+/// The core's turn (plan step S2e), the same for the windowed and the
+/// headless driver, in two halves: [`Host::core_events`] (the events) and
+/// [`Host::core_steps`] (the periodic steps). The windowed driver runs the
+/// interface's steps between and after them, as before; the headless driver
+/// has none. S3a runs both halves on the core thread.
+impl Host {
+    /// The first half of the core's turn, which began at `began`: `first`
+    /// (an event the headless driver already waited for), then the queued
+    /// ones ([`drain`]), each handled. `observe` sees each event before it
+    /// is handled (the headless evidence); `turn`, the windowed tick's
+    /// record, gets each event's handling time (`host/stall.rs`).
+    pub(crate) fn core_events(
+        &mut self,
+        receiver: &mpsc::Receiver<Event>,
+        began: Instant,
+        first: Option<Event>,
+        mut turn: Option<&mut super::stall::Turn>,
+        mut observe: impl FnMut(&Event),
+    ) {
+        let mut handle = |host: &mut Host, event: Event| {
+            observe(&event);
+            let (label, at) = (event.label(), Instant::now());
+            host.handle(event);
+            if let Some(turn) = turn.as_deref_mut() {
+                turn.event(label, at.elapsed());
+            }
+        };
+        let handled = match first {
+            Some(event) => {
+                handle(self, event);
+                1
+            }
+            None => 0,
+        };
+        drain(receiver, began, handled, |event| handle(self, event));
+    }
+    /// The second half of the core's turn: its periodic steps, in their
+    /// order (activation, on-demand start, power, diagnostics, packages,
+    /// notifications, the timeline, files to open). With a window also the
+    /// two steps the windowed tick ran elsewhere before: the binding
+    /// table's disabled set (it followed the theme step) and the state
+    /// file's debounced write (at the end of the window tick). A headless
+    /// run never ran them and still does not. `turn` names the steps for
+    /// the windowed tick's record.
+    pub(crate) fn core_steps(&mut self, mut turn: Option<&mut super::stall::Turn>) {
+        let mut step = |what: &'static str| {
+            if let Some(turn) = turn.as_deref_mut() {
+                turn.step(what);
+            }
+        };
+        self.activation_tick();
+        self.on_demand_tick();
+        step("plugin activation");
+        self.power_tick();
+        self.diagnostics_tick();
+        step("power and diagnostics");
+        self.package_tick();
+        step("packages");
+        self.notify_tick();
+        self.timeline_tick();
+        self.open_files_tick();
+        step("notifications, timeline, open files");
+        if self.core.headless {
+            return;
+        }
+        // The binding table follows the registry's disabled commands (keys
+        // bound to them pass on). Only a change is a write: the interface's
+        // copy of the table is made again only then (`host/tables.rs`).
+        if self.core.commands.revision() != self.core.binding_revision {
+            self.core.binding_revision = self.core.commands.revision();
+            let disabled = self.core.commands.disabled();
+            if *self.core.bindings().disabled() != disabled {
+                self.core.bindings_mut().set_disabled(disabled);
+            }
+        }
+        // The state file is the core's to write (plan step S2c(7)), once a
+        // second after its last change.
+        let now = self.core.now_ms();
+        self.core.ui_state.save_if_due(now);
+        step("bindings and state file");
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;

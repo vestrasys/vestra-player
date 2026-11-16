@@ -5,7 +5,7 @@ use crate::{
     host::{
         Host, LayoutChange, MenuMode, Mount, MountChange, Origin, Reply, RpcError, debug_keys,
         layout_change,
-        messages::{LayoutOp, SetMount, UiCommand, UiReport},
+        messages::{LayoutOp, MountCancel, PanelMenu, PanelsOp, SetMount, UiCommand, UiReport},
         mount_view, panel_key, panel_slot, policy_slot, refuse_initial, string,
     },
     i18n, process,
@@ -192,6 +192,7 @@ pub(crate) fn rekey_panels(host: &mut Host, from: u64, to: u64) {
         .filter(|m| m.plugin == from)
         .map(|m| (m.spec.owner, m.spec.slot))
         .collect::<Vec<_>>();
+    let mut moved = Vec::new();
     for (old, slot) in keys {
         let new = panel_key(to, slot);
         let Some(mut mount) = host.core.mounts.remove(&old) else {
@@ -200,37 +201,100 @@ pub(crate) fn rekey_panels(host: &mut Host, from: u64, to: u64) {
         mount.spec.owner = new;
         mount.plugin = to;
         host.core.mounts.insert(new, mount);
-        host.policy.rekey(old, new);
-        host.panels.rekey(old, new);
-        let swap = |key: &mut u64| {
-            if *key == old {
-                *key = new;
+        moved.push((old, new));
+    }
+    // The interface's part (plan step S2d(3)): its panels follow, in the
+    // same order.
+    host.ui_command(UiCommand::Panels(PanelsOp::Rekeyed {
+        from,
+        to,
+        keys: moved,
+    }));
+}
+
+impl Host {
+    /// The interface's side of `UiCommand::Panels` (plan step S2d(3)).
+    pub(crate) fn panels_command(&mut self, op: PanelsOp) {
+        match op {
+            PanelsOp::Gone(panels) => self.panels_gone(&panels),
+            PanelsOp::PlaceholderGone(key) => {
+                self.policy.remove_owner(key);
+                self.report_tabs();
             }
-        };
-        if let Some(floating) = &mut host.floating {
-            floating.owners.iter_mut().for_each(swap);
-        }
-        for state in &mut host.columns {
-            state.tabs.iter_mut().for_each(swap);
-            for key in [&mut state.active, &mut state.woken].into_iter().flatten() {
-                swap(key);
+            PanelsOp::Rekeyed { from, to, keys } => {
+                for (old, new) in keys {
+                    self.policy.rekey(old, new);
+                    self.panels.rekey(old, new);
+                    let swap = |key: &mut u64| {
+                        if *key == old {
+                            *key = new;
+                        }
+                    };
+                    if let Some(floating) = &mut self.floating {
+                        floating.owners.iter_mut().for_each(swap);
+                    }
+                    for state in &mut self.columns {
+                        state.tabs.iter_mut().for_each(swap);
+                        for key in [&mut state.active, &mut state.woken].into_iter().flatten() {
+                            swap(key);
+                        }
+                    }
+                }
+                // The panel keys' owners (plugins).
+                {
+                    let mut shared = self.input.borrow_mut();
+                    let input = &mut *shared;
+                    for owner in [&mut input.sidebar, &mut input.adjust]
+                        .into_iter()
+                        .flatten()
+                    {
+                        if *owner == from {
+                            *owner = to;
+                        }
+                    }
+                }
+                self.report_tabs();
             }
         }
     }
-    // The panel keys' owners (plugins).
-    {
-        let mut shared = host.input.borrow_mut();
-        let input = &mut *shared;
-        for owner in [&mut input.sidebar, &mut input.adjust]
-            .into_iter()
-            .flatten()
+    /// Panels `panels` (key, slot) leave the interface, in this order
+    /// (`stop_run`, `drop_panels`): each gone tab's column is read before
+    /// it goes; the floating window closes if it shows one (it opens again
+    /// without it, `sync_floating`); they leave the policy and the tabs
+    /// are reported; a slot whose last panel left is hidden (another tab of
+    /// its column stays shown until the shell is rebuilt).
+    fn panels_gone(&mut self, panels: &[(u64, composition::Slot)]) {
+        let tabs_before = panels
+            .iter()
+            .map(|&(_, slot)| {
+                Some(slot)
+                    .filter(|slot| slot.tabbed())
+                    .and_then(crate::host::policy_slot)
+                    .map(|slot| self.policy.panels(slot))
+                    .unwrap_or_default()
+            })
+            .collect::<Vec<_>>();
+        if self
+            .floating
+            .as_ref()
+            .is_some_and(|f| panels.iter().any(|(key, _)| f.owners.contains(key)))
         {
-            if *owner == from {
-                *owner = to;
+            self.close_floating();
+        }
+        for (key, _) in panels {
+            self.policy.remove_owner(*key);
+        }
+        self.report_tabs();
+        for (&(key, slot), tabs_before) in panels.iter().zip(tabs_before) {
+            let last_tab = tabs_before.iter().all(|&o| o == key);
+            if let Some(shell) = &self.shell
+                && let Some(property) = slot.visible_property()
+                && (!slot.tabbed() || last_tab)
+            {
+                let _ = shell.set_property(property, false.into());
             }
         }
     }
-    host.report_tabs();
 }
 
 /// Drop the mounts of plugin `owner` that wait in `queue` (its unmounts
@@ -251,8 +315,7 @@ fn revoke_panel(host: &mut Host, key: u64, keep_recorded: bool) {
     } else if mount.recorded {
         let owner = mount.plugin;
         host.core.mounts.remove(&key);
-        host.policy.remove_owner(key);
-        host.report_tabs();
+        host.ui_command(UiCommand::Panels(PanelsOp::PlaceholderGone(key)));
         host.core.mount_queue.retain(|c| c.key != key);
         host.core.mount_queue.push_front(MountChange {
             reply: Reply { owner, id: 0 },
@@ -366,8 +429,13 @@ fn mount(
     // a plugin that mounts a little after its ready keeps its tab.
     let removal = |c: &MountChange| c.key == key && c.reply.id == 0 && c.contribution.is_none();
     host.core.mount_queue.retain(|c| !removal(c));
-    if host.preparing.as_ref().is_some_and(|(_, c)| removal(c)) {
-        host.preparing = None;
+    // One the interface's batching window holds already: the core cancels
+    // it there (plan step S2d(2)).
+    #[cfg(debug_assertions)]
+    host.check_handed();
+    if host.core.handed.as_ref().is_some_and(|h| h.removes(key)) {
+        host.core.handed = None;
+        host.ui_command(UiCommand::CancelMount(MountCancel::Removal { key }));
     }
     if pending_change(host, key) {
         return Err(RpcError::new(
@@ -403,8 +471,8 @@ fn mount(
             .core
             .mount_queue
             .iter()
-            .chain(host.preparing.as_ref().map(|(_, change)| change))
             .map(|c| (c.reply.owner, c.contribution.as_ref().map(|m| m.spec.slot)))
+            .chain(host.core.handed.as_ref().map(|h| (h.reply.owner, h.slot)))
             .collect::<Vec<_>>();
         let mounted = host.core.mounts.values().map(|m| (m.plugin, m.spec.slot));
         if let Some(holder) = slot_claims::occupant(slot, reply.owner, mounted, &pending) {
@@ -443,10 +511,11 @@ fn mount(
     Ok(())
 }
 
-/// A change of panel `key` waits to be applied.
+/// A change of panel `key` waits to be applied (`Core::mount_pending`).
 fn pending_change(host: &Host, key: u64) -> bool {
-    host.core.mount_queue.iter().any(|c| c.key == key)
-        || host.preparing.as_ref().is_some_and(|(_, c)| c.key == key)
+    #[cfg(debug_assertions)]
+    host.check_handed();
+    host.core.mount_pending(key)
 }
 
 /// A mount or unmount of panel `key` of plugin `owner` waits to be applied
@@ -461,6 +530,8 @@ fn pending(host: &Host, owner: u64, key: u64) -> bool {
 /// read from their parameters; an unknown slot counts as the bottom bar
 /// (live, the safe side), and a held unmount without a slot as all panels.
 fn waiting_mounts(host: &Host, owner: u64) -> Vec<(u64, Option<composition::Slot>, Value)> {
+    #[cfg(debug_assertions)]
+    host.check_handed();
     let name = host
         .core
         .plugins
@@ -468,16 +539,22 @@ fn waiting_mounts(host: &Host, owner: u64) -> Vec<(u64, Option<composition::Slot
         .and_then(|plugin| plugin.manifest.name.clone())
         .unwrap_or_default();
     let mut waiting = host
-        .preparing
+        .core
+        .handed
         .as_ref()
-        .map(|(_, change)| change)
+        .filter(|held| held.reply.owner == owner)
+        .map(|held| (held.key, held.slot, held.call.clone()))
         .into_iter()
-        .chain(host.core.mount_queue.iter())
-        .filter(|change| change.reply.owner == owner)
-        .map(|change| match &change.contribution {
-            Some(mount) => (change.key, Some(mount.spec.slot), mount.call.clone()),
-            None => (change.key, None, Value::Null),
-        })
+        .chain(
+            host.core
+                .mount_queue
+                .iter()
+                .filter(|change| change.reply.owner == owner)
+                .map(|change| match &change.contribution {
+                    Some(mount) => (change.key, Some(mount.spec.slot), mount.call.clone()),
+                    None => (change.key, None, Value::Null),
+                }),
+        )
         .collect::<Vec<_>>();
     let mounted = host
         .core
@@ -907,8 +984,37 @@ fn menu(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<V
             .set_property("menu-origin-y", y.into())
             .map_err(anyhow::Error::from)?;
     }
-    host.open_menu(generation, MenuMode::Panel(reply.owner, ids));
+    // The menu opens in the interface (`UiCommand::PanelMenu`, plan step
+    // S2d(4)); the refusals above and the origin's properties still read
+    // and write its windows in place (design §5.1 note 7: from S3a the
+    // core judges them from the facts and the shell's definition).
+    host.ui_command(UiCommand::PanelMenu(PanelMenu {
+        owner: reply.owner,
+        key,
+        ids,
+        // Carried for plan step S3a (the origin and its refusals judged on
+        // the core, design §5.1 note 7); unused for now.
+        params: params.clone(),
+    }));
     Ok(Value::Null)
+}
+
+impl Host {
+    /// The interface's side of `UiCommand::PanelMenu` (plan step S2d(4)):
+    /// the panel's menu opens in the window that shows the panel (the
+    /// floating sidebar's, else the main window's).
+    pub(crate) fn panel_menu(&mut self, menu: PanelMenu) {
+        let PanelMenu {
+            owner, key, ids, ..
+        } = menu;
+        let floating = self
+            .floating
+            .as_ref()
+            .filter(|f| panel_slot(key) == composition::Slot::Sidebar && f.owners.contains(&key))
+            .map(|f| f.generation);
+        let generation = floating.unwrap_or(self.shell_generation);
+        self.open_menu(generation, MenuMode::Panel(owner, ids));
+    }
 }
 
 impl Host {

@@ -303,11 +303,38 @@ impl Host {
             self.respond(reply, result.map(|_| Value::Null));
         }
     }
-    /// One OSD line; nothing without a window.
+    /// One OSD line of the player's; nothing without a window. The core's
+    /// lines reach the interface as `UiCommand::Osd` (plan step S2d(4)).
     pub(crate) fn show_osd(&mut self, text: &str) {
         let text: String = text.replace(['\n', '\r'], " ").chars().take(200).collect();
         if !text.trim().is_empty() {
-            self.put_osd(&text, None, None);
+            self.ui_command(messages::UiCommand::Osd(messages::OsdOp::Show {
+                text,
+                from: None,
+                actions: None,
+            }));
+        }
+    }
+    /// The interface's side of `UiCommand::Osd` (plan step S2d(4)).
+    pub(crate) fn osd_command(&mut self, op: messages::OsdOp) {
+        match op {
+            messages::OsdOp::Show {
+                text,
+                from,
+                actions,
+            } => {
+                let actions = actions.map(|buttons| {
+                    (
+                        OsdActions {
+                            owner: buttons.owner,
+                            commands: buttons.commands,
+                        },
+                        buttons.titles,
+                    )
+                });
+                self.put_osd(&text, from, actions);
+            }
+            messages::OsdOp::Hide { reason } => self.hide_osd(&reason),
         }
     }
     /// Show one OSD line from `from` (a plugin; `None`: the player), with
@@ -440,7 +467,7 @@ impl Host {
             return;
         }
         if id == palette::PALETTE {
-            self.open_palette();
+            self.ui_command(messages::UiCommand::OpenPalette);
             return;
         }
         if id == ASK_AGAIN {
@@ -448,11 +475,14 @@ impl Host {
             return;
         }
         if id == "quit" {
-            // Before anything waits on the GPU.
-            platform::release_gpu_waits();
+            // The core stops the handoffs (a second launch is not taken any
+            // more) and writes the state file, then the interface releases
+            // the GPU waits and ends the event loop (`WindowOp::Quit`, plan
+            // step S2d(4)). Before S2d(4) the GPU waits were released first;
+            // neither the handoffs, the write nor they wait on the other.
             crate::stop_handoffs();
-            self.ui_state.flush();
-            let _ = slint::quit_event_loop();
+            self.core.ui_state.flush();
+            self.ui_command(messages::UiCommand::Window(messages::WindowOp::Quit));
             return;
         }
         self.window_command(id);
@@ -460,19 +490,53 @@ impl Host {
     /// The main window's commands, for a key, the menu and `host.run`:
     /// `fullscreen` toggles (in when windowed, out when fullscreen),
     /// `enter-fullscreen` enters, `exit-fullscreen` leaves. False without
-    /// a window.
-    pub(crate) fn window_command(&self, id: &str) -> bool {
-        let Some(shell) = &self.shell else {
+    /// a window. The change goes as `WindowOp::Fullscreen` (plan step
+    /// S2d(4)); "a window exists" is still read from the interface in
+    /// place (S3a: from the window facts' shell generation).
+    pub(crate) fn window_command(&mut self, id: &str) -> bool {
+        if self.shell.is_none() {
             return false;
+        }
+        let change = match id {
+            "fullscreen" => Some(messages::FullscreenChange::Toggle),
+            "enter-fullscreen" => Some(messages::FullscreenChange::Enter),
+            "exit-fullscreen" => Some(messages::FullscreenChange::Exit),
+            _ => None,
         };
-        let window = shell.window();
-        match id {
-            "fullscreen" => window.set_fullscreen(!window.is_fullscreen()),
-            "enter-fullscreen" => window.set_fullscreen(true),
-            "exit-fullscreen" => window.set_fullscreen(false),
-            _ => {}
+        if let Some(change) = change {
+            self.ui_command(messages::UiCommand::Window(messages::WindowOp::Fullscreen(
+                change,
+            )));
         }
         true
+    }
+    /// The interface's side of the one-way `WindowOp`s (plan step S2d(4)).
+    pub(crate) fn window_op(&mut self, op: messages::WindowOp) {
+        match op {
+            messages::WindowOp::Fullscreen(change) => {
+                if let Some(shell) = &self.shell {
+                    let window = shell.window();
+                    match change {
+                        messages::FullscreenChange::Toggle => {
+                            window.set_fullscreen(!window.is_fullscreen())
+                        }
+                        messages::FullscreenChange::Enter => window.set_fullscreen(true),
+                        messages::FullscreenChange::Exit => window.set_fullscreen(false),
+                    }
+                }
+            }
+            messages::WindowOp::Raise => {
+                if let Some(shell) = &self.shell {
+                    crate::ui::view::raise(shell);
+                }
+            }
+            // Before anything waits on the GPU.
+            messages::WindowOp::Quit => {
+                platform::release_gpu_waits();
+                let _ = slint::quit_event_loop();
+            }
+            _ => unreachable!("answered or kept elsewhere"),
+        }
     }
 }
 impl Core {

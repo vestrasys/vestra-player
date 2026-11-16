@@ -256,6 +256,61 @@ pub struct UiState {
     pub trusted_plugins: BTreeMap<String, Vec<String>>,
 }
 
+/// The interface's part of [`UiState`] (plan step S2c(7) of
+/// doc/process/core-thread-plan.md; design K8): what the interface writes
+/// and reads itself. The core writes the file and owns the rest (the
+/// binding overlay and its migrations, the appearance, the trusted
+/// plugins); the interface keeps this part and gives it to the core whole
+/// whenever it changes ([`UiState::set_interface`]).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Interface {
+    pub window: Option<Frame>,
+    pub window_maximized: bool,
+    pub window_physical: Option<crate::platform::DesktopRect>,
+    pub sidebar: Option<Sidebar>,
+    pub sidebar_slot: Option<SidebarSlot>,
+    pub adjust_slot: Option<AdjustSlot>,
+    pub settings: Option<Settings>,
+    pub palette_recent: Vec<String>,
+}
+
+impl UiState {
+    /// The interface's part, as the file holds it now.
+    pub fn interface(&self) -> Interface {
+        Interface {
+            window: self.window,
+            window_maximized: self.window_maximized,
+            window_physical: self.window_physical,
+            sidebar: self.sidebar.clone(),
+            sidebar_slot: self.sidebar_slot.clone(),
+            adjust_slot: self.adjust_slot.clone(),
+            settings: self.settings.clone(),
+            palette_recent: self.palette_recent.clone(),
+        }
+    }
+    /// The interface's part replaced whole; the core's part stays.
+    pub fn set_interface(&mut self, part: Interface) {
+        let Interface {
+            window,
+            window_maximized,
+            window_physical,
+            sidebar,
+            sidebar_slot,
+            adjust_slot,
+            settings,
+            palette_recent,
+        } = part;
+        self.window = window;
+        self.window_maximized = window_maximized;
+        self.window_physical = window_physical;
+        self.sidebar = sidebar;
+        self.sidebar_slot = sidebar_slot;
+        self.adjust_slot = adjust_slot;
+        self.settings = settings;
+        self.palette_recent = palette_recent;
+    }
+}
+
 /// At most this many plugins are trusted per caller (the oldest go first).
 pub const TRUST_LIMIT: usize = 256;
 

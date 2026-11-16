@@ -102,21 +102,21 @@ impl Host {
                 let inputs = bindings::Table::canonical(&inputs).map_err(RpcError::invalid)?;
                 let key = format!("{plugin}/{command}");
                 if !self.core.bindings().declares(&plugin, &command)
-                    && !self.ui_state.state.bindings.contains_key(&key)
+                    && !self.core.ui_state.state.bindings.contains_key(&key)
                 {
                     return Err(RpcError::new("missing", format!("no command {key}")));
                 }
-                self.ui_state.state.bindings.insert(key, inputs);
+                self.core.ui_state.state.bindings.insert(key, inputs);
                 self.overlay_changed();
                 Ok(Value::Null)
             }
             "bindings.reset" => {
                 if params["plugin"].is_null() && params["command"].is_null() {
-                    self.ui_state.state.bindings.clear();
+                    self.core.ui_state.state.bindings.clear();
                 } else {
                     let (plugin, command) = reference(params)?;
                     let key = format!("{plugin}/{command}");
-                    if self.ui_state.state.bindings.remove(&key).is_none()
+                    if self.core.ui_state.state.bindings.remove(&key).is_none()
                         && !self.core.bindings().declares(&plugin, &command)
                     {
                         return Err(RpcError::new("missing", format!("no command {key}")));
@@ -130,10 +130,10 @@ impl Host {
     }
     /// The overlay is kept in the interface state file (debounced save).
     fn overlay_changed(&mut self) {
-        let overlay = self.ui_state.state.bindings.clone();
+        let overlay = self.core.ui_state.state.bindings.clone();
         self.core.bindings_mut().set_overlay(overlay);
         let now = self.core.now_ms();
-        self.ui_state.touch(now);
+        self.core.ui_state.touch(now);
         if self.menu_open {
             let result = self.refresh_menu();
             self.report_menu(result);

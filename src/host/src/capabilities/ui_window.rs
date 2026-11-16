@@ -1,7 +1,20 @@
 //! `ui.window`: a plugin's own Slint windows (ui/view.rs).
+//!
+//! Plan step S2d: the four requests (rows 36–39, UI-bound, R5) go through
+//! the explicit pair. The core checks what it can (`open`, `change`) and
+//! sends `UiCommand::View`; the interface carries it out
+//! (`Host::view_command`) and answers with `UiReport::Answered`, from which
+//! the core replies (`respond`: after an `ui.open` of a run still
+//! activating, its readiness follows the reply, R12). Until plan step S3a
+//! the command is delivered in place, inside the request, so the reply
+//! leaves where it did.
 use super::{Capability, Handled, Info, Recorded, plugin};
 use crate::{
-    host::{Host, Reply, RpcError, string},
+    host::{
+        Host, Reply, RpcError,
+        messages::{UiCommand, UiReport, ViewKind, ViewOp},
+        string,
+    },
     platform, process,
     ui::theme,
     ui::ui_patch,
@@ -11,6 +24,7 @@ use crate::{
 use serde_json::{Value, json};
 use slint::ComponentHandle;
 use std::collections::BTreeMap;
+use std::path::Path;
 
 pub struct UiWindow;
 static INFO: Info = Info {
@@ -33,38 +47,77 @@ impl Capability for UiWindow {
     }
     fn rekey(&self, _: &mut Host, _: u64, _: u64) {}
     fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
-        match method {
-            "ui.open" => open(host, reply, params),
-            _ => change(host, reply, method, params),
-        }
-        .map(|()| Some(Value::Null))
+        let (id, kind) = match method {
+            "ui.open" => open_request(host, reply, params)?,
+            _ => change_request(host, reply, method, params)?,
+        };
+        host.ui_command(UiCommand::View(ViewOp {
+            reply: reply.clone(),
+            id,
+            kind,
+        }));
+        Ok(None)
     }
 }
 
-fn open(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<(), RpcError> {
-    if host.core.headless {
-        return Err(RpcError::new(
-            "unavailable",
-            "UI is unavailable in headless mode",
-        ));
+impl Host {
+    /// The interface's side of `UiCommand::View` (plan step S2d): carry
+    /// out the view request and report its result (`UiReport::Answered`).
+    /// A view's write records are reset and released here, inside the
+    /// request as before, so they stay in the one ordered stream with
+    /// `ResetWrites`, `SetMount` and `SettingsOp::Set` (design K8).
+    pub(crate) fn view_command(&mut self, op: ViewOp) {
+        let ViewOp { reply, id, kind } = op;
+        let result = match kind {
+            ViewKind::Open {
+                file,
+                properties,
+                callbacks,
+            } => open(self, &reply, id, &file, &properties, &callbacks),
+            ViewKind::Refused(error) => {
+                if self.views.contains_key(&(reply.owner, id)) {
+                    Err(conflict())
+                } else {
+                    Err(error)
+                }
+            }
+            ViewKind::Set { params, prepared } => {
+                change_view(self, &reply, "ui.set", id, &params, prepared)
+            }
+            ViewKind::Show { params } => change_view(self, &reply, "ui.show", id, &params, None),
+            ViewKind::Close => change_view(self, &reply, "ui.close", id, &Value::Null, None),
+        };
+        self.ui_report(UiReport::Answered {
+            reply,
+            result: result.map(|()| Value::Null),
+            handoff: None,
+            confirm_failed: false,
+        });
     }
-    let id = string(params, "id")?.to_owned();
+}
+
+fn conflict() -> RpcError {
+    RpcError::new("conflict", "view already exists")
+}
+
+/// `ui.open` on the interface: the view's id must be free; the rest as the
+/// core checked it.
+fn open(
+    host: &mut Host,
+    reply: &Reply,
+    id: String,
+    path: &Path,
+    properties: &BTreeMap<String, Value>,
+    callbacks: &[String],
+) -> std::result::Result<(), RpcError> {
     if host.views.contains_key(&(reply.owner, id.clone())) {
-        return Err(RpcError::new("conflict", "view already exists"));
+        return Err(conflict());
     }
-    let path = process::package_file(&plugin(host, reply)?.directory, string(params, "file")?)?;
-    let properties: BTreeMap<String, Value> =
-        serde_json::from_value(params.get("properties").cloned().unwrap_or(json!({})))
-            .map_err(|e| RpcError::invalid(e.to_string()))?;
-    let callbacks = serde_json::from_value::<Vec<String>>(
-        params.get("callbacks").cloned().unwrap_or(json!([])),
-    )
-    .map_err(|e| RpcError::invalid(e.to_string()))?;
     let view_key = format!("w:{id}");
     // Row patches apply on these initial properties (seq 0).
     host.images.reset_writes(reply.owner, &view_key);
     let mut values = Vec::new();
-    for (name, value) in &properties {
+    for (name, value) in properties {
         match host.prop_value(reply.owner, &view_key, name, value) {
             Ok(value) => values.push((name.clone(), value)),
             Err(error) => {
@@ -76,11 +129,11 @@ fn open(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<(
     let theme = host.theme().to_owned();
     let missed = std::cell::Cell::new(false);
     let view = view::open(
-        &path,
+        path,
         reply.owner,
         &id,
         &values,
-        &callbacks,
+        callbacks,
         host.core.events.clone(),
         |instance| {
             if theme != theme::THEMES[0] && theme::apply(instance, &theme).is_err()
@@ -99,14 +152,17 @@ fn open(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<(
     Ok(())
 }
 
-/// `ui.set`, `ui.show` and `ui.close`.
-fn change(
+/// `ui.set`, `ui.show` and `ui.close` on the interface, of the view `id`;
+/// `prepared`: `ui.set`'s large array, taken by the core.
+fn change_view(
     host: &mut Host,
     reply: &Reply,
     method: &str,
+    id: String,
     params: &Value,
+    prepared: Option<Box<ui_values::Prepared>>,
 ) -> std::result::Result<(), RpcError> {
-    let key = (reply.owner, string(params, "id")?.to_owned());
+    let key = (reply.owner, id);
     if !host.views.contains_key(&key) {
         return Err(RpcError::new("missing", "view not found"));
     }
@@ -114,11 +170,9 @@ fn change(
     // A large array converted on the reader thread (P3): a whole value was
     // taken out of `params`. A part of a whole value sent in parts is held
     // until the last.
-    let mut prepared = None;
     let mut done = None;
     if method == "ui.set" {
         let property = string(params, "property")?;
-        prepared = host.core.take_prepared(reply);
         match host.parts(
             reply.owner,
             &view_key,
@@ -233,6 +287,70 @@ fn show(
     instance.show().map_err(anyhow::Error::from)?;
     platform::shown(instance);
     Ok(view::show_again(instance, foreground))
+}
+
+// The two core parts stay below the interface's functions: the source test
+// `host::origins::tests::every_input_path_records_an_origin` reads the first
+// `fn open(` and `"ui.show" =>` of this file, which must be the interface's.
+
+/// The core's part of `ui.open` (row 36): no interface without a window,
+/// the view's id, then the package file, the initial properties and the
+/// callbacks (`ViewKind::Open`). A refusal of those three is not answered
+/// here: a view of that id already open is refused `conflict` first, as
+/// before, and the open views are the interface's, so it goes as
+/// `ViewKind::Refused` and the interface answers.
+fn open_request(
+    host: &mut Host,
+    reply: &Reply,
+    params: &Value,
+) -> std::result::Result<(String, ViewKind), RpcError> {
+    if host.core.headless {
+        return Err(RpcError::new(
+            "unavailable",
+            "UI is unavailable in headless mode",
+        ));
+    }
+    let id = string(params, "id")?.to_owned();
+    let checked = (|| -> std::result::Result<ViewKind, RpcError> {
+        let file = process::package_file(&plugin(host, reply)?.directory, string(params, "file")?)?;
+        let properties: BTreeMap<String, Value> =
+            serde_json::from_value(params.get("properties").cloned().unwrap_or(json!({})))
+                .map_err(|e| RpcError::invalid(e.to_string()))?;
+        let callbacks = serde_json::from_value::<Vec<String>>(
+            params.get("callbacks").cloned().unwrap_or(json!([])),
+        )
+        .map_err(|e| RpcError::invalid(e.to_string()))?;
+        Ok(ViewKind::Open {
+            file,
+            properties,
+            callbacks,
+        })
+    })();
+    Ok((id, checked.unwrap_or_else(ViewKind::Refused)))
+}
+
+/// The core's part of `ui.set`, `ui.show` and `ui.close` (rows 37–39): the
+/// view's id, and for `ui.set` the large array its reader thread
+/// converted, if any (`Event::Prepared`). Everything else reads the open
+/// view, the interface's.
+fn change_request(
+    host: &mut Host,
+    reply: &Reply,
+    method: &str,
+    params: &Value,
+) -> std::result::Result<(String, ViewKind), RpcError> {
+    let id = string(params, "id")?.to_owned();
+    let kind = match method {
+        "ui.set" => ViewKind::Set {
+            params: params.clone(),
+            prepared: host.core.take_prepared(reply),
+        },
+        "ui.show" => ViewKind::Show {
+            params: params.clone(),
+        },
+        _ => ViewKind::Close,
+    };
+    Ok((id, kind))
 }
 
 #[cfg(test)]

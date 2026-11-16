@@ -45,8 +45,10 @@ impl Capability for UiDialog {
     }
     /// A confirmation of a plugin that stopped leaves the sheet unanswered;
     /// its origin goes unless it only stands by.
+    /// The sheet is the interface's (`UiCommand::DropConfirm`, plan step
+    /// S2d(3)).
     fn revoke(&self, host: &mut Host, owner: u64, keep_recorded: bool) {
-        host.drop_confirm_of(owner);
+        host.ui_command(UiCommand::DropConfirm { owner });
         if !keep_recorded {
             host.core.origins.forget(owner);
         }

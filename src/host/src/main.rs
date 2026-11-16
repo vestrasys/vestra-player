@@ -567,15 +567,38 @@ fn player() -> Result<()> {
         origins: Default::default(),
         lead: None,
         panel_tabs: Default::default(),
+        info_panels: BTreeMap::new(),
+        on_top: window_control::LastWrite::new(false),
+        cursor_playing: window_control::LastWrite::new(false),
+        window_settings_sent: (None, None),
+        cover_art_off: false,
+        drops: Default::default(),
+        ui_state,
+        area_replies: Vec::new(),
+        handed: None,
+        // Headless runs mount nothing.
+        startup_panels: headless,
+        source_display: host::messages::SourceShown {
+            no_video: true,
+            empty: false,
+            title: "Vestra Player".into(),
+        },
+        binding_revision: u64::MAX,
         // Made above, before the clock, as before plan step S2c moved it
         // from `Host`.
         on_demand,
     };
+    // The interface's copies of what it reads of the state file (plan step
+    // S2c(7)): its own part, and the palette.
+    let remembered = core.ui_state.state.interface();
+    let shown_theme = core.theme().to_owned();
     let mut host = Host {
         core,
         views: BTreeMap::new(),
         shell: None,
         preparing: None,
+        #[cfg(debug_assertions)]
+        handing_over: false,
         mount_singly: 0,
         mount_events,
         mount_input,
@@ -612,14 +635,16 @@ fn player() -> Result<()> {
         native_before: None,
         native_unavailable: None,
         input: Rc::new(RefCell::new(InputShared::default())),
-        ui_state,
+        remembered,
+        shown_theme,
+        source: std::sync::Arc::new(Value::Null),
         osd_until: None,
         osd_actions: None,
         osd_shown_at: 0,
         osd_clear_at: None,
         osd_shown: Default::default(),
         osd_from: None,
-        info_panels: BTreeMap::new(),
+        info_panels: Default::default(),
         floating: None,
         menu_mode: MenuMode::Main,
         menu_generation: 1,
@@ -629,15 +654,13 @@ fn player() -> Result<()> {
         sizing: Default::default(),
         frame_log: render_target::FrameLog::from_env(),
         shown_size: None,
-        on_top: window_control::LastWrite::new(false),
-        cursor_playing: window_control::LastWrite::new(false),
+        on_top: false,
+        cursor_playing: false,
         on_top_applied: None,
-        area_replies: Vec::new(),
         images: Default::default(),
         no_video: true,
         video_absent: true,
         video_cleared: false,
-        cover_art_off: false,
         pip: Default::default(),
         pip_log: None,
         render_area: None,
@@ -661,7 +684,7 @@ fn player() -> Result<()> {
     // unless asked, so diagnostics read the same on every machine.
     let preference = std::env::var("VESTRA_LANGUAGE")
         .ok()
-        .or_else(|| host.language_preference());
+        .or_else(|| host.core.language_preference());
     let system = if headless {
         Vec::new()
     } else {
@@ -679,7 +702,7 @@ fn player() -> Result<()> {
         // Commands whose full id changed (`command_renames`): keys and
         // recent palette entries saved under the old id follow, once.
         let renamed = {
-            let state = &mut host.ui_state.state;
+            let state = &mut host.core.ui_state.state;
             let keys = command_renames::migrate_overlay(&mut state.bindings);
             command_renames::migrate_recent(&mut state.palette_recent) || keys
         };
@@ -688,7 +711,7 @@ fn player() -> Result<()> {
         let holders = bindings::parse("Escape")
             .map(|escape| host.core.bindings().default_holders(&escape))
             .unwrap_or_default();
-        let state = &mut host.ui_state.state;
+        let state = &mut host.core.ui_state.state;
         let escape = host::migrate_fullscreen_escape(
             &mut state.bindings,
             &mut state.bindings_migrated,
@@ -698,15 +721,18 @@ fn player() -> Result<()> {
             // Saved ids now name the commands' current ids, and the
             // migrations are recorded; saved once.
             let now = host.core.now_ms();
-            host.ui_state.touch(now);
-            host.ui_state.flush();
+            host.core.ui_state.touch(now);
+            host.core.ui_state.flush();
         }
-        let overlay = host.ui_state.state.bindings.clone();
+        // The palette's recents may have been renamed: the interface takes
+        // its part again (plan step S2c(7)).
+        host.remembered = host.core.ui_state.state.interface();
+        let overlay = host.core.ui_state.state.bindings.clone();
         host.core.bindings_mut().set_overlay(overlay);
-        if let Some(sidebar) = &host.ui_state.state.sidebar {
+        if let Some(sidebar) = &host.remembered.sidebar {
             host.policy.set_sidebar_width(sidebar.width);
         }
-        if let Some(adjust) = &host.ui_state.state.adjust_slot {
+        if let Some(adjust) = &host.remembered.adjust_slot {
             host.policy.set_adjust_width(adjust.width);
         }
     }
@@ -739,29 +765,20 @@ fn player() -> Result<()> {
                 Err(mpsc::RecvTimeoutError::Timeout) => None,
                 Err(_) => break,
             };
-            // At least 128 events a tick, then what its time budget allows,
-            // as the windowed tick (`host::drain_events`): one a tick fell
-            // behind while the start-up queue held each tick (`START_BUDGET`),
-            // and the shared runner's answered pings waited past its
-            // heartbeat limit.
-            let mut handle = |event: Event| {
-                if let Event::Broadcast(name, data) = &event
+            // The core's turn (plan step S2e): the same as the windowed
+            // tick's, with no interface steps around it. At least 128 events
+            // a tick, then what its time budget allows (`host::events::drain`):
+            // one a tick fell behind while the start-up queue held each tick
+            // (`START_BUDGET`), and the shared runner's answered pings waited
+            // past its heartbeat limit.
+            host.core_events(&receiver, began, first, None, |event| {
+                if let Event::Broadcast(name, data) = event
                     && name == "source.state"
                 {
                     observed_source = data.clone();
                 }
-                host.handle(event);
-            };
-            let handled = first.map(&mut handle).map_or(0, |()| 1);
-            host::drain_events(&receiver, began, handled, handle);
-            host.activation_tick();
-            host.on_demand_tick();
-            host.power_tick();
-            host.diagnostics_tick();
-            host.package_tick();
-            host.notify_tick();
-            host.timeline_tick();
-            host.open_files_tick();
+            });
+            host.core_steps(None);
             if let Some(log) = host.frame_log.as_mut() {
                 log.tick_took(began.elapsed());
                 let presentation = &host.core.backend.render.presentation;
@@ -794,7 +811,7 @@ fn player() -> Result<()> {
         // Compiled once for the run: every slot is a container, and the
         // panels compile on their own when first shown (`ui/panels.rs`).
         let window = composition::shell_in(None)?;
-        let position = host.ui_state.state.window.map(|frame| {
+        let position = host.remembered.window.map(|frame| {
             window.window().set_size(slint::LogicalSize::new(
                 frame.width.max(320.) as f32,
                 frame.height.max(182.) as f32,
@@ -810,8 +827,8 @@ fn player() -> Result<()> {
         // (after Slint's first draw), macOS zooms it at its creation, before
         // it is visible (`view::Placements`).
         let restore = view::Restore {
-            maximized: host.ui_state.state.window_maximized,
-            physical: host.ui_state.state.window_physical,
+            maximized: host.remembered.window_maximized,
+            physical: host.remembered.window_physical,
         };
         match position {
             Some(position) => {
@@ -918,7 +935,6 @@ fn player() -> Result<()> {
         let tick_host = host.clone();
         let timer = slint::Timer::default();
         let mut menu_revision = u64::MAX;
-        let mut binding_revision = u64::MAX;
         // Busy: a post from Windows' move/size loop runs no tick then
         // (`platform::keep_ticking`).
         let held = Rc::downgrade(&host);
@@ -937,11 +953,8 @@ fn player() -> Result<()> {
                     host::stall::tick_began(began);
                     let mut turn = host::stall::Turn::new(began);
                     let mut host = tick_host.borrow_mut();
-                    host::drain_events(&receiver, began, 0, |event| {
-                        let (label, at) = (event.label(), Instant::now());
-                        host.handle(event);
-                        turn.event(label, at.elapsed());
-                    });
+                    // The core's turn, first half (plan step S2e): the events.
+                    host.core_events(&receiver, began, None, Some(&mut turn), |_| ());
                     turn.step("events");
                     // The UI part of the turn starts here. The UI stall test
                     // switch holds it once (`ui_stall_switch`).
@@ -956,8 +969,7 @@ fn player() -> Result<()> {
                     }
                     if first_draws.is_some() {
                         let (draws, pictures) = host.core.backend.render.presentation.counts();
-                        let opening =
-                            opened_at_start || host.core.last_source["phase"] == "loading";
+                        let opening = opened_at_start || host.source["phase"] == "loading";
                         if playback::render_state::windows_started(draws, pictures, opening)
                             && let Some(guard) = first_draws.take()
                         {
@@ -975,35 +987,20 @@ fn player() -> Result<()> {
                     turn.step("window tick");
                     platform::tool_windows_tick();
                     turn.step("tool windows");
-                    host.activation_tick();
-                    host.on_demand_tick();
-                    turn.step("plugin activation");
-                    host.power_tick();
-                    host.diagnostics_tick();
-                    turn.step("power and diagnostics");
-                    host.package_tick();
-                    turn.step("packages");
-                    host.notify_tick();
-                    host.timeline_tick();
+                    // The core's turn, second half (plan step S2e): its periodic
+                    // steps, with the binding table's disabled set and the state
+                    // file's write.
+                    host.core_steps(Some(&mut turn));
+                    // The interface's steps after it: a complete file drop goes
+                    // to the core (`UiReport::Drop`), the options window, the
+                    // palette, the tables, the menu, the frame.
                     host.drops_tick();
-                    host.open_files_tick();
-                    turn.step("notifications, timeline, drops, open files");
+                    turn.step("drops");
                     host.settings_tick();
                     turn.step("settings");
                     if host.theme_pending {
                         host.theme_all();
                         turn.step("theme");
-                    }
-                    // The core's step: the binding table follows the registry's
-                    // disabled commands (keys bound to them pass on).
-                    if host.core.commands.revision() != binding_revision {
-                        binding_revision = host.core.commands.revision();
-                        let disabled = host.core.commands.disabled();
-                        // Only a change is a write: the interface's copy of the
-                        // table is made again only then (`host/tables.rs`).
-                        if *host.core.bindings().disabled() != disabled {
-                            host.core.bindings_mut().set_disabled(disabled);
-                        }
                     }
                     // The interface's step, on its copy of the registry (rule
                     // R8, `host/tables.rs`). The revision alone, not a snapshot:
@@ -1111,7 +1108,7 @@ fn player() -> Result<()> {
             // windows one, so the player starts again where it was (already
             // started from the device's callback; this is the fallback).
             teardown_step("saving the UI state");
-            host.borrow_mut().ui_state.flush();
+            host.borrow_mut().core.ui_state.flush();
             let source = host.borrow().core.last_source.clone();
             // Plugin shaders stay `applying` if they were: a device lost
             // while they were on keeps them off in the restarted player.
@@ -1133,7 +1130,7 @@ fn player() -> Result<()> {
         FRAME_SINK.with(|sink| sink.borrow_mut().take());
         PIP_GPU_SINK.with(|sink| sink.borrow_mut().take());
         RESIZE_SINK.with(|sink| sink.borrow_mut().take());
-        host.borrow_mut().ui_state.flush();
+        host.borrow_mut().core.ui_state.flush();
         // Native windows/resources must be released before process teardown.
         teardown_step("closing the secondary windows");
         host.borrow_mut().close_secondary_windows();

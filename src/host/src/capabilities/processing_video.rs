@@ -100,7 +100,7 @@ fn lut_files(host: &Host, owner: u64, params: &Value) -> Result<Value, RpcError>
     if !has_lut(params) {
         return Ok(params.clone());
     }
-    let roots = host.image_roots(owner);
+    let roots = host.core.image_roots(owner);
     let mut params = params.clone();
     if let Some(nodes) = params["nodes"].as_array_mut() {
         for node in nodes.iter_mut().filter(|n| n["kind"] == "lut3d") {
@@ -139,7 +139,7 @@ fn shader_request(host: &Host, owner: u64, params: &Value) -> Result<Value, RpcE
             ),
         ));
     }
-    let roots = host.image_roots(owner);
+    let roots = host.core.image_roots(owner);
     let paths = list
         .iter()
         .map(|path| {

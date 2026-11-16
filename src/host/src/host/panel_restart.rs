@@ -385,10 +385,12 @@ impl Host {
         );
         self.drop_panels(entry.owner, entry.keys.into_iter().collect());
     }
-    /// A change of panel `key` waits to be applied.
+    /// A change of panel `key` waits to be applied: the core's record
+    /// (`Core::mount_pending`, plan step S2d(2)).
     pub(crate) fn mount_pending(&self, key: u64) -> bool {
-        self.core.mount_queue.iter().any(|c| c.key == key)
-            || self.preparing.as_ref().is_some_and(|(_, c)| c.key == key)
+        #[cfg(debug_assertions)]
+        self.check_handed();
+        self.core.mount_pending(key)
     }
     /// Remove panels `keys` of run `owner` (queued: one change for them),
     /// as `stop_run` removes a stopped run's.
@@ -400,42 +402,18 @@ impl Host {
         if keys.is_empty() {
             return;
         }
-        // Each gone tab's column before it goes.
-        let tabs_before = keys
+        // The interface's part first (plan step S2d(3), `PanelsOp::Gone`):
+        // the floating window, the policy and the tabs, the shell's slots.
+        let panels = keys
             .iter()
-            .map(|key| {
-                self.core
-                    .mounts
-                    .get(key)
-                    .filter(|m| m.spec.slot.tabbed())
-                    .and_then(|m| policy_slot(m.spec.slot))
-                    .map(|slot| self.policy.panels(slot))
-                    .unwrap_or_default()
-            })
-            .collect::<Vec<_>>();
-        // The floating window opens again without this panel (`sync_floating`).
-        if self
-            .floating
-            .as_ref()
-            .is_some_and(|f| keys.iter().any(|key| f.owners.contains(key)))
-        {
-            self.close_floating();
-        }
-        for key in &keys {
-            self.policy.remove_owner(*key);
-        }
-        self.report_tabs();
-        for (key, tabs_before) in keys.into_iter().zip(tabs_before) {
-            let Some(mount) = self.core.mounts.remove(&key) else {
+            .filter_map(|key| self.core.mounts.get(key).map(|m| (*key, m.spec.slot)))
+            .collect();
+        self.ui_command(super::messages::UiCommand::Panels(
+            super::messages::PanelsOp::Gone(panels),
+        ));
+        for key in keys {
+            if self.core.mounts.remove(&key).is_none() {
                 continue;
-            };
-            // Another tab of its column stays shown until the shell is rebuilt.
-            let last_tab = tabs_before.iter().all(|&o| o == key);
-            if let Some(shell) = &self.shell
-                && let Some(property) = mount.spec.slot.visible_property()
-                && (!mount.spec.slot.tabbed() || last_tab)
-            {
-                let _ = shell.set_property(property, false.into());
             }
             self.core.mount_queue.retain(|c| c.key != key);
             self.core.mount_queue.push_front(MountChange {

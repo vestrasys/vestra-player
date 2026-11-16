@@ -10,7 +10,18 @@
 //! [`UiCommand::Layout`], [`UiCommand::Lead`], [`UiCommand::Dialog`],
 //! [`UiCommand::Confirm`], [`UiCommand::Review`], [`UiReport::Acted`], the
 //! `layout.set` and sheet-confirmation [`UiReport::Answered`] and the tab
-//! order in [`WindowFacts`]; S2c(6): [`UiCommand::ResetWrites`]), S3a
+//! order in [`WindowFacts`]; S2c(6): [`UiCommand::ResetWrites`]; S2c(7):
+//! [`UiSnapshot::LastSource`], [`UiSnapshot::InfoPanels`],
+//! [`UiSnapshot::Theme`], [`UiSnapshot::CursorAutoHide`],
+//! [`WindowOp::OnTop`], [`UiReport::Remembered`] and [`UiReport::Drop`];
+//! S2d(1): [`UiCommand::View`] with the view requests' [`UiReport::Answered`],
+//! [`WindowOp::VideoArea`] with [`UiReport::AreaFitted`] and
+//! [`UiReport::VideoArea`], [`WindowOp::Pip`]; S2d(2): [`UiReport::Batching`],
+//! [`UiCommand::CancelMount`], [`UiSnapshot::StartupSettled`]; S2d(3):
+//! [`UiCommand::RevokeOwner`], [`UiCommand::Panels`], [`UiCommand::DropConfirm`],
+//! [`SettingsOp::OwnerGone`], [`SettingsOp::Rekeyed`]; S2d(4): [`UiCommand::Osd`],
+//! [`UiSnapshot::Source`], [`UiCommand::PanelMenu`], [`WindowOp::Fullscreen`],
+//! [`WindowOp::Raise`], [`WindowOp::Quit`], [`UiCommand::OpenPalette`]), S3a
 //! moves the core to its own thread.
 //!
 //! Each variant names the rows of the design's method table (§5.1, "row
@@ -116,13 +127,24 @@ pub(crate) enum UiCommand {
     /// key or a menu through `host_command`): open the palette in the main
     /// window.
     OpenPalette,
-    /// A plugin stopped: its views, mounts, OSD buttons, floating window
-    /// and shell properties go (K3; `stop_run`). `park`: it went to
-    /// standby, its sidebar tabs stay as recorded placeholders.
+    /// A plugin stopped (K3; `stop_run`; plan step S2d(3)): the interface
+    /// drops what it keeps of the run: the input slots naming it, its OSD
+    /// buttons, its panel menu, its images, its picture-in-picture, its
+    /// tool windows. `park`: it went to standby (its recorded tabs stay;
+    /// the core leaves them out of the panels it sends as
+    /// [`PanelsOp::Gone`]).
     RevokeOwner { owner: u64, park: bool },
     /// A woken or restarted plugin's interface moves to its new owner
-    /// generation (panels, views, settings pages).
+    /// generation. Not sent as built in plan step S2d(3): the interface's
+    /// rekeys carry the keys and pages they move ([`PanelsOp::Rekeyed`],
+    /// [`SettingsOp::Rekeyed`]), sent where the core moved its own.
     RekeyOwner { from: u64, to: u64 },
+    /// Panels leave or change owner (plan step S2d(3)): the interface's part
+    /// of the core's removals and rekeys of mount records.
+    Panels(PanelsOp),
+    /// A plugin stopped while its `dialogs.confirm` waits on the sheet
+    /// (`ui.dialog`'s revoke; plan step S2d(3)): the sheet ends unanswered.
+    DropConfirm { owner: u64 },
     /// A view shows its initial properties again: `ui.mount` (row 40, at
     /// the request, before the batching window) and `settings.register`
     /// (row 83a). Row patches apply on them (`seq` 0), so the interface
@@ -134,6 +156,43 @@ pub(crate) enum UiCommand {
     /// (plan step S2c(6); design §7, K8): the `stale` check and the write
     /// it guards are one step of the UI-bound stream.
     ResetWrites { owner: u64, view: String },
+    /// The core cancels the mount change the interface's batching window
+    /// holds (plan step S2d(2)): the host's own removal of a panel, given
+    /// way to its plugin's mount, or every change of a stopped plugin. The
+    /// interface drops it if its window holds it and reports
+    /// [`UiReport::Batching`]; the core has cleared its record already.
+    CancelMount(MountCancel),
+}
+
+/// See [`UiCommand::Panels`].
+pub(crate) enum PanelsOp {
+    /// Panels of a stopped run, or kept panels whose restart never came
+    /// (`stop_run`, `drop_panels`), with their slots, in the core's order:
+    /// the floating window closes if it shows one, they leave the panel
+    /// policy (the tabs are reported), and a slot whose last panel left is
+    /// hidden in the shell.
+    Gone(Vec<(u64, composition::Slot)>),
+    /// A placeholder tab goes (`ui.mount`'s revoke and prune): it leaves the
+    /// panel policy (the tabs are reported).
+    PlaceholderGone(u64),
+    /// Run `from`'s panels are run `to`'s now, under the keys `keys`
+    /// (old, new), in the core's order (`rekey_panels`): the policy, the
+    /// drawn panels, the floating window, the columns and the input slots
+    /// follow, and the tabs are reported.
+    Rekeyed {
+        from: u64,
+        to: u64,
+        keys: Vec<(u64, u64)>,
+    },
+}
+
+/// See [`UiCommand::CancelMount`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum MountCancel {
+    /// The host's own removal (an unmount with id 0) of panel `key`.
+    Removal { key: u64 },
+    /// Any change of a stopped plugin (its owner generation).
+    Owner(u64),
 }
 
 /// The core's tables and values the UI shows. Each is the whole value at
@@ -160,6 +219,17 @@ pub(crate) enum UiSnapshot {
     /// `window.setCursorAutoHide` (row 73): hide the pointer while playing
     /// (`true`) or only in fullscreen.
     CursorAutoHide(bool),
+    /// The core's last `source.state` (`Core::last_source`; rule R1:
+    /// playback control is the core's), whole (plan step S2c(7)). The
+    /// interface reads its copy for what it shows from the source: no
+    /// video and the empty phase, the window title, the pointer hidden
+    /// while playing, picture-in-picture's playback, the first draws'
+    /// crash guard.
+    LastSource(Arc<Value>),
+    /// The plugins' start-up panels are in place (plan step S2d(2);
+    /// `Core::startup_panels`, decided in `open_files_tick`): the
+    /// interface's columns stop waiting for their remembered tabs.
+    StartupSettled(bool),
 }
 
 /// See [`UiSnapshot::Source`].
@@ -195,6 +265,12 @@ pub(crate) enum ViewKind {
     Show { params: Value },
     /// `ui.close`.
     Close,
+    /// `ui.open` refused by the core's checks (the package file, the
+    /// properties, the callbacks; plan step S2d). Not answered by the core:
+    /// a view of that id already open is refused `conflict` before them,
+    /// as before, and the open views are the interface's. The interface
+    /// answers `conflict` or this error.
+    Refused(RpcError),
 }
 
 /// `ui.setMount`: the property of the plugin's panel `key` (`panel_key`).
@@ -223,24 +299,40 @@ pub(crate) enum SettingsOp {
     /// `settings.show` (row 83d; stream B): answered with the window's
     /// open error.
     Show { reply: Reply, params: Value },
+    /// Pages of `owner` left the registry (its stop for good, or the
+    /// recorded pages its woken run did not register again; plan step
+    /// S2d(3)): an open window is rebuilt.
+    OwnerGone { owner: u64 },
+    /// A woken plugin's pages `serials` belong to run `to` now (plan step
+    /// S2d(3)): an open window's callbacks follow.
+    Rekeyed { serials: Vec<u64>, to: u64 },
 }
 
 pub(crate) enum WindowOp {
-    /// `window.setVideoArea` (row 71; stream B). The UI fits the window and
-    /// reports [`UiReport::AreaFitted`] (or an error as
-    /// [`UiReport::Answered`]); the core answers when the window facts show
-    /// the size or after its 1 s deadline (R13).
+    /// `window.setVideoArea` (row 71; stream B). The core checks the size;
+    /// the UI fits the window and reports [`UiReport::AreaFitted`] (or an
+    /// error as [`UiReport::Answered`]); the core answers when the layout
+    /// shows the size ([`UiReport::VideoArea`]) or after its 1 s deadline
+    /// (R13). As built in plan step S2d.
     VideoArea {
         reply: Reply,
         width: f64,
         height: f64,
     },
     /// `window.setPictureInPicture { on }` (row 74; stream B). Answered from
-    /// the PiP state machine through [`UiReport::Answered`], whose handoff
-    /// carries the facts with the new `active` flag (R13).
+    /// the PiP state machine through [`UiReport::Answered`] (at once, or
+    /// when the system window has opened or closed). Plan step S2d sends no
+    /// handoff with it: `window.state` reads the interface's live PiP state
+    /// on this thread, and a handoff with the new `active` flag would
+    /// broadcast `window.state` before today's window tick does. R13's
+    /// handoff of the flag is plan step S3a's (the core's own copy).
     Pip { reply: Reply, on: bool },
     /// `window.setAlwaysOnTop` (row 72): every ordinary window at the
-    /// floating level, or not. Answered by the core at once.
+    /// floating level, or not. Answered by the core at once. Plan step
+    /// S2c(7): the value in effect (the newest write of a running or
+    /// standby plugin), sent when it changed (`Core::window_settings`); the
+    /// UI keeps it and applies it at `apply_on_top`, right after the
+    /// request and at every window tick.
     OnTop(bool),
     /// The shell window in or out of fullscreen: `host.run fullscreen`
     /// (row 34, note 4) and the host's `fullscreen`, `enter-fullscreen`,
@@ -248,9 +340,12 @@ pub(crate) enum WindowOp {
     Fullscreen(FullscreenChange),
     /// `OpenFiles` from another launch: the main window to the front.
     Raise,
-    /// The player ends its event loop: `rendering.restart` (row 90, after
-    /// the reply) and the host's `quit` command (`host_command`: the GPU
-    /// waits released, handoffs stopped, the interface state flushed).
+    /// The player ends its event loop: the host's `quit` command
+    /// (`host_command`; plan step S2d(4)). The core stops the handoffs and
+    /// writes the state file (the core's since plan step S2c(7)) before it
+    /// sends this; the interface releases the GPU waits and ends the loop.
+    /// `rendering.restart` (row 90) keeps its own quit after its reply
+    /// (`slint::invoke_from_event_loop`, safe from any thread).
     Quit,
 }
 
@@ -435,15 +530,31 @@ pub(crate) enum UiReport {
     },
     /// `window.setVideoArea` was fitted: the video size it waits for and
     /// the reply it will carry. The core keeps it with its deadline
-    /// (request time + 1000 ms) and answers from [`Self::WindowFacts`].
-    /// On receipt it first checks the facts it already has: they may show
-    /// the size already (a fact that arrived before this report), and then
-    /// it answers at once instead of waiting out the deadline.
+    /// (receipt + 1000 ms, `Core::area_replies`) and answers from
+    /// [`Self::VideoArea`]. As built in plan step S2d it is not checked on
+    /// receipt: today's reply waits for the next window tick's layout even
+    /// when the size is shown already, and the wire trace keeps that.
+    /// Answering at once when the core's copy already shows the size is
+    /// plan step S3a's choice (design §5, the 1 s timeout).
     AreaFitted {
         reply: Reply,
         video: (f64, f64),
         result: Value,
     },
+    /// The size of the video area the window tick's layout shows, at that
+    /// tick's time (`now`, the core clock's ms), after the bar, the columns
+    /// and fullscreen changed it (plan step S2d): the core answers each
+    /// pending `window.setVideoArea` the size matches, or whose deadline
+    /// passed. Last value wins: the newest layout is what the window shows.
+    /// The core's window facts are measured earlier in the same tick, so
+    /// they cannot stand in for it without moving the reply a tick later.
+    VideoArea { size: (f64, f64), now: u64 },
+    /// The mount change the interface's batching window holds now, or none
+    /// (plan step S2d(2)): sent where the window opens, closes, takes a
+    /// failed batch's first change again, or drops one the core
+    /// cancelled. The core replaces its record (`Core::handed`), which it
+    /// also sets itself when it hands a change over. Last value wins.
+    Batching(Option<super::mounts::HandedMount>),
     /// Mount changes left the batching queue: the core sends their
     /// `ui.preparing` (`phase: preparing`) lines, in this order. Only
     /// changes not announced before (a failed batch's changes are put back
@@ -454,6 +565,19 @@ pub(crate) enum UiReport {
     /// The user acted for a plugin in this window (`origins`: where its
     /// `dialogs.confirm` goes), e.g. the tool window an `ui.open` showed.
     Acted { owner: u64, origin: origins::Origin },
+    /// The interface's part of the interface state file changed (plan step
+    /// S2c(7); design K8): the core, the file's one writer, takes it whole
+    /// and writes the file a second after `at` (the core clock's ms of the
+    /// change, `ui_state::Store::touch`). Last value wins.
+    Remembered {
+        state: Box<crate::ui::ui_state::Interface>,
+        at: u64,
+    },
+    /// A complete file drop (R-U2; plan step S2c(7)): the interface
+    /// collected its paths and found the panel under the pointer; the core
+    /// delivers it from its registry (`drops.panel` to a listening panel,
+    /// else `drops.drop` to the providers).
+    Drop(FileDrop),
     /// One of the 26 UI-originated events, unchanged.
     Event(UiEvent),
 }
@@ -508,6 +632,16 @@ pub(crate) struct MountApplied {
 /// One of today's UI-originated [`Event`]s (study §2.1: keys, clicks,
 /// window callbacks, view callbacks). Only those can be wrapped.
 pub(crate) struct UiEvent(Event);
+
+/// See [`UiReport::Drop`]: the paths in the order they came, the panel
+/// under the pointer by its plugin with the point in the panel's
+/// coordinates (`None`: no panel there), and the modifier keys
+/// (`{alt, shift, cmd}`) when the drop closed.
+pub(crate) struct FileDrop {
+    pub(crate) paths: Vec<PathBuf>,
+    pub(crate) panel: Option<(u64, (f64, f64))>,
+    pub(crate) modifiers: Value,
+}
 
 impl UiEvent {
     /// The event, if the UI thread is where it comes from; else it back.
@@ -612,6 +746,9 @@ impl UiReport {
             (Self::WindowFacts(_), Self::WindowFacts(_))
                 | (Self::Displays(_), Self::Displays(_))
                 | (Self::FrameShown(_), Self::FrameShown(_))
+                | (Self::Remembered { .. }, Self::Remembered { .. })
+                | (Self::VideoArea { .. }, Self::VideoArea { .. })
+                | (Self::Batching(_), Self::Batching(_))
         )
     }
 }
@@ -626,6 +763,7 @@ const _: () = {
     send::<UiEvent>();
     send::<WindowFacts>();
     send::<MountApplied>();
+    send::<FileDrop>();
 };
 
 #[cfg(test)]
@@ -957,12 +1095,15 @@ mod tests {
                 UiSnapshot::Theme(_) => "Theme",
                 UiSnapshot::Source(_) => "Source",
                 UiSnapshot::CursorAutoHide(_) => "CursorAutoHide",
+                UiSnapshot::LastSource(_) => "LastSource",
+                UiSnapshot::StartupSettled(_) => "StartupSettled",
             },
             UiCommand::View(op) => match op.kind {
                 ViewKind::Open { .. } => "View.Open",
                 ViewKind::Set { .. } => "View.Set",
                 ViewKind::Show { .. } => "View.Show",
                 ViewKind::Close => "View.Close",
+                ViewKind::Refused(_) => "View.Refused",
             },
             UiCommand::Mount(_) => "Mount",
             UiCommand::SetMount(_) => "SetMount",
@@ -972,6 +1113,8 @@ mod tests {
                 SettingsOp::Removed { .. } => "Settings.Removed",
                 SettingsOp::Set { .. } => "Settings.Set",
                 SettingsOp::Show { .. } => "Settings.Show",
+                SettingsOp::OwnerGone { .. } => "Settings.OwnerGone",
+                SettingsOp::Rekeyed { .. } => "Settings.Rekeyed",
             },
             UiCommand::Window(op) => match op {
                 WindowOp::VideoArea { .. } => "Window.VideoArea",
@@ -1013,6 +1156,13 @@ mod tests {
             UiCommand::RevokeOwner { .. } => "RevokeOwner",
             UiCommand::RekeyOwner { .. } => "RekeyOwner",
             UiCommand::ResetWrites { .. } => "ResetWrites",
+            UiCommand::CancelMount(_) => "CancelMount",
+            UiCommand::Panels(op) => match op {
+                PanelsOp::Gone(_) => "Panels.Gone",
+                PanelsOp::PlaceholderGone(_) => "Panels.PlaceholderGone",
+                PanelsOp::Rekeyed { .. } => "Panels.Rekeyed",
+            },
+            UiCommand::DropConfirm { .. } => "DropConfirm",
         }
     }
 
@@ -1026,6 +1176,10 @@ mod tests {
             UiReport::MountPreparing(_) => "MountPreparing",
             UiReport::MountApplied(_) => "MountApplied",
             UiReport::Acted { .. } => "Acted",
+            UiReport::Remembered { .. } => "Remembered",
+            UiReport::Drop(_) => "Drop",
+            UiReport::VideoArea { .. } => "VideoArea",
+            UiReport::Batching(_) => "Batching",
             UiReport::Event(event) => event.0.label().0,
         }
     }
@@ -1052,6 +1206,151 @@ mod tests {
         for other in every_command() {
             assert!(!reset.replaces(&other) && !other.replaces(&reset));
             assert_ne!(command_name(&other), "ResetWrites");
+        }
+    }
+
+    /// The snapshot plan step S2c(7) added: it replaces only an older
+    /// value of its own kind (`every_command` keeps the S2a set).
+    #[test]
+    fn the_last_source_snapshot_is_constructed_matched_and_coalesced() {
+        let older = UiCommand::Snapshot(UiSnapshot::LastSource(Arc::new(json!({"phase":"empty"}))));
+        let newer = UiCommand::Snapshot(UiSnapshot::LastSource(Arc::new(json!({"phase":"ready"}))));
+        assert_eq!(command_name(&newer), "LastSource");
+        assert!(newer.replaces(&older));
+        for other in every_command() {
+            assert!(!newer.replaces(&other) && !other.replaces(&newer));
+        }
+    }
+
+    /// The reports plan step S2c(7) added: the interface's part of the
+    /// state file is a fact (last value wins), a drop is ordered.
+    #[test]
+    fn remembered_coalesces_and_a_drop_is_ordered() {
+        let remembered = |at| UiReport::Remembered {
+            state: Box::default(),
+            at,
+        };
+        let drop = || {
+            UiReport::Drop(FileDrop {
+                paths: vec![PathBuf::from("a.mkv")],
+                panel: Some((7, (1., 2.))),
+                modifiers: json!({"alt":false,"shift":false,"cmd":false}),
+            })
+        };
+        assert_eq!(report_name(&remembered(1)), "Remembered");
+        assert_eq!(report_name(&drop()), "Drop");
+        assert!(remembered(2).replaces(&remembered(1)));
+        assert!(!drop().replaces(&drop()));
+        assert!(!remembered(1).replaces(&drop()) && !drop().replaces(&remembered(1)));
+        for other in every_report() {
+            for new in [remembered(1), drop()] {
+                assert!(!new.replaces(&other) && !other.replaces(&new));
+            }
+        }
+    }
+
+    /// What plan step S2d added (`every_command` and `every_report` keep
+    /// the S2a set): a refused `ui.open` is ordered like the other view
+    /// requests; the layout's video area is a fact that replaces only an
+    /// older one.
+    #[test]
+    fn a_refused_open_is_ordered_and_the_video_area_coalesces() {
+        let refused = || {
+            UiCommand::View(ViewOp {
+                reply: reply(16),
+                id: "w".into(),
+                kind: ViewKind::Refused(RpcError::invalid("bad file")),
+            })
+        };
+        assert_eq!(command_name(&refused()), "View.Refused");
+        assert!(!refused().replaces(&refused()));
+        for other in every_command() {
+            assert!(!refused().replaces(&other) && !other.replaces(&refused()));
+            assert_ne!(command_name(&other), "View.Refused");
+        }
+        let area = |width| UiReport::VideoArea {
+            size: (width, 360.),
+            now: 5,
+        };
+        assert_eq!(report_name(&area(640.)), "VideoArea");
+        assert!(area(641.).replaces(&area(640.)));
+        for other in every_report() {
+            assert!(!area(640.).replaces(&other) && !other.replaces(&area(640.)));
+        }
+    }
+
+    /// What plan step S2d(2) added: a cancellation is ordered, start-up
+    /// settled and the batching window's change are values that replace
+    /// only an older one of their kind.
+    #[test]
+    fn a_cancel_is_ordered_and_the_settled_and_batching_values_coalesce() {
+        let cancels = [
+            UiCommand::CancelMount(MountCancel::Removal { key: 28 }),
+            UiCommand::CancelMount(MountCancel::Owner(7)),
+        ];
+        for cancel in &cancels {
+            assert_eq!(command_name(cancel), "CancelMount");
+            for other in cancels.iter().chain(every_command().iter()) {
+                assert!(!cancel.replaces(other) && !other.replaces(cancel));
+            }
+        }
+        let settled = |on| UiCommand::Snapshot(UiSnapshot::StartupSettled(on));
+        assert_eq!(command_name(&settled(true)), "StartupSettled");
+        assert!(settled(true).replaces(&settled(false)));
+        for other in every_command() {
+            assert!(!settled(true).replaces(&other) && !other.replaces(&settled(true)));
+        }
+        let held = |id| {
+            UiReport::Batching(Some(super::super::mounts::HandedMount {
+                reply: reply(id),
+                key: 28,
+                slot: Some(composition::Slot::Sidebar),
+                call: json!({}),
+            }))
+        };
+        assert_eq!(report_name(&held(3)), "Batching");
+        assert!(UiReport::Batching(None).replaces(&held(3)));
+        assert!(held(4).replaces(&UiReport::Batching(None)));
+        for other in every_report() {
+            assert!(!held(3).replaces(&other) && !other.replaces(&held(3)));
+        }
+    }
+
+    /// What plan step S2d(3) added: the interface's parts of a stop, a
+    /// revoke and a rekey are ordered and never collapse.
+    #[test]
+    fn the_owner_and_panel_commands_are_ordered() {
+        let added = [
+            UiCommand::Panels(PanelsOp::Gone(vec![(28, composition::Slot::Sidebar)])),
+            UiCommand::Panels(PanelsOp::PlaceholderGone(28)),
+            UiCommand::Panels(PanelsOp::Rekeyed {
+                from: 7,
+                to: 8,
+                keys: vec![(28, 32)],
+            }),
+            UiCommand::DropConfirm { owner: 7 },
+            UiCommand::Settings(SettingsOp::OwnerGone { owner: 7 }),
+            UiCommand::Settings(SettingsOp::Rekeyed {
+                serials: vec![1],
+                to: 8,
+            }),
+        ];
+        let names: Vec<_> = added.iter().map(command_name).collect();
+        assert_eq!(
+            names,
+            [
+                "Panels.Gone",
+                "Panels.PlaceholderGone",
+                "Panels.Rekeyed",
+                "DropConfirm",
+                "Settings.OwnerGone",
+                "Settings.Rekeyed"
+            ]
+        );
+        for command in &added {
+            for other in added.iter().chain(every_command().iter()) {
+                assert!(!command.replaces(other) && !other.replaces(command));
+            }
         }
     }
 
