@@ -28,7 +28,15 @@ impl Capability for WindowControl {
     /// §4.8): they hold nothing that keeps the plugin running.
     /// Picture-in-picture and a video area being applied still do.
     fn record(&self, host: &Host, owner: u64, _: &Value) -> Recorded {
-        if host.pip.holds(owner)
+        // Picture-in-picture's holder is the interface's fact (plan step
+        // S2f(3)).
+        #[cfg(debug_assertions)]
+        {
+            host.check_ui_facts();
+            host.core
+                .check_settled(&[crate::host::outbox::Fact::PipHolder(owner)]);
+        }
+        if host.core.ui_facts.pip.holder == Some(owner)
             || host
                 .core
                 .area_replies

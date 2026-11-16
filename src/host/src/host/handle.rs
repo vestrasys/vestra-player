@@ -11,14 +11,21 @@ impl Host {
     pub(crate) fn handle(&mut self, event: Event) {
         match UiEvent::new(event) {
             Ok(event) => self.ui_event(event.into_event()),
-            Err(event) => self.core_event(event),
+            Err(event) => {
+                // The interface's facts as the core reads them (plan step
+                // S2f(1)).
+                self.report_ui_facts();
+                self.core_event(event);
+                // What the core issued for it is carried out now (plan step
+                // S2f(3), `outbox.rs`).
+                self.drain_outbox();
+            }
         }
     }
     /// An event of the core: a plugin, the playback worker, the reaper, the
-    /// spawner, the recorder, the settings check, a dialog's thread.
-    fn core_event(&mut self, event: Event) {
-        // The interface's facts as the core reads them (plan step S2f(1)).
-        self.report_ui_facts();
+    /// spawner, the recorder, the settings check, a dialog's thread. What it
+    /// asks of the interface waits in the outbox (plan step S2f(3)).
+    pub(crate) fn core_event(&mut self, event: Event) {
         // What a process said before the Host has it (its spawn on the
         // spawn thread is not answered yet) waits for it (`worker.rs`).
         let from_process = super::supervisor::worker::from_process(&event);
@@ -31,7 +38,7 @@ impl Host {
         match event {
             Event::Prepared(owner, message, prepared) => {
                 self.core.prepared = message["id"].as_u64().map(|id| (owner, id, prepared));
-                self.handle(Event::Request(owner, message));
+                self.core_event(Event::Request(owner, message));
                 self.core.prepared = None;
             }
             Event::Request(owner, message) => {
@@ -712,6 +719,15 @@ impl Host {
             UiInput::ColumnCommands(states) => self.core.column_command_states(states),
             UiInput::MountTick => self.release_held_mounts(),
             UiInput::PanelBack(key) => self.panel_back(key),
+            // Plan step S2f(3): the interface shows a `dialogs.confirm` as a
+            // system dialog; busy before it shows.
+            UiInput::SystemConfirm => {
+                self.core.dialog_busy = true;
+                self.core.confirm_open = true;
+                #[cfg(feature = "producer-audio")]
+                self.core
+                    .physical_revoke(producer_input::RevokeReason::Dialog);
+            }
             UiInput::MountRetry(changes) => {
                 for change in changes.into_iter().rev() {
                     self.core.mount_queue.push_front(change);

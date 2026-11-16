@@ -278,17 +278,26 @@ impl Host {
                 turn.step(what);
             }
         };
+        // What each step asks of the interface is carried out before the
+        // next one (plan step S2f(3), `outbox.rs`).
         self.activation_tick();
+        self.drain_outbox();
         self.on_demand_tick();
+        self.drain_outbox();
         step("plugin activation");
         self.core.power_tick();
         self.diagnostics_tick();
+        self.drain_outbox();
         step("power and diagnostics");
         self.package_tick();
+        self.drain_outbox();
         step("packages");
         self.notify_tick();
+        self.drain_outbox();
         self.timeline_tick();
+        self.drain_outbox();
         self.open_files_tick();
+        self.drain_outbox();
         step("notifications, timeline, open files");
         if self.core.headless {
             return;

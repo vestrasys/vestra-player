@@ -40,7 +40,14 @@ impl Capability for UiWindow {
         METHODS
     }
     fn record(&self, host: &Host, owner: u64, _: &Value) -> Recorded {
-        if host.views.keys().any(|(each, _)| *each == owner) {
+        // The interface's fact (plan step S2f(3)).
+        #[cfg(debug_assertions)]
+        {
+            host.check_ui_facts();
+            host.core
+                .check_settled(&[crate::host::outbox::Fact::Views(owner)]);
+        }
+        if host.core.ui_facts.views.contains(&owner) {
             return Recorded::Live("an open window");
         }
         Recorded::Nothing

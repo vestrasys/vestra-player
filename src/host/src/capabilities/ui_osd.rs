@@ -39,7 +39,11 @@ impl Capability for UiOsd {
             return Recorded::Live("an OSD panel");
         }
         #[cfg(debug_assertions)]
-        host.check_ui_facts();
+        {
+            host.check_ui_facts();
+            host.core
+                .check_settled(&[crate::host::outbox::Fact::OsdButtons(owner)]);
+        }
         // Its buttons run its commands while the message shows.
         if host.core.ui_facts.osd_buttons == Some(owner) {
             return Recorded::Live("an OSD message with actions");
@@ -75,7 +79,8 @@ fn show(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<(
         |title| host.core.plugin_sentence(owner, title, &Value::Null),
         |id| host.core.commands.get(owner, id).is_some(),
     )?;
-    if host.shell.is_none() {
+    // "A shell exists" is the interface's fact (plan step S2f(3)).
+    if host.core.ui_facts.shell.is_none() {
         return Err(RpcError::new("unavailable", "native shell unavailable"));
     }
     let actions = (!actions.is_empty()).then(|| {
@@ -135,7 +140,8 @@ fn parse_actions(
 }
 
 fn panel(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<(), RpcError> {
-    if host.shell.is_none() {
+    // "A shell exists" is the interface's fact (plan step S2f(3)).
+    if host.core.ui_facts.shell.is_none() {
         return Err(RpcError::new("unavailable", "native shell unavailable"));
     }
     match &params["text"] {

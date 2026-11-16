@@ -859,7 +859,10 @@ fn interaction(
     // The core judges the locks from its copy of the tabs (plan step
     // S2c(5)); the interface marks activity and sets them (`LayoutOp::Locks`).
     #[cfg(debug_assertions)]
-    host.check_panel_tabs();
+    {
+        host.check_panel_tabs();
+        host.core.check_settled(&[crate::host::outbox::Fact::Tabs]);
+    }
     // The backdrop never auto-hides: nothing to lock.
     let judged = policy_slot(slot).map_or(Ok(()), |slot| host.core.panel_tabs.holds(slot, key));
     host.ui_command(UiCommand::Layout(LayoutOp::Locks { key, locks }));
@@ -895,7 +898,10 @@ fn layout_set(host: &mut Host, reply: &Reply, params: &Value) -> Handled {
         policy_slot(slot).ok_or_else(|| RpcError::invalid("the backdrop has no preference"))?;
     let change = layout_change(params, slot, &panels)?;
     #[cfg(debug_assertions)]
-    host.check_panel_tabs();
+    {
+        host.check_panel_tabs();
+        host.core.check_settled(&[crate::host::outbox::Fact::Tabs]);
+    }
     host.core
         .panel_tabs
         .judge_layout(slot, policy_slot, &change, panels[0].0)
@@ -920,7 +926,7 @@ fn menu(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<V
         diag!(
             "keys: ui.menu owner={} menu_open={} dialog={} sidebar_effective={}",
             reply.owner,
-            host.menu_open,
+            host.core.ui_facts.menu_open,
             host.core.dialog_busy,
             host.core.window_facts["slots"]["sidebar"]["effective"]
         );
@@ -958,7 +964,9 @@ fn menu(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<V
             .filter(|v| v.is_finite())
             .ok_or_else(|| RpcError::invalid(format!("{key} requires a finite number")))
     };
-    let (x, y) = (number("x")?, number("y")?);
+    // The origin: checked here, written by the interface (`panel_menu`).
+    number("x")?;
+    number("y")?;
     let mount_slot = mount.spec.slot;
     if mount_slot == composition::Slot::Backdrop {
         return Err(RpcError::new(
@@ -967,45 +975,38 @@ fn menu(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<V
         ));
     }
     let slot = mount_slot.name();
+    // The refusals are judged from the interface's facts (design §5.1 note
+    // 7; plan step S2f(3)): the columns' current tabs and the floating
+    // window's panels.
+    #[cfg(debug_assertions)]
+    {
+        use crate::host::outbox::Fact;
+        host.check_ui_facts();
+        host.core.check_settled(&[Fact::Columns, Fact::Floating]);
+    }
     // A panel in a background tab is not shown (the columns' tabs).
-    if let Some(policy) = policy_slot(mount_slot).filter(|_| mount_slot.tabbed())
-        && host.policy.active(policy) != Some(key)
+    if let Some(column) = crate::ui::sidebar_tabs::Column::of(mount_slot)
+        && host.core.ui_facts.columns[column.index()].active != Some(key)
     {
         return Err(RpcError::new(
             "unavailable",
             "the panel's tab is not the current one",
         ));
     }
-    let generation = if mount_slot == composition::Slot::Sidebar
-        && host
-            .floating
-            .as_ref()
-            .is_some_and(|f| f.owners.contains(&key))
-    {
-        host.floating.as_ref().unwrap().generation
-    } else if host.core.window_facts["slots"][slot]["effective"] == true {
-        host.shell_generation
-    } else {
+    let floating =
+        mount_slot == composition::Slot::Sidebar && host.core.ui_facts.floating.contains(&key);
+    if !floating && host.core.window_facts["slots"][slot]["effective"] != true {
         return Err(RpcError::new("unavailable", "the panel is not shown"));
-    };
-    if let Some(window) = host.window_for(generation) {
-        window
-            .set_property("menu-origin-x", x.into())
-            .map_err(anyhow::Error::from)?;
-        window
-            .set_property("menu-origin-y", y.into())
-            .map_err(anyhow::Error::from)?;
     }
     // The menu opens in the interface (`UiCommand::PanelMenu`, plan step
-    // S2d(4)); the refusals above and the origin's properties still read
-    // and write its windows in place (design §5.1 note 7: from S3a the
-    // core judges them from the facts and the shell's definition).
+    // S2d(4)), in the window that shows the panel, at the origin the
+    // request gives (`x`, `y` in `params`, checked above; written there,
+    // plan step S2f(3): both windows declare them as writable numbers, so
+    // the write cannot fail).
     host.ui_command(UiCommand::PanelMenu(PanelMenu {
         owner: reply.owner,
         key,
         ids,
-        // Carried for plan step S3a (the origin and its refusals judged on
-        // the core, design §5.1 note 7); unused for now.
         params: params.clone(),
     }));
     Ok(Value::Null)
@@ -1017,7 +1018,10 @@ impl Host {
     /// floating sidebar's, else the main window's).
     pub(crate) fn panel_menu(&mut self, menu: PanelMenu) {
         let PanelMenu {
-            owner, key, ids, ..
+            owner,
+            key,
+            ids,
+            params,
         } = menu;
         let floating = self
             .floating
@@ -1025,6 +1029,15 @@ impl Host {
             .filter(|f| panel_slot(key) == composition::Slot::Sidebar && f.owners.contains(&key))
             .map(|f| f.generation);
         let generation = floating.unwrap_or(self.shell_generation);
+        // The origin the request gives (the core checked both are finite
+        // numbers), written before the menu opens (plan step S2f(3); the
+        // core wrote it while answering before).
+        if let Some(window) = self.window_for(generation) {
+            for (property, key) in [("menu-origin-x", "x"), ("menu-origin-y", "y")] {
+                let value = params[key].as_f64().unwrap_or_default();
+                let _ = window.set_property(property, value.into());
+            }
+        }
         self.open_menu(generation, MenuMode::Panel(owner, ids));
     }
 }

@@ -425,6 +425,16 @@ impl Host {
             shell_generation: self.shell_generation,
             no_video: self.no_video,
             osd_buttons: self.osd_actions.as_ref().map(|actions| actions.owner),
+            // Plan step S2f(3): what `ui.menu`, `window.state` and the
+            // standby records read.
+            menu_open: self.menu_open,
+            floating: self
+                .floating
+                .as_ref()
+                .map(|floating| floating.owners.clone())
+                .unwrap_or_default(),
+            views: self.views.keys().map(|(owner, _)| *owner).collect(),
+            pip: self.pip_fact(),
         }
     }
     /// The interface hands the turn to the core (an event of the core, a
@@ -543,6 +553,9 @@ impl Host {
             UiReport::Input(input) => self.core_input(input),
             _ => unreachable!("not reported until plan step S2f or S3a"),
         }
+        // Plan step S2f(3): what the core issued for this report is carried
+        // out now, before the interface goes on.
+        self.drain_outbox();
     }
     /// The fullscreen title strip (`title-strip.slint`): it applies to the
     /// fullscreen main window where the system shows no title bar there

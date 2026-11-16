@@ -1169,7 +1169,12 @@ impl Host {
         }
         // The interface's facts from the core's copy (plan step S2f(1)).
         #[cfg(debug_assertions)]
-        self.check_ui_facts();
+        {
+            use crate::host::outbox::Fact;
+            self.check_ui_facts();
+            self.core
+                .check_settled(&[Fact::Sheet, Fact::Options, Fact::Columns]);
+        }
         // A confirmation on the sheet counts as a dialog open (H5).
         if self.core.dialog_busy || self.core.confirm_waiting() {
             busy.insert(Busy::Dialog);
