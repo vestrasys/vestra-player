@@ -279,7 +279,7 @@ impl Host {
         let owned = |dialog: rfd::AsyncFileDialog| {
             platform::own_file_dialog(dialog, owner.as_ref().map(|owner| owner.window()))
         };
-        let events = self.core.events.clone();
+        let events = self.events.clone();
         match purpose {
             DialogPurpose::Open(params) => {
                 let kind = params["kind"].as_str().unwrap_or_default();
@@ -357,7 +357,7 @@ impl Host {
         if let Some(instance) = &owner {
             view::show_again(instance, platform::app_in_foreground());
         }
-        let events = self.core.events.clone();
+        let events = self.events.clone();
         let answer = reply.clone();
         if let Err(error) = platform::confirm(
             &options,

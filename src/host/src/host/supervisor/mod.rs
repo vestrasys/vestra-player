@@ -269,6 +269,15 @@ impl OnDemand {
     pub fn held(&self, owner: u64) -> Option<&Held> {
         self.held.get(&owner)
     }
+    /// Every held unit, by owner (the interface's copy of their packages,
+    /// plan step S3a(1)).
+    pub fn held_all(&self) -> &BTreeMap<u64, Held> {
+        &self.held
+    }
+    /// The shown names of the units ever held, by manifest id (`name_of`).
+    pub fn names(&self) -> &BTreeMap<String, String> {
+        &self.names
+    }
     /// Moves whenever a unit is held or let go (a source of
     /// `packages.list`: a held unit's `warning` and `warnings`).
     pub fn held_revision(&self) -> u64 {

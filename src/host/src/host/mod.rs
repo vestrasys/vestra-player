@@ -1,4 +1,4 @@
-//! The `Host` and its `Core`. The core ([`Core`], `Host::core`) is the
+//! The `Host` and its `Core`. The core ([`Core`], behind `Host::link`) is the
 //! state and the code that never touch the interface: the lifecycle of
 //! plugins, the dispatch of their requests (`crate::capabilities`), the
 //! supervisor, triggers, packages; its turn takes the core alone (plan step
@@ -16,6 +16,7 @@ pub(crate) use diagnostics::{
     ShaderGuard, persist_shader_guard, register_shader_writer, session_end,
 };
 mod dispatch;
+pub(crate) mod driver;
 mod events;
 mod handle;
 mod input;
@@ -172,6 +173,24 @@ pub(crate) struct Mount {
     /// The `ui.mount` call a recording keeps for it
     /// (`sidebar_tabs::recorded_call`).
     pub(crate) call: Value,
+}
+impl Mount {
+    /// The core's record of this mount (plan step S3a(1)): everything but
+    /// the values its panel was given (`properties`), which only the
+    /// interface reads; `visible` is the interface's too, kept as it is.
+    pub(crate) fn record(&self) -> Mount {
+        Mount {
+            spec: self.spec.clone(),
+            plugin: self.plugin,
+            properties: BTreeMap::new(),
+            visible: self.visible,
+            title: self.title.clone(),
+            manifest: self.manifest.clone(),
+            builtin: self.builtin,
+            recorded: self.recorded,
+            call: self.call.clone(),
+        }
+    }
 }
 /// What the host keeps of one column of tabs (the sidebar, the adjust
 /// column) between ticks and shells (sidebar-tabs.md, per column).
@@ -364,8 +383,9 @@ pub(crate) struct MountChange {
 }
 /// The host's core: the state that never touches a Slint object or a
 /// window (doc/architecture/core-thread.md, plan step S2b; the CORE rows
-/// of doc/process/research/core-loop-study.md §1.1). `Host` holds it as
-/// `core`, still on the UI thread until plan step S3a.
+/// of doc/process/research/core-loop-study.md §1.1). `Host` holds it in
+/// its `link`, reached only through the driver (`driver.rs`, plan step
+/// S3a(1)), still on the UI thread until plan step S3a(2).
 pub(crate) struct Core {
     pub(crate) backend: Backend,
     /// The shared runner of the trusted plugins, while one runs. Declared
@@ -437,8 +457,10 @@ pub(crate) struct Core {
     /// its key (`panel_key`), a placeholder tab replayed from a recording
     /// included, with its spec, values and the `ui.mount` call a recording
     /// keeps. Standby recording, `rekey`, `revoke`, `prune` and `replay`
-    /// read and write it here. A batch of changes is applied to it by the
-    /// interface (`Host::prepare_mount_tick`, `UiReport::MountApplied`).
+    /// read and write it here. A batch of changes is applied by the
+    /// interface, whose copy (`Host::mounts`) the registry takes without
+    /// the panels' values (`UiInput::Mounts`, plan step S3a(1)); the
+    /// core's own changes reach that copy as `outbox::MountOp`s.
     pub(crate) mounts: BTreeMap<u64, Mount>,
     /// Mount changes the core accepted (`ui.mount`, `ui.unmount`, a replayed
     /// tab, a removal) that the interface has not taken into its batching
@@ -449,7 +471,7 @@ pub(crate) struct Core {
     /// pages and their recordings. The open options window is the
     /// interface's (`Host::settings`), told of changes as
     /// `UiCommand::Settings`.
-    pub(crate) settings: settings_window::Settings,
+    pub(crate) settings: revised::Revised<settings_window::Settings>,
     /// The large array of the request being answered, converted on its
     /// plugin's reader thread (`Event::Prepared`, `take_prepared`): owner,
     /// request id, rows.
@@ -597,7 +619,7 @@ pub(crate) struct Core {
     /// What the core asks of the interface, in order, and the core work
     /// kept behind it (plan step S2f(3), `outbox.rs`): drained by the
     /// driver after every event, report and core step.
-    pub(crate) outbox: std::collections::VecDeque<outbox::Out>,
+    pub(crate) outbox: outbox::Outbox,
     /// On-demand start: the Host's side of standby, wake and
     /// classification (`supervisor/`, supervisor.md §4). Moved from `Host`
     /// in plan step S2c as its last field, so it drops after every other
@@ -613,10 +635,36 @@ const _: fn() = || {
     send::<Core>();
 };
 pub(crate) struct Host {
-    /// The core part (`Core`). Declared first, so it is dropped first, as
+    /// The core part (`Core`), reached only through the driver (plan step
+    /// S3a(1), `driver.rs`). Declared first, so it is dropped first, as
     /// `backend`, `shared` and `plugins` (its first fields) were before the
     /// split.
-    pub(crate) core: Core,
+    pub(crate) link: driver::CoreLink,
+    /// The interface's own event sender (`driver::UiEvents`; plan step
+    /// S3a(1)): its callbacks send there.
+    pub(crate) events: driver::UiEvents,
+    /// The interface's clock, on the core's epoch (`Host::now_ms` gives
+    /// the core's millisecond values; plan S3a brief item 10).
+    pub(crate) clock: Instant,
+    /// A headless run (no window; the core's `headless`).
+    pub(crate) headless: bool,
+    /// The playback handles the interface draws with, cloned at start.
+    pub(crate) playback: driver::Playback,
+    /// The interface's copy of the mount registry (plan step S3a(1); K6):
+    /// the record it applies is the core's, the core's own changes reach
+    /// it as `outbox::MountOp`s, and the values its panels were given
+    /// (`properties`, `visible`) are its own.
+    pub(crate) mounts: BTreeMap<u64, Mount>,
+    /// The interface's copy of the settings pages (K7; plan step S3a(1)),
+    /// given whole when the core's registry changed; the values the open
+    /// window was given flow back to the core (`UiInput::Stored`).
+    pub(crate) pages: Vec<settings_window::Page>,
+    /// The interface's copies of the core's small values (design §5.3 group
+    /// D: the dialog flag, the lead, the run tickets, the origins).
+    pub(crate) view: outbox::CoreFacts,
+    /// The interface's copy of what it reads of the plugins (ids, names,
+    /// packages).
+    pub(crate) plugins: outbox::PluginsView,
     pub(crate) views: BTreeMap<(u64, String), view::View>,
     pub(crate) shell: Option<slint_interpreter::ComponentInstance>,
     /// The interface's mount batching window (K6): the change that opened

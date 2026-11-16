@@ -11,17 +11,10 @@ impl Host {
     pub(crate) fn handle(&mut self, event: Event) {
         match UiEvent::new(event) {
             Ok(event) => self.ui_event(event.into_event()),
-            Err(event) => {
-                // The interface's facts as the core reads them (plan step
-                // S2f(1)).
-                self.report_ui_facts();
-                #[cfg(debug_assertions)]
-                self.check_copies();
-                self.core.handle(event);
-                // What the core issued for it is carried out now (plan step
-                // S2f(3), `outbox.rs`).
-                self.drain_outbox();
-            }
+            // The core's, through the driver (plan step S3a(1),
+            // `driver.rs`): the interface's facts first, then the core's
+            // handling, then what it issued.
+            Err(event) => self.deliver_event(event),
         }
     }
 }
@@ -309,7 +302,7 @@ impl Host {
                 let _ = kind;
                 // Activity keeps the pointer and the popped-out sidebar; it
                 // never reveals the fullscreen bar (FS-BAR-1).
-                self.policy.activity(self.core.now_ms());
+                self.policy.activity(self.now_ms());
             }
             Event::MenuAction(generation, action) => {
                 if !self.window_generation_live(generation)
@@ -317,7 +310,7 @@ impl Host {
                 {
                     return;
                 }
-                self.policy.activity(self.core.now_ms());
+                self.policy.activity(self.now_ms());
                 if debug_menu()
                     && let MenuAction::Invoke(token) = &action
                 {
@@ -345,7 +338,7 @@ impl Host {
                             diag!(
                                 "menu: hover level={level} token={token} now={now} open={:?} t={}",
                                 self.menu_path,
-                                self.core.now_ms()
+                                self.now_ms()
                             );
                         }
                         let Some(path) = menu::hover_target(&self.menu_path, level, &token) else {
@@ -359,7 +352,7 @@ impl Host {
                                 .then(|| self.menu_panels.get(level + 1).copied())
                                 .flatten();
                             let pointer = self.menu_pointer();
-                            let now = self.core.now_ms();
+                            let now = self.now_ms();
                             if let Some(path) =
                                 self.menu_aim
                                     .hover(&self.menu_path, path, pointer, submenu, now)
@@ -394,7 +387,6 @@ impl Host {
                             self.close_menu();
                             if self.policy.set_active(owner).is_ok() {
                                 let column = self
-                                    .core
                                     .mounts
                                     .get(&owner)
                                     .and_then(|m| sidebar_tabs::Column::of(m.spec.slot))
@@ -412,7 +404,7 @@ impl Host {
                     return;
                 }
                 input_trace::mark(&format!("host loop: binding → {owner}/{id}"));
-                self.policy.activity(self.core.now_ms());
+                self.policy.activity(self.now_ms());
                 let origin = self.origin_of(generation);
                 self.ui_report(UiReport::Input(UiInput::Command {
                     from: CommandFrom::Key,
@@ -427,7 +419,7 @@ impl Host {
                 }
                 self.policy.set_sidebar_width(width);
                 self.remembered.sidebar = Some(ui_state::Sidebar { width });
-                self.remember(self.core.now_ms());
+                self.remember(self.now_ms());
             }
             Event::BarButton(generation, token) => self.bar_click(generation, &token),
             Event::BarMore(generation, x, y) => self.bar_more(generation, x, y),
@@ -489,7 +481,7 @@ impl Host {
                 let mut slot = self.adjust_slot();
                 slot.width = self.policy.adjust_user_width();
                 self.remembered.adjust_slot = Some(slot);
-                self.remember(self.core.now_ms());
+                self.remember(self.now_ms());
             }
             Event::AdjustDismiss(generation) => {
                 if generation == self.shell_generation {
@@ -526,7 +518,7 @@ impl Host {
             }
             Event::ReviewSheet(generation, action) => {
                 if generation == self.shell_generation {
-                    self.policy.activity(self.core.now_ms());
+                    self.policy.activity(self.now_ms());
                     self.review_action(&action);
                 }
             }
@@ -588,7 +580,7 @@ impl Host {
             Event::Dropped(generation, path) => self.drops.arrived(generation, path),
             Event::Settings(generation, index) => self.settings_event(generation, index),
             Event::CommandRunAnswered(reply, yes, remember) => {
-                self.policy.activity(self.core.now_ms());
+                self.policy.activity(self.now_ms());
                 self.report_event(Event::CommandRunAnswered(reply, yes, remember));
             }
             core => unreachable!("{:?} is the core's (`Core::handle`)", core.label()),
@@ -722,6 +714,24 @@ impl Core {
                     self.mount_queue.push_front(change);
                 }
             }
+            // Plan step S3a(1): what the interface wrote in the core's data,
+            // or called on the core, in place before.
+            UiInput::Mounts(record) => self.mounts = record,
+            UiInput::PanelPlugins => self.note_panel_plugins(),
+            UiInput::Mounted(owner) => self.clear_warning(owner, "slot-occupied"),
+            UiInput::Stored {
+                owner,
+                id,
+                property,
+                value,
+            } => self.settings_stored(owner, &id, property, value),
+            UiInput::PipAction { action, step } => {
+                if let Err(error) = self.run_core_action_with(action, None, step) {
+                    diag!("pip: {action}: {}", error.message);
+                }
+            }
+            #[cfg(feature = "producer-audio")]
+            UiInput::Revoke(reason) => self.physical_revoke(reason),
         }
     }
 }

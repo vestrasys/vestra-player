@@ -392,7 +392,7 @@ impl Host {
         generation: u64,
         reset: bool,
     ) -> Result<()> {
-        let events = self.core.events.clone();
+        let events = self.events.clone();
         window.set_callback("menu-hover", move |args| {
             if let [
                 SValue::Number(level),
@@ -408,7 +408,7 @@ impl Host {
             }
             SValue::Void
         })?;
-        let events = self.core.events.clone();
+        let events = self.events.clone();
         window.set_callback("menu-scroll", move |args| {
             if let [SValue::Number(level), SValue::Number(offset)] = args
                 && *level >= 0.
@@ -420,7 +420,7 @@ impl Host {
             }
             SValue::Void
         })?;
-        let events = self.core.events.clone();
+        let events = self.events.clone();
         window.set_callback("menu-invoke", move |args| {
             if let Some(SValue::String(token)) = args.first() {
                 let _ = events.send(Event::MenuAction(
@@ -435,7 +435,7 @@ impl Host {
             callbacks.push("menu-reset");
         }
         for callback in callbacks {
-            let events = self.core.events.clone();
+            let events = self.events.clone();
             window.set_callback(callback, move |_| {
                 let action = match callback {
                     "menu-reset" => MenuAction::Reset,
@@ -502,7 +502,7 @@ impl Host {
         if !self.menu_open {
             return;
         }
-        let now = self.core.now_ms();
+        let now = self.now_ms();
         let pointer = self.menu_pointer();
         if let Some(path) = self.menu_aim.tick(pointer, now) {
             self.set_menu_path(path);
@@ -589,12 +589,7 @@ impl Host {
                 };
                 let tabs = owners
                     .iter()
-                    .filter_map(|owner| {
-                        self.core
-                            .mounts
-                            .get(owner)
-                            .map(|m| (*owner, m.title.clone()))
-                    })
+                    .filter_map(|owner| self.mounts.get(owner).map(|m| (*owner, m.title.clone())))
                     .collect::<Vec<_>>();
                 let (origin, size) = menu_frame(window);
                 let scroll = self.menu_scroll.first().copied().unwrap_or(0.);

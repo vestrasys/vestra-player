@@ -364,7 +364,7 @@ impl Host {
         } else {
             OSD_MS
         };
-        let now = self.core.now_ms();
+        let now = self.now_ms();
         self.osd_until = Some(now + ms);
         self.osd_shown_at = now;
         self.osd_clear_at = None;
@@ -387,7 +387,7 @@ impl Host {
         self.osd_debug(&OsdEvent::Hide(reason));
         self.osd_until = None;
         self.osd_actions = None;
-        self.osd_clear_at = Some(self.core.now_ms() + OSD_CLEAR_MS);
+        self.osd_clear_at = Some(self.now_ms() + OSD_CLEAR_MS);
         self.osd_shown.visible = false;
         self.write_osd();
     }
@@ -414,7 +414,7 @@ impl Host {
         }
         let from = self.osd_from.map_or_else(
             || "the player".to_owned(),
-            |owner| self.core.plugin_id(owner),
+            |owner| self.plugins.plugin_id(owner),
         );
         let actions = self
             .osd_actions

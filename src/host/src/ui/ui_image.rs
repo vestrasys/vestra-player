@@ -452,8 +452,8 @@ impl crate::host::Core {
     /// Where a plugin's images may live: its package and data directories;
     /// a parked plugin's too (lazy activation: its bar button and settings
     /// pages still show). Core data only (the running plugins and the
-    /// parked origins; plan step S2d). The interface reads it in place
-    /// until plan step S3a gives it a per-owner copy.
+    /// parked origins; plan step S2d). The interface resolves the same from
+    /// its copy (`PluginsView::image_roots`, plan step S3a(1)).
     pub(crate) fn image_roots(&self, owner: u64) -> Vec<PathBuf> {
         if let Some(plugin) = self.plugins.get(&owner) {
             return plugin.origin().image_roots();
@@ -500,7 +500,7 @@ impl Host {
         value: &Value,
         prepared: Option<&ui_values::PlainRows>,
     ) -> std::result::Result<SValue, RpcError> {
-        let roots = self.core.image_roots(owner);
+        let roots = self.plugins.image_roots(owner);
         // An array without documents: plain rows (`ui_rows`), images
         // loaded once per reference.
         if let Some(rows) = value.as_array()

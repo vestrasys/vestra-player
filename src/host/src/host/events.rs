@@ -225,65 +225,12 @@ pub(crate) fn drain(
     handled
 }
 
-/// The core's turn (plan step S2e), the same for the windowed and the
-/// headless driver, in two halves: [`Host::core_events`] (the events) and
-/// [`Host::core_steps`] (the periodic steps). The windowed driver runs the
-/// interface's steps between and after them, as before; the headless driver
-/// has none. S3a runs both halves on the core thread.
-impl Host {
-    /// The first half of the core's turn, which began at `began`: `first`
-    /// (an event the headless driver already waited for), then the queued
-    /// ones ([`drain`]), each handled. `observe` sees each event before it
-    /// is handled (the headless evidence); `turn`, the windowed tick's
-    /// record, gets each event's handling time (`host/stall.rs`).
-    pub(crate) fn core_events(
-        &mut self,
-        receiver: &mpsc::Receiver<Event>,
-        began: Instant,
-        first: Option<Event>,
-        mut turn: Option<&mut super::stall::Turn>,
-        mut observe: impl FnMut(&Event),
-    ) {
-        let mut handle = |host: &mut Host, event: Event| {
-            observe(&event);
-            let (label, at) = (event.label(), Instant::now());
-            host.handle(event);
-            if let Some(turn) = turn.as_deref_mut() {
-                turn.event(label, at.elapsed());
-            }
-        };
-        let handled = match first {
-            Some(event) => {
-                handle(self, event);
-                1
-            }
-            None => 0,
-        };
-        drain(receiver, began, handled, |event| handle(self, event));
-    }
-    /// The second half of the core's turn: its periodic steps
-    /// ([`Core::STEPS`]), in their order, each followed by what it asked of
-    /// the interface (plan step S2f(3), `outbox.rs`). A headless run never
-    /// ran the windowed steps and still does not. `turn` names the steps
-    /// for the windowed tick's record.
-    pub(crate) fn core_steps(&mut self, mut turn: Option<&mut super::stall::Turn>) {
-        // The interface's facts as the core's steps read them (plan step
-        // S2f(1)).
-        self.report_ui_facts();
-        #[cfg(debug_assertions)]
-        self.check_copies();
-        for step in Core::STEPS {
-            if step.windowed && self.core.headless {
-                break;
-            }
-            (step.run)(&mut self.core);
-            self.drain_outbox();
-            if let (Some(what), Some(turn)) = (step.ends, turn.as_deref_mut()) {
-                turn.step(what);
-            }
-        }
-    }
-}
+// The core's turn (plan step S2e), the same for the windowed and the
+// headless driver, in two halves: `Host::core_events` (the events) and
+// `Host::core_steps` (the periodic steps), in the driver (`driver.rs`, plan
+// step S3a(1)). The windowed driver runs the interface's steps between and
+// after them, as before; the headless driver has none. S3a(2) runs both
+// halves on the core thread.
 
 /// One periodic step of the core ([`Core::STEPS`]).
 pub(crate) struct Step {

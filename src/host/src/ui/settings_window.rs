@@ -384,6 +384,11 @@ fn moved(before: &Page, after: &Page) -> bool {
 }
 
 impl Settings {
+    /// Every page, in registration order (the interface's copy, plan step
+    /// S3a(1)).
+    pub fn pages(&self) -> &[Page] {
+        &self.pages
+    }
     pub fn page(&self, owner: u64, id: &str) -> Option<&Page> {
         self.pages.iter().find(|p| p.owner == owner && p.id == id)
     }
@@ -581,7 +586,7 @@ impl Core {
     /// on first use. `false`: the thread is missing (the caller compiles).
     fn settings_queue_check(&mut self, serial: u64, source: String) -> bool {
         if self.settings.checker.is_none() {
-            self.settings.checker = spawn_checker(self.events.clone());
+            self.settings.edit().checker = spawn_checker(self.events.clone());
         }
         let queued = self
             .settings
@@ -589,7 +594,7 @@ impl Core {
             .as_ref()
             .is_some_and(|checker| checker.send((serial, source)).is_ok());
         if !queued {
-            self.settings.checker = None;
+            self.settings.edit().checker = None;
         }
         queued
     }
@@ -604,10 +609,10 @@ impl Core {
             .iter()
             .position(|p| p.owner == owner && p.id == page.id && recorded.contains(&p.serial))
         {
-            Some(index) => self.settings.pages[index] = page,
-            None => self.settings.pages.push(page),
+            Some(index) => self.settings.edit().pages[index] = page,
+            None => self.settings.edit().pages.push(page),
         }
-        self.settings.forget_gone();
+        self.settings.edit().forget_gone();
     }
     /// `settings.unregister` of a page still compiling: its registration,
     /// taken (it ends with an error and the page is never added).
@@ -617,15 +622,16 @@ impl Core {
             .checking
             .iter()
             .position(|(_, page, _)| page.owner == owner && page.id == id)?;
-        Some(self.settings.checking.remove(index).0)
+        Some(self.settings.edit().checking.remove(index).0)
     }
     /// `settings.unregister`: the page goes; whether there was one.
     fn settings_unregister(&mut self, owner: u64, id: &str) -> bool {
         let before = self.settings.pages.len();
         self.settings
+            .edit()
             .pages
             .retain(|p| !(p.owner == owner && p.id == id));
-        self.settings.forget_gone();
+        self.settings.edit().forget_gone();
         self.settings.pages.len() != before
     }
 }
@@ -665,7 +671,7 @@ impl Core {
                 });
                 // A woken plugin registers its recorded page again: the same
                 // files need no compile (the recording is of this package).
-                if let Some(before) = self.settings.reregister(&page, sent_page(params)) {
+                if let Some(before) = self.settings.edit().reregister(&page, sent_page(params)) {
                     // The same source: an open window keeps its component
                     // and its native window; only what changed is written.
                     // What the window reports to the plugin (a value that
@@ -690,17 +696,23 @@ impl Core {
                 // registration instead of the shared window: on the
                 // `settings-check` thread (`spawn_checker`); the reply waits.
                 let checked = source(&[&page])?;
-                self.settings.sent.insert(page.serial, sent_page(params));
+                self.settings
+                    .edit()
+                    .sent
+                    .insert(page.serial, sent_page(params));
                 if !self.settings_queue_check(page.serial, checked.clone()) {
                     // No thread: compiled here, as before.
                     if let Err(error) = composition::build(checked, "OptionsWindow") {
-                        self.settings.forget_gone();
+                        self.settings.edit().forget_gone();
                         return Err(RpcError::new("ui-prepare", format!("{error:#}")));
                     }
                     self.settings_add(page, refused);
                     return Ok(Some(Value::Null));
                 }
-                self.settings.checking.push((reply.clone(), page, refused));
+                self.settings
+                    .edit()
+                    .checking
+                    .push((reply.clone(), page, refused));
                 Ok(None)
             }
             "settings.unregister" => {
@@ -810,8 +822,6 @@ impl Host {
         let id = params_page(params)?.to_owned();
         let property = string(params, "property")?.to_owned();
         let page = self
-            .core
-            .settings
             .page(owner, &id)
             .ok_or_else(|| RpcError::new("missing", "page not registered"))?;
         let (view, serial) = (page.view(), page.serial);
@@ -873,9 +883,7 @@ impl Host {
             // Prepared rows were checked on the reader thread.
             RpcError::check_property(&property, &value)?;
         }
-        if let Some(page) = self.core.settings.page_mut(owner, &id) {
-            page.properties.insert(property.clone(), value);
-        }
+        self.page_stored(owner, &id, &property, value);
         self.images.set_seq(owner, &view, &property, seq);
         Ok(Value::Null)
     }
@@ -889,8 +897,6 @@ impl Host {
         if !params["id"].is_null() {
             let id = params_page(params)?;
             let page = self
-                .core
-                .settings
                 .page(owner, id)
                 .ok_or_else(|| RpcError::invalid("not a settings page of this plugin"))?;
             self.settings.current = Some(page.key());
@@ -917,8 +923,6 @@ impl Host {
         prepared: Option<Box<ui_values::Prepared>>,
     ) -> std::result::Result<Option<Value>, RpcError> {
         let page = self
-            .core
-            .settings
             .page(owner, id)
             .ok_or_else(|| RpcError::new("missing", "page not registered"))?;
         let view = page.view();
@@ -941,8 +945,6 @@ impl Host {
                 .filter(|rows| ui_patch::applicable(&current, ops.before, &ops.shapes, rows));
             let Some(rows) = rows else {
                 return match self
-                    .core
-                    .settings
                     .page(owner, id)
                     .and_then(|page| page.properties.get(property))
                 {
@@ -956,8 +958,6 @@ impl Host {
         } else {
             // The rows it keeps count toward the totals too.
             let Some(Value::Array(stored)) = self
-                .core
-                .settings
                 .page(owner, id)
                 .and_then(|page| page.properties.get(property))
             else {
@@ -965,9 +965,7 @@ impl Host {
             };
             let whole = ui_patch::patched(stored, &ops);
             RpcError::check_property(property, &whole)?;
-            if let Some(page) = self.core.settings.page_mut(owner, id) {
-                page.properties.insert(property.to_owned(), whole);
-            }
+            self.page_stored(owner, id, property, whole);
             return Ok(None);
         }
         // The stored rows: copied on the reader thread when large.
@@ -976,14 +974,60 @@ impl Host {
             _ => ops.rows.iter().map(|row| (*row).clone()).collect(),
         };
         if let Some(Value::Array(stored)) = self
-            .core
-            .settings
             .page_mut(owner, id)
             .and_then(|page| page.properties.get_mut(property))
         {
             ui_patch::apply_vec(stored, &ops.shapes, rows);
+            // The core's page keeps the patched value too (plan step
+            // S3a(1)): its recording reads it.
+            let value = Value::Array(stored.clone());
+            self.report_stored(owner, id, property, value);
         }
         Ok(None)
+    }
+}
+
+impl Host {
+    /// The interface's copy of page `id` of `owner` (plan step S3a(1)).
+    pub(crate) fn page(&self, owner: u64, id: &str) -> Option<&Page> {
+        self.pages.iter().find(|p| p.owner == owner && p.id == id)
+    }
+    fn page_mut(&mut self, owner: u64, id: &str) -> Option<&mut Page> {
+        self.pages
+            .iter_mut()
+            .find(|p| p.owner == owner && p.id == id)
+    }
+    /// The open window stored `value` as `property` of page `id` of
+    /// `owner`: in the interface's copy of the page, and in the core's
+    /// (`UiInput::Stored`, in place, where the interface wrote the core's
+    /// page before; plan step S3a(1)).
+    fn page_stored(&mut self, owner: u64, id: &str, property: &str, value: Value) {
+        let Some(page) = self.page_mut(owner, id) else {
+            return;
+        };
+        page.properties.insert(property.to_owned(), value.clone());
+        self.report_stored(owner, id, property, value);
+    }
+    fn report_stored(&mut self, owner: u64, id: &str, property: &str, value: Value) {
+        self.ui_report(UiReport::Input(crate::host::messages::UiInput::Stored {
+            owner,
+            id: id.to_owned(),
+            property: property.to_owned(),
+            value,
+        }));
+    }
+}
+impl Core {
+    /// The interface's report of a value the open window stored
+    /// (`UiInput::Stored`): the core's page keeps it. The interface's copy
+    /// has it already, so the pages are not given again for it alone
+    /// (`Core::pages_echoed`).
+    pub(crate) fn settings_stored(&mut self, owner: u64, id: &str, property: String, value: Value) {
+        let before = self.settings.revision();
+        if let Some(page) = self.settings.edit().page_mut(owner, id) {
+            page.properties.insert(property, value);
+        }
+        self.pages_echoed(before);
     }
 }
 
@@ -1038,7 +1082,7 @@ impl Core {
             serde_json::from_value(params.get("properties").cloned().unwrap_or(json!({})))
                 .map_err(|e| RpcError::invalid(e.to_string()))?;
         let refused = crate::host::refuse_initial(&mut properties);
-        self.settings.next_serial += 1;
+        self.settings.edit().next_serial += 1;
         let page = Page {
             owner,
             manifest: origin.id.clone(),
@@ -1072,9 +1116,12 @@ impl Core {
                 page.id
             )));
         }
-        self.settings.sent.insert(page.serial, sent_page(params));
-        self.settings.recorded.insert(page.serial);
-        self.settings.pages.push(page.clone());
+        self.settings
+            .edit()
+            .sent
+            .insert(page.serial, sent_page(params));
+        self.settings.edit().recorded.insert(page.serial);
+        self.settings.edit().pages.push(page.clone());
         self.ui_command(UiCommand::Settings(SettingsOp::Added(Box::new(page))));
         Ok(())
     }
@@ -1094,20 +1141,10 @@ impl Host {
         Ok(())
     }
     fn settings_build(&mut self) -> Result<()> {
-        let order: Vec<u64> = sorted(&self.core.settings.pages)
-            .iter()
-            .map(|p| p.serial)
-            .collect();
+        let order: Vec<u64> = sorted(&self.pages).iter().map(|p| p.serial).collect();
         let pages: Vec<Page> = order
             .iter()
-            .filter_map(|serial| {
-                self.core
-                    .settings
-                    .pages
-                    .iter()
-                    .find(|p| p.serial == *serial)
-                    .cloned()
-            })
+            .filter_map(|serial| self.pages.iter().find(|p| p.serial == *serial).cloned())
             .collect();
         let refs: Vec<&Page> = pages.iter().collect();
         let definition = composition::build(source(&refs)?, "OptionsWindow")?;
@@ -1180,10 +1217,10 @@ impl Host {
                 &alias,
                 owner,
                 page.view(),
-                self.core.events.clone(),
+                self.events.sender(),
             )?;
         }
-        let events = self.core.events.clone();
+        let events = self.events.clone();
         instance.set_callback("select", move |args| {
             if let Some(SValue::Number(index)) = args.first()
                 && *index >= 0.
@@ -1192,7 +1229,7 @@ impl Host {
             }
             SValue::Void
         })?;
-        let events = self.core.events.clone();
+        let events = self.events.clone();
         instance.set_callback("close-window", move |_| {
             let _ = events.send(Event::Settings(generation, None));
             SValue::Void
@@ -1208,7 +1245,7 @@ impl Host {
         instance: &slint_interpreter::ComponentInstance,
         generation: u64,
     ) {
-        let events = self.core.events.clone();
+        let events = self.events.clone();
         instance.window().on_close_requested(move || {
             let _ = events.send(Event::Settings(generation, None));
             slint::CloseRequestResponse::KeepWindowShown
@@ -1270,7 +1307,7 @@ impl Host {
         let Some(open) = &self.settings.open else {
             return Ok(());
         };
-        let pages = sorted(&self.core.settings.pages);
+        let pages = sorted(&self.pages);
         let current = self
             .settings
             .current
@@ -1284,7 +1321,7 @@ impl Host {
     }
     /// Show `serial`, or the current / last page with the fallbacks of `pick`.
     fn settings_select(&mut self, serial: Option<u64>) -> Result<()> {
-        let pages = sorted(&self.core.settings.pages);
+        let pages = sorted(&self.pages);
         let wanted = match serial {
             Some(serial) => pages.iter().find(|p| p.serial == serial).map(|p| p.key()),
             None => self.settings.current.clone().or_else(|| {
@@ -1319,7 +1356,7 @@ impl Host {
                 .get_or_insert_with(Default::default);
             if last.last_page != key {
                 last.last_page = key;
-                let now = self.core.now_ms();
+                let now = self.now_ms();
                 self.remember(now);
             }
         }
@@ -1375,9 +1412,9 @@ impl Core {
         else {
             return;
         };
-        let (reply, page, refused) = self.settings.checking.remove(index);
+        let (reply, page, refused) = self.settings.edit().checking.remove(index);
         if !self.plugins.contains_key(&reply.owner) {
-            self.settings.forget_gone();
+            self.settings.edit().forget_gone();
             return;
         }
         match result {
@@ -1386,7 +1423,7 @@ impl Core {
                 self.respond(reply, Ok(Value::Null));
             }
             Err(message) => {
-                self.settings.forget_gone();
+                self.settings.edit().forget_gone();
                 self.respond(reply, Err(RpcError::new("ui-prepare", message)))
             }
         }

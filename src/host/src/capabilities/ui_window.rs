@@ -139,7 +139,7 @@ fn open(
         &id,
         &values,
         callbacks,
-        host.core.events.clone(),
+        host.events.sender(),
         |instance| {
             if theme != theme::THEMES[0] && theme::apply(instance, &theme).is_err()
                 || theme::apply_fonts(instance).is_err()

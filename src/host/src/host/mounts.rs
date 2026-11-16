@@ -3,6 +3,7 @@
 use super::messages::{
     MountApplied, MountCancel, SetMount, UiCommand, UiReport, UiSnapshot, WindowFacts, WindowOp,
 };
+use super::outbox::MountOp;
 use super::*;
 use crate::ui::sidebar_tabs::Column;
 
@@ -103,6 +104,94 @@ impl Core {
     fn mount_commands(&mut self) -> Vec<UiCommand> {
         self.mount_queue.drain(..).map(UiCommand::Mount).collect()
     }
+    /// The core's answer to a request of the interface's (`Take`; plan step
+    /// S3a(1)): what the interface pulled from the core in place before,
+    /// answered in place on one thread.
+    pub(crate) fn take(&mut self, take: messages::Take) -> Vec<UiCommand> {
+        use messages::Take;
+        match take {
+            Take::Mount => self.mount_command().into_iter().collect(),
+            Take::Mounts => self.mount_commands(),
+            // A mount of a plugin stopped since is dropped, as before; a tab
+            // replayed from a recording belongs to a plugin in standby, which
+            // has no process (dropped when it is no longer held either).
+            Take::Live(changes) => changes
+                .into_iter()
+                .filter(|change| {
+                    let owner = change.reply.owner;
+                    match &change.contribution {
+                        None => true,
+                        Some(mount) if mount.recorded => {
+                            self.plugins.contains_key(&owner)
+                                || self.on_demand.held(owner).is_some()
+                        }
+                        Some(_) => self.plugins.contains_key(&owner),
+                    }
+                })
+                .map(UiCommand::Mount)
+                .collect(),
+            Take::Tables => self
+                .table_snapshots()
+                .into_iter()
+                .map(UiCommand::Snapshot)
+                .collect(),
+            Take::WindowSettings => self.window_settings(),
+        }
+    }
+    /// The core's own changes of its mount registry, each recorded for the
+    /// interface's copy (`MountOp`; plan step S3a(1)).
+    pub(crate) fn mount_remove(&mut self, key: u64) -> Option<Mount> {
+        let removed = self.mounts.remove(&key);
+        if removed.is_some() {
+            self.outbox.mount_ops.push(MountOp::Remove(key));
+        }
+        removed
+    }
+    /// Panel `from` moves to key `to` of plugin `plugin` (a rekey).
+    pub(crate) fn mount_move(&mut self, from: u64, to: u64, plugin: u64) -> bool {
+        let Some(mut mount) = self.mounts.remove(&from) else {
+            return false;
+        };
+        mount.spec.owner = to;
+        mount.plugin = plugin;
+        self.mounts.insert(to, mount);
+        self.outbox
+            .mount_ops
+            .push(MountOp::Move { from, to, plugin });
+        true
+    }
+    /// Panel `key` stays as a placeholder (its plugin parked).
+    pub(crate) fn mount_recorded(&mut self, key: u64) {
+        if let Some(mount) = self.mounts.get_mut(&key) {
+            mount.recorded = true;
+            self.outbox.mount_ops.push(MountOp::Recorded(key));
+        }
+    }
+}
+
+impl Host {
+    /// The interface's copy of the mount registry follows a change the core
+    /// made itself (`MountOp`; plan step S3a(1)); the values its panels
+    /// were given since (`properties`, `visible`) stay.
+    pub(crate) fn mount_op(&mut self, op: MountOp) {
+        match op {
+            MountOp::Remove(key) => {
+                self.mounts.remove(&key);
+            }
+            MountOp::Move { from, to, plugin } => {
+                if let Some(mut mount) = self.mounts.remove(&from) {
+                    mount.spec.owner = to;
+                    mount.plugin = plugin;
+                    self.mounts.insert(to, mount);
+                }
+            }
+            MountOp::Recorded(key) => {
+                if let Some(mount) = self.mounts.get_mut(&key) {
+                    mount.recorded = true;
+                }
+            }
+        }
+    }
 }
 
 /// What the core records of the mount change the interface's batching
@@ -139,7 +228,8 @@ impl HandedMount {
         self.key == key && self.reply.id == 0 && self.slot.is_none()
     }
     /// The same change (debug check of the record against the window).
-    fn same(&self, other: &Self) -> bool {
+    #[cfg(debug_assertions)]
+    pub(crate) fn same(&self, other: &Self) -> bool {
         self.reply.owner == other.reply.owner
             && self.reply.id == other.reply.id
             && self.key == other.key
@@ -180,7 +270,9 @@ impl Host {
         // The core answers what it held first (plan step S2f(1)).
         self.ui_report(UiReport::Input(messages::UiInput::MountTick));
         if self.preparing.is_none() {
-            if let Some(change) = self.core.mount_command().map(mount_change) {
+            // Taken from the core's queue (`Take::Mount`, plan step S3a(1)).
+            let taken = self.take(messages::Take::Mount).into_iter().next();
+            if let Some(change) = taken.map(mount_change) {
                 let preparing = unannounced([&change]);
                 // Handed over, not yet in the window: its `ui.preparing` goes
                 // out first (a full pipe can stop its plugin right there,
@@ -222,8 +314,7 @@ impl Host {
             self.mount_singly -= 1;
         } else {
             let joining = self
-                .core
-                .mount_commands()
+                .take(messages::Take::Mounts)
                 .into_iter()
                 .map(mount_change)
                 .collect::<Vec<_>>();
@@ -233,29 +324,24 @@ impl Host {
             }
             changes.extend(joining);
         }
-        // A mount of a plugin stopped since is dropped, as before; a tab
-        // replayed from a recording belongs to a plugin in standby, which has
-        // no process (dropped when it is no longer held either).
-        changes.retain(|change| {
-            let owner = change.reply.owner;
-            match &change.contribution {
-                None => true,
-                Some(mount) if mount.recorded => {
-                    self.core.plugins.contains_key(&owner)
-                        || self.core.on_demand.held(owner).is_some()
-                }
-                Some(_) => self.core.plugins.contains_key(&owner),
-            }
-        });
+        // A mount of a plugin stopped since is dropped, as before: the core
+        // keeps the changes whose plugin still runs or is held (`Take::Live`,
+        // plan step S3a(1)).
+        let changes: Vec<MountChange> = self
+            .take(messages::Take::Live(changes))
+            .into_iter()
+            .map(mount_change)
+            .collect();
         if changes.is_empty() {
             return;
         }
-        let mut next = self.core.mounts.clone();
+        let mut next = self.mounts.clone();
         for change in &changes {
             let owner = change.reply.owner;
             if let Some(mount) = &change.contribution {
-                // Mounted after all: an earlier refusal no longer applies.
-                self.core.clear_warning(owner, "slot-occupied");
+                // Mounted after all: an earlier refusal no longer applies
+                // (the core's, plan step S3a(1)).
+                self.ui_report(UiReport::Input(messages::UiInput::Mounted(owner)));
                 next.insert(change.key, mount.clone());
             } else {
                 next.remove(&change.key);
@@ -359,33 +445,6 @@ impl Host {
         if dropped {
             self.set_preparing(None);
         }
-    }
-    /// Debug builds: the core's record of the change the batching window
-    /// holds is the window's at the core's reads of it (plan step S2d(2)),
-    /// except while a change is being handed over (`handing_over`: the
-    /// record is set, the window not yet). Removed with the in-place
-    /// delivery (plan S3a).
-    #[cfg(debug_assertions)]
-    pub(crate) fn check_handed(&self) {
-        // Nor while a cancel of the core's waits in its outbox (plan step
-        // S2f(3)): the core cleared its record, the window drops the
-        // change when the cancel is carried out.
-        if self.handing_over || self.core.cancel_pending() {
-            return;
-        }
-        let window = self
-            .preparing
-            .as_ref()
-            .map(|(_, change)| HandedMount::of(change));
-        let same = match (&self.core.handed, &window) {
-            (None, None) => true,
-            (Some(core), Some(window)) => core.same(window),
-            _ => false,
-        };
-        debug_assert!(
-            same,
-            "the core's record of the batching window is behind it"
-        );
     }
     /// The R13 handoff of a mount batch and of `layout.set`: the window
     /// facts the interface last reported, with the tabs as the apply left it
@@ -545,7 +604,7 @@ impl Host {
                 }
             }
             UiCommand::ShowWaiting => self.show_waiting_confirmation(),
-            UiCommand::Activity => self.policy.activity(self.core.now_ms()),
+            UiCommand::Activity => self.policy.activity(self.now_ms()),
             UiCommand::Window(WindowOp::ApplyOnTop) => self.apply_on_top(),
             // Plan step S2f(3): the dialogs placed by the interface, and the
             // sheet's offer written again.
@@ -562,7 +621,7 @@ impl Host {
             diag!(
                 "vestra shell: {} change(s), {} panel(s), {} compiled, prepared in {:.1} ms ({})",
                 changes,
-                self.core.mounts.len(),
+                self.mounts.len(),
                 self.panels.definitions(),
                 started.elapsed().as_secs_f64() * 1000.,
                 if ok { "ready" } else { "failed" }
@@ -594,7 +653,6 @@ impl Host {
         self.tabs_failed.retain(|owner| next.contains_key(owner));
         // Gone, or moved to another slot (no tab left behind).
         let leaving = self
-            .core
             .mounts
             .iter()
             .filter(|(owner, mount)| {
@@ -712,7 +770,7 @@ impl Host {
                 }
             }
             if let Some(slot) = policy_slot(mount.spec.slot)
-                && self.core.mounts.contains_key(&mount.spec.owner)
+                && self.mounts.contains_key(&mount.spec.owner)
                 && let Err(error) =
                     self.policy
                         .set_locks(slot, mount.spec.owner, window_state::Locks::default())
@@ -726,7 +784,7 @@ impl Host {
         for old in &leaving {
             self.policy.remove_owner(*old);
             if !next.contains_key(old)
-                && let Some(mount) = self.core.mounts.get(old)
+                && let Some(mount) = self.mounts.get(old)
             {
                 self.images
                     .release_view(mount.plugin, mount_view(mount.spec.slot));
@@ -741,9 +799,7 @@ impl Host {
                     .iter()
                     .flat_map(|plan| plan.order.iter().filter_map(|owner| next.get(owner))),
             )
-            .filter(|m| {
-                !self.core.mounts.contains_key(&m.spec.owner) || leaving.contains(&m.spec.owner)
-            })
+            .filter(|m| !self.mounts.contains_key(&m.spec.owner) || leaving.contains(&m.spec.owner))
             .map(|m| (m.spec.owner, m.spec.slot, m.visible, m.manifest.clone()))
             .collect::<Vec<_>>();
         for (id, mount_slot, mount_visible, manifest) in attach {
@@ -779,7 +835,7 @@ impl Host {
         }
         // The tabs as the batch left them reach the core (rule R9).
         self.report_tabs();
-        self.policy.activity(self.core.now_ms());
+        self.policy.activity(self.now_ms());
         {
             let mut input = self.input.borrow_mut();
             input.bottom = next
@@ -789,10 +845,16 @@ impl Host {
         }
         // The mount record of the R13 handoff, given to the core's registry
         // here, in place, before any reply (`mounts_applied`): what follows
-        // (the panel keys, the panels shown) reads the record it makes.
-        // From plan step S3a the interface keeps its own copy and the
-        // record travels in `MountApplied`.
-        self.core.mounts = next;
+        // (the panel keys, the panels shown) reads the record it makes. Plan
+        // step S3a(1): the interface's copy is the record; the core's
+        // registry takes it without the values the panels were given, which
+        // only the interface reads (`UiInput::Mounts`).
+        let record = next
+            .iter()
+            .map(|(key, mount)| (*key, mount.record()))
+            .collect();
+        self.mounts = next;
+        self.ui_report(UiReport::Input(messages::UiInput::Mounts(record)));
         {
             // The panel keys' plugins: their commands take the panel's keys
             // (none while a column waits for its remembered tab).
@@ -802,7 +864,7 @@ impl Host {
             input.sidebar = sidebar;
             input.adjust = adjust;
         }
-        self.core.note_panel_plugins();
+        self.ui_report(UiReport::Input(messages::UiInput::PanelPlugins));
         for (state, plan) in self.columns.iter_mut().zip(&plans) {
             state.tabs = plan.order.clone();
             state.tabbed = plan.tabbed;
@@ -812,7 +874,7 @@ impl Host {
         }
         // The strips (a tab came or went) and the panels, in the same
         // frame: each column's current tab, the bar and the backdrop.
-        for mount in self.core.mounts.values() {
+        for mount in self.mounts.values() {
             if let Some(column) = Column::of(mount.spec.slot)
                 && let Some(panel) = self.panels.panel(mount.spec.owner)
             {
@@ -899,7 +961,7 @@ impl Host {
         self.current_in(
             column,
             self.policy.active(policy_column(column)),
-            &self.core.mounts,
+            &self.mounts,
         )
     }
     /// The tab `current` names: none while the column waits for its
@@ -917,7 +979,7 @@ impl Host {
             mount.manifest,
             mount.spec.slot.name(),
             took.map_or_else(String::new, |ms| format!(" in {ms:.1} ms")),
-            self.core.now_ms(),
+            self.now_ms(),
             if took.is_some() { "ready" } else { "failed" }
         );
     }
@@ -941,7 +1003,7 @@ impl Host {
             Ok(Shown::Same) => false,
             Ok(Shown::Changed { compiled_ms }) => {
                 if let (Some(took), Some(mount)) =
-                    (compiled_ms, key.and_then(|key| self.core.mounts.get(&key)))
+                    (compiled_ms, key.and_then(|key| self.mounts.get(&key)))
                 {
                     self.log_compile(mount, Some(took));
                 }
@@ -952,7 +1014,7 @@ impl Host {
                     diag!("panel container {}: {error:#}", slot.name());
                     return false;
                 };
-                if let Some(mount) = self.core.mounts.get(&key) {
+                if let Some(mount) = self.mounts.get(&key) {
                     self.log_compile(mount, None);
                 }
                 diag!("panel {key}: it does not compile: {error:#}");
@@ -982,12 +1044,12 @@ impl Host {
                 Ok(None) => {}
                 Ok(Some(took)) => {
                     loaded = true;
-                    if let (Some(took), Some(mount)) = (took, self.core.mounts.get(&key)) {
+                    if let (Some(took), Some(mount)) = (took, self.mounts.get(&key)) {
                         self.log_compile(mount, Some(took));
                     }
                 }
                 Err(error) => {
-                    if let Some(mount) = self.core.mounts.get(&key) {
+                    if let Some(mount) = self.mounts.get(&key) {
                         self.log_compile(mount, None);
                     }
                     diag!("panel {key}: it does not compile: {error:#}");
@@ -1025,7 +1087,6 @@ impl Host {
         let mut changed = false;
         for slot in [Slot::Bottom, Slot::Backdrop] {
             let key = self
-                .core
                 .mounts
                 .values()
                 .find(|m| m.spec.slot == slot)
@@ -1141,7 +1202,7 @@ impl Host {
             // whose plugin woke or restarted under another owner since is
             // no longer mounted under it, and is dropped.
             if !self.window_generation_live(event.shell_generation)
-                || !self.core.mounts.contains_key(&event.owner)
+                || !self.mounts.contains_key(&event.owner)
             {
                 continue;
             }

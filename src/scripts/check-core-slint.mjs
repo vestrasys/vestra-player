@@ -15,6 +15,16 @@
  * signature is the text from `fn` to the first `{` or `;` outside
  * parentheses and angle brackets.
  *
+ * Plan step S3a(1) adds the driver check: the interface reaches the core
+ * only through the driver (`host/driver.rs`). `struct Host` has no field
+ * that names `Core`; the core sits in `struct CoreLink`, whose fields are
+ * private (the compiler then keeps every other module off them); only
+ * `host/driver.rs` names `link.core`; the driver's start-up and quit
+ * accessors (`starting`, `quitting`, `backend`) are called from `main.rs`
+ * only. The types that carry the interface's copies of core data
+ * (`Outbox`, `MountOp`, `CoreFacts`, `PluginsView`, `Copies`, `Sent`) are
+ * scanned like `Core`'s fields.
+ *
  * Before the scan a self-test runs the same scanner on a small source with
  * known violations and known clean code; a scanner that misses one of them
  * or reports a clean one fails the run (exit 2), so a broken pattern cannot
@@ -140,7 +150,7 @@ function scan(sources) {
   for (const [rel, source] of sources) {
     const text = blank(source);
     for (const m of text.matchAll(
-      /\bstruct\s+Core\s*\{|\benum\s+(?:Out|Then)\s*\{/g,
+      /\b(?:struct|enum)\s+(?:Core|Out|Then|Outbox|MountOp|CoreFacts|PluginsView|Copies|Sent)\s*\{/g,
     )) {
       const open = m.index + m[0].length - 1;
       const body = text.slice(open, blockEnd(text, open));
@@ -219,14 +229,109 @@ fn literal() -> &'static str { "fn quoted(core: &Core, host: &Host)" }
   }
 }
 
-const { blocks, signatures, findings } = scan(
-  files(root).map((file) => [
-    path.relative(root, file).replaceAll("\\", "/"),
-    fs.readFileSync(file, "utf8"),
-  ]),
-);
+// Plan step S3a(1): the interface reaches the core only through the driver.
+const DRIVER = "host/driver.rs";
+const ACCESSORS = /\.\s*(starting|quitting|backend)\s*\(/g;
+function scanDriver(sources) {
+  const findings = [];
+  let links = 0;
+  for (const [rel, source] of sources) {
+    const text = blank(source);
+    for (const m of text.matchAll(/\bstruct\s+(Host|CoreLink)\s*\{/g)) {
+      const open = m.index + m[0].length - 1;
+      const body = text.slice(open + 1, blockEnd(text, open) - 1);
+      if (m[1] === "CoreLink" && rel !== DRIVER) {
+        findings.push(`${rel}:${lineOf(text, m.index)}: CoreLink outside ${DRIVER}`);
+      }
+      body.split("\n").forEach((line, n) => {
+        const at = `${rel}:${lineOf(text, open) + n}`;
+        if (m[1] === "Host" && /:\s*[^,]*\bCore\b/.test(line)) {
+          findings.push(`${at}: a Host field names Core: ${line.trim()}`);
+        }
+        if (m[1] === "CoreLink") {
+          if (/\bpub\b/.test(line)) {
+            findings.push(`${at}: a CoreLink field is not private: ${line.trim()}`);
+          }
+          if (/\bCore\b/.test(line)) links++;
+        }
+      });
+    }
+    if (rel !== DRIVER) {
+      for (const m of text.matchAll(/\blink\s*\.\s*core\b/g)) {
+        findings.push(`${rel}:${lineOf(text, m.index)}: link.core outside ${DRIVER}`);
+      }
+    }
+    if (rel !== "main.rs" && rel !== DRIVER) {
+      for (const m of text.matchAll(ACCESSORS)) {
+        // `backend()` is also the name of unrelated methods: only the
+        // driver's, called on a `Host` (`host.backend()`), counts.
+        const before = text.slice(Math.max(0, m.index - 12), m.index);
+        if (m[1] === "backend" && !/\bhost\s*$/.test(before)) continue;
+        findings.push(
+          `${rel}:${lineOf(text, m.index)}: the driver's ${m[1]}() outside main.rs`,
+        );
+      }
+    }
+  }
+  return { links, findings };
+}
+
+// Its negative self-test, over three files.
+{
+  const sources = [
+    [
+      DRIVER,
+      `pub(crate) struct CoreLink {
+    core: Core,
+}
+fn drive(host: &mut Host) { host.link.core.handle(); }`,
+    ],
+    [
+      "host/mod.rs",
+      `pub(crate) struct Host {
+    pub(crate) core: Core, // BAD
+    pub(crate) link: CoreLink,
+    pub(crate) mounts: BTreeMap<u64, Mount>,
+}
+pub(crate) struct CoreLink { // BAD
+    pub(crate) core: Core, // BAD
+}
+fn interface(host: &mut Host) {
+    host.link.core.dialog_busy = true; // BAD
+    host.starting(|core| ()); // BAD
+    let backend = host.backend(); // BAD
+    let other = renderer.backend();
+    // host.link.core in a comment
+}`,
+    ],
+    ["main.rs", `fn main() { host.starting(|core| ()); host.quitting(|core| ()); }`],
+  ];
+  const want = sources[1][1]
+    .split("\n")
+    .map((line, n) => (line.includes("// BAD") ? n + 1 : 0))
+    .filter(Boolean);
+  const { links, findings: found } = scanDriver(sources);
+  const got = [...new Set(found.map((f) => Number(f.split(":")[1])))];
+  if (links !== 2 || found.some((f) => !f.startsWith("host/mod.rs:")) || want.join() !== got.join()) {
+    console.error(
+      `check-core-slint: driver self-test failed: expected findings on host/mod.rs lines ${want.join(", ")}, got ${found.join("; ") || "none"}`,
+    );
+    process.exit(2);
+  }
+}
+
+const sources = files(root).map((file) => [
+  path.relative(root, file).replaceAll("\\", "/"),
+  fs.readFileSync(file, "utf8"),
+]);
+const { blocks, signatures, findings } = scan(sources);
 console.log(
   `impl Core blocks: ${blocks}, core signatures: ${signatures}, with a Slint type or Host: ${findings.length}`,
 );
-for (const finding of findings) console.log(finding);
-process.exit(findings.length ? 1 : 0);
+const driver = scanDriver(sources);
+if (driver.links !== 1) {
+  driver.findings.push(`${DRIVER}: expected one CoreLink holding the core, found ${driver.links}`);
+}
+console.log(`driver (plan step S3a(1)): ${driver.findings.length} finding(s)`);
+for (const finding of [...findings, ...driver.findings]) console.log(finding);
+process.exit(findings.length || driver.findings.length ? 1 : 0);

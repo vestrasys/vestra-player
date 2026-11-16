@@ -221,8 +221,7 @@ impl Host {
         };
         // GPU frames are not kept in `last_image`: clear once per empty phase.
         let gpu = self
-            .core
-            .backend
+            .playback
             .render
             .gpu()
             .filter(|_| empty && !self.video_cleared);
@@ -302,11 +301,11 @@ impl Host {
     /// while a system dialog is open (`window_control::floating`), and
     /// back when it closes (the next tick).
     pub(crate) fn apply_on_top(&mut self) {
-        if self.core.headless {
+        if self.headless {
             return;
         }
         self.sync_window_settings();
-        let want = window_control::floating(self.on_top, self.core.dialog_busy);
+        let want = window_control::floating(self.on_top, self.view.dialog_busy);
         let count = platform::window_count();
         if self.on_top_applied == Some((want, count)) {
             return;
@@ -491,8 +490,9 @@ impl Host {
     /// and the command registry do (`sync_tables`).
     pub(crate) fn sync_window_settings(&mut self) {
         // Taken by the interface, so carried out here, not through the
-        // core's outbox (plan step S2f(3)).
-        for command in self.core.window_settings() {
+        // core's outbox (plan step S2f(3)); asked of the core (plan step
+        // S3a(1), `Take::WindowSettings`).
+        for command in self.take(super::messages::Take::WindowSettings) {
             self.apply_ui_command(command);
             self.report_ui_facts();
         }
@@ -567,8 +567,7 @@ impl Core {
 impl Host {
     /// `panels.backdrop.state`: `{ owner, effective }`, null without a backdrop.
     pub(crate) fn backdrop_state(&self) -> Value {
-        self.core
-            .mounts
+        self.mounts
             .values()
             .find(|m| m.spec.slot == composition::Slot::Backdrop)
             .map_or(

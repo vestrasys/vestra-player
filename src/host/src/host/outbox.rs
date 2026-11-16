@@ -21,6 +21,192 @@
 use super::messages::{SettingsOp, UiCommand};
 use super::*;
 
+/// The core's outbox: the requests to the interface in the core's order
+/// ([`Out`]), and what the interface's copies of core data need (plan step
+/// S3a(1), design §5.3 group D): the changes of the mount registry the
+/// core made itself ([`MountOp`]), and what of the core's facts, plugins
+/// and settings pages the interface was last given ([`Copies`]). The driver
+/// gives the interface its copies at the start of every drain, before the
+/// requests, so a request's interface part reads the core's data as the
+/// handler left it, as it did when it read the core's own (S2f(3)).
+#[derive(Default)]
+pub(crate) struct Outbox {
+    queue: std::collections::VecDeque<Out>,
+    /// The core's own changes of `Core::mounts`, in order, since the last
+    /// drain.
+    pub(crate) mount_ops: Vec<MountOp>,
+    /// What the interface was last given (`Core::copies`).
+    pub(crate) sent: Sent,
+}
+
+impl std::ops::Deref for Outbox {
+    type Target = std::collections::VecDeque<Out>;
+    fn deref(&self) -> &Self::Target {
+        &self.queue
+    }
+}
+impl std::ops::DerefMut for Outbox {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.queue
+    }
+}
+
+/// A change of the mount registry the core made itself (not one the
+/// interface applied and reported): the interface's copy
+/// (`Host::mounts`) follows it. The interface's copy keeps the values its
+/// panels were given since (`ui.setMount`: the stored properties, and the
+/// bottom bar's `visible`), which only the interface reads.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum MountOp {
+    /// The panel went.
+    Remove(u64),
+    /// The panel `from` is now `to`, of plugin `plugin` (a rekey).
+    Move { from: u64, to: u64, plugin: u64 },
+    /// The panel stays as a placeholder (its plugin parked).
+    Recorded(u64),
+}
+
+/// What the interface was last given of the core's data (`Core::copies`).
+#[derive(Default)]
+pub(crate) struct Sent {
+    facts: Option<CoreFacts>,
+    plugins: Option<(u64, u64)>,
+    pages: Option<u64>,
+}
+
+/// Small core values the interface reads for drawing and for its own
+/// checks (design §5.3 group D): the interface's copy is `Host::view`.
+#[derive(Clone, Default, PartialEq)]
+pub(crate) struct CoreFacts {
+    /// A native dialog is open (`Core::dialog_busy`).
+    pub(crate) dialog_busy: bool,
+    /// The palette's lead (`Core::lead`).
+    pub(crate) lead: Option<crate::capabilities::Lead>,
+    /// The `commands.run` tickets and the runs waiting for the sheet.
+    pub(crate) runs: crate::capabilities::RunsView,
+    /// Where the user last acted for each plugin (`Core::origins`).
+    pub(crate) origins: origins::Origins,
+}
+
+/// What the interface knows of the running and the held plugins: their
+/// ids, names and packages (`Host::plugins`), as of the core's
+/// `plugins_revision` and `held_revision`.
+#[derive(Default)]
+pub(crate) struct PluginsView {
+    /// Per running plugin: its manifest id and its shown name.
+    pub(crate) running: BTreeMap<u64, (String, String)>,
+    /// The packages of the running plugins and, after them, of the held
+    /// ones (each image read resolves its roots from these, as before).
+    pub(crate) origins: BTreeMap<u64, crate::host::Origin>,
+    pub(crate) held: BTreeMap<u64, crate::host::Origin>,
+    /// Shown names by manifest id: the running plugins', and the held
+    /// ones' (`OnDemand::name_of`).
+    pub(crate) names: BTreeMap<String, String>,
+    pub(crate) held_names: BTreeMap<String, String>,
+}
+
+impl PluginsView {
+    /// `plugin_id`: the manifest id of a running plugin, else the owner.
+    pub(crate) fn plugin_id(&self, owner: u64) -> String {
+        self.running
+            .get(&owner)
+            .map_or_else(|| owner.to_string(), |(id, _)| id.clone())
+    }
+    /// `shown_name`: the shown name of a running plugin, else the owner.
+    pub(crate) fn shown_name(&self, owner: u64) -> String {
+        self.running
+            .get(&owner)
+            .map_or_else(|| owner.to_string(), |(_, name)| name.clone())
+    }
+    /// `Core::image_roots`, from the copies.
+    pub(crate) fn image_roots(&self, owner: u64) -> Vec<PathBuf> {
+        if let Some(origin) = self.origins.get(&owner) {
+            return origin.image_roots();
+        }
+        self.held
+            .get(&owner)
+            .map(|origin| origin.image_roots())
+            .unwrap_or_default()
+    }
+    /// A plugin's shown name by manifest id (the palette's rows): a
+    /// running plugin's, a held one's, else the id.
+    pub(crate) fn name_of(&self, id: &str) -> String {
+        self.names
+            .get(id)
+            .or_else(|| self.held_names.get(id))
+            .cloned()
+            .unwrap_or_else(|| id.to_owned())
+    }
+}
+
+/// What changed of the core's data since the interface's copies were last
+/// given (`Core::copies`).
+#[derive(Default)]
+pub(crate) struct Copies {
+    pub(crate) facts: Option<CoreFacts>,
+    pub(crate) plugins: Option<PluginsView>,
+    pub(crate) pages: Option<Vec<crate::ui::settings_window::Page>>,
+    pub(crate) mount_ops: Vec<MountOp>,
+}
+
+impl Core {
+    /// What the interface's copies need (plan step S3a(1)): the core's
+    /// changes of the mount registry since the last call, and each copied
+    /// value that differs from what the interface was last given.
+    pub(crate) fn copies(&mut self) -> Copies {
+        let mut copies = Copies {
+            mount_ops: std::mem::take(&mut self.outbox.mount_ops),
+            ..Copies::default()
+        };
+        let facts = CoreFacts {
+            dialog_busy: self.dialog_busy,
+            lead: self.lead.clone(),
+            runs: self.command_runs.view(),
+            origins: self.origins.clone(),
+        };
+        if self.outbox.sent.facts.as_ref() != Some(&facts) {
+            self.outbox.sent.facts = Some(facts.clone());
+            copies.facts = Some(facts);
+        }
+        let plugins = (self.plugins_revision, self.on_demand.held_revision());
+        if self.outbox.sent.plugins != Some(plugins) {
+            self.outbox.sent.plugins = Some(plugins);
+            copies.plugins = Some(self.plugins_view());
+        }
+        let pages = self.settings.revision();
+        if self.outbox.sent.pages != Some(pages) {
+            self.outbox.sent.pages = Some(pages);
+            copies.pages = Some(self.settings.pages().to_vec());
+        }
+        copies
+    }
+    /// The interface's copy of a settings page's stored values was written
+    /// by the interface itself (`settings.set`), and the core's was written
+    /// from its report just now: the interface need not be given the pages
+    /// again for that write alone.
+    pub(crate) fn pages_echoed(&mut self, before: u64) {
+        if self.outbox.sent.pages == Some(before) {
+            self.outbox.sent.pages = Some(self.settings.revision());
+        }
+    }
+    fn plugins_view(&self) -> PluginsView {
+        let mut view = PluginsView::default();
+        for (owner, plugin) in &self.plugins {
+            let origin = plugin.origin();
+            let name = package_manager::display_name(&plugin.manifest, origin.catalog.as_deref());
+            view.names.insert(plugin.manifest.id.clone(), name.clone());
+            view.running
+                .insert(*owner, (plugin.manifest.id.clone(), name));
+            view.origins.insert(*owner, origin);
+        }
+        for (owner, held) in self.on_demand.held_all() {
+            view.held.insert(*owner, held.origin.clone());
+        }
+        view.held_names = self.on_demand.names().clone();
+        view
+    }
+}
+
 /// One entry of the outbox.
 pub(crate) enum Out {
     /// A request of the core to the interface (rule R3).
@@ -210,44 +396,6 @@ fn changes(command: &UiCommand, fact: Fact) -> bool {
     }
 }
 
-impl Host {
-    /// The driver's side of the outbox (plan step S2f(3)): every entry in
-    /// the core's order. A request is carried out by the interface, then
-    /// its facts go to the core (`report_ui_facts`, as after every request
-    /// since S2f(1)); a report it sends on the way is handled by the core
-    /// at once and drains what that issued (`ui_report`). A [`Then`] is the
-    /// core's, run here, its own requests drained before the next entry.
-    /// Each pass takes the entries issued so far, so what an entry's
-    /// handling issues is carried out before the entries after it, as when
-    /// each request was carried out in place.
-    pub(crate) fn drain_outbox(&mut self) {
-        loop {
-            let entries = std::mem::take(&mut self.core.outbox);
-            if entries.is_empty() {
-                return;
-            }
-            for entry in entries {
-                match entry {
-                    Out::Ui(command) => {
-                        self.apply_ui_command(command);
-                        self.report_ui_facts();
-                    }
-                    Out::Then(then) => {
-                        self.report_ui_facts();
-                        self.core.run_then(then);
-                        self.drain_outbox();
-                    }
-                }
-                // Every report drained what it issued: nothing waits
-                // behind the entries still to come.
-                debug_assert!(
-                    self.core.outbox.is_empty(),
-                    "a request was issued and not drained"
-                );
-            }
-        }
-    }
-}
 impl Core {
     /// `reply` with `result`, now or, while a request whose interface part
     /// writes lines waits ([`Core::lines_pending`]), behind it
@@ -264,7 +412,7 @@ impl Core {
         }
     }
     /// The core's [`Then`].
-    fn run_then(&mut self, then: Then) {
+    pub(crate) fn run_then(&mut self, then: Then) {
         match then {
             Then::Respond { reply, result } => self.respond(reply, result),
             Then::Registered { reply, refused } => {

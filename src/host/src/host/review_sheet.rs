@@ -348,7 +348,7 @@ impl Host {
         // Nothing of the texts: they may name the user's file.
         diag!(
             "review sheet: {} asks to confirm",
-            self.core.plugin_id(reply.owner)
+            self.plugins.plugin_id(reply.owner)
         );
         self.open_sheet(Review {
             reply,
@@ -372,7 +372,7 @@ impl Host {
         self.review
             .as_ref()
             .is_some_and(|review| match review.asks {
-                Asks::Run { .. } => self.core.command_runs.waiting(&review.reply),
+                Asks::Run { .. } => self.view.runs.waiting(&review.reply),
                 Asks::Confirm { .. } => true,
             })
     }
@@ -407,7 +407,7 @@ impl Host {
     /// any open menu or palette, unless a native dialog is open or there is
     /// no window yet. Its guard starts now.
     pub(crate) fn present_review(&mut self) {
-        if self.review.is_none() || self.core.dialog_busy || self.review_presented() {
+        if self.review.is_none() || self.view.dialog_busy || self.review_presented() {
             return;
         }
         let Some(shell) = self.shell.as_ref().map(ComponentHandle::clone_strong) else {
@@ -416,9 +416,11 @@ impl Host {
         if self.menu_open {
             self.close_menu();
         }
+        // The core revokes the physical input (plan step S3a(1)).
         #[cfg(feature = "producer-audio")]
-        self.core
-            .physical_revoke(producer_input::RevokeReason::Menu);
+        self.ui_report(messages::UiReport::Input(messages::UiInput::Revoke(
+            producer_input::RevokeReason::Menu,
+        )));
         let Some(value) = self.review_value() else {
             return;
         };
@@ -436,7 +438,7 @@ impl Host {
             Ok(())
         })();
         self.report_menu(result);
-        let now = self.core.now_ms();
+        let now = self.now_ms();
         let first = self.review.as_mut().is_some_and(|review| {
             review.shown_at = Some(now);
             !std::mem::replace(&mut review.hinted, true)
@@ -461,10 +463,10 @@ impl Host {
         // The request box: the lead's icon and title when the caller holds
         // it (always for a plan, today: only the lead mints tickets), else
         // its name.
-        let (title, icon) = match self.core.lead.as_ref().filter(|lead| lead.owner == owner) {
+        let (title, icon) = match self.view.lead.as_ref().filter(|lead| lead.owner == owner) {
             Some(lead) => (lead.row.title.clone(), lead.row.icon.clone()),
             None => (
-                crate::capabilities::shown_name(&self.core, owner),
+                self.plugins.shown_name(owner),
                 commands::ButtonIcon::Name("ai".into()),
             ),
         };
@@ -520,8 +522,8 @@ impl Host {
             return;
         }
         let Some((text, checked)) = self
-            .core
-            .command_runs
+            .view
+            .runs
             .offered(&review.reply)
             .and_then(|names| offer_after(names, &review.checkbox, review.checked))
         else {
@@ -548,7 +550,7 @@ impl Host {
             Ok(())
         })();
         self.report_menu(result);
-        let now = self.core.now_ms();
+        let now = self.now_ms();
         if let Some(review) = self.review.as_mut() {
             review.shown_at = Some(now);
         }
@@ -574,14 +576,14 @@ impl Host {
         }
         if review
             .ticket()
-            .is_some_and(|ticket| !self.core.command_runs.is_live(ticket, now))
+            .is_some_and(|ticket| !self.view.runs.is_live(ticket, now))
         {
             diag!("review sheet: the ticket ended: Don't Run");
             let checked = review.reports_checkbox() && review.checked;
             self.end_review(Some((false, checked)));
             return;
         }
-        if self.core.dialog_busy {
+        if self.view.dialog_busy {
             if self.review_presented() {
                 self.close_menu();
             }
@@ -601,7 +603,7 @@ impl Host {
         let decision = decide(
             action,
             review.shown_at.unwrap_or(0),
-            self.core.now_ms(),
+            self.now_ms(),
             !review.checkbox.is_empty(),
             review.checked,
             review.reports_checkbox(),
@@ -637,15 +639,14 @@ impl Host {
         input_trace::follow(&format!("review sheet: answered {yes} (checked {checked})"));
         match review.asks {
             Asks::Run { .. } => {
-                let _ =
-                    self.core
-                        .events
-                        .send(Event::CommandRunAnswered(review.reply, yes, checked));
+                let _ = self
+                    .events
+                    .send(Event::CommandRunAnswered(review.reply, yes, checked));
             }
             Asks::Confirm { .. } => {
                 // As `Event::ConfirmDone` (the system dialog's answer) and
                 // `Event::CommandRunAnswered` (a plan's) do.
-                self.policy.activity(self.core.now_ms());
+                self.policy.activity(self.now_ms());
                 self.ui_report(messages::UiReport::Answered {
                     reply: review.reply,
                     result: Ok(json!({"confirmed": yes, "checked": checked})),
