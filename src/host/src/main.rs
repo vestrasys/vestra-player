@@ -678,6 +678,9 @@ fn player() -> Result<()> {
         bar: bar_buttons::Strip::default(),
         registry: Default::default(),
     };
+    // The core's copy of the interface's facts from the start, not
+    // `Default` until the first hand-over (plan step S2f(1)).
+    host.report_ui_facts();
     // Kept trigger conditions: one file per installed instance.
     host.core.triggers = triggers::Triggers::new(Some(host.core.triggers_dir()));
     // The interface language of this run (doc/architecture/i18n.md §2):
@@ -802,6 +805,9 @@ fn player() -> Result<()> {
         }
         // Every plugin process stops within one deadline (supervisor.md
         // T31), each running plugin recorded first.
+        // What the last tick changed of the interface's facts first (plan
+        // step S2f(1)).
+        host.report_ui_facts();
         host.shutdown_plugins(host::QUIT_BUDGET);
         stop_handoffs();
         host.core.shader_guard.quit();
@@ -1102,6 +1108,9 @@ fn player() -> Result<()> {
         } else {
             host::QUIT_BUDGET
         };
+        // What the last tick (drops, the options window) changed of the
+        // interface's facts reaches the core first (plan step S2f(1)).
+        host.borrow_mut().report_ui_facts();
         host.borrow_mut().shutdown_plugins(budget);
         stop_handoffs();
         // Read now: only a loss that ended the loop restarts the player.
