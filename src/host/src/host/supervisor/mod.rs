@@ -226,7 +226,7 @@ pub(crate) struct OnDemand {
     /// asked of the interface was carried out (plan step S2f(3)).
     check_due: Option<u64>,
     /// Debug builds: a busy check of `QueryResources` runs, which may read
-    /// the column facts as of its batch's start (`query_resources`).
+    /// the column facts as of the last drain (`query_resources`).
     #[cfg(debug_assertions)]
     pub(crate) batch_columns: bool,
     tests: Vec<probe::TestExecute>,
@@ -1161,9 +1161,8 @@ impl Core {
         {
             use crate::host::outbox::Fact;
             self.check_settled(&[Fact::Sheet, Fact::Options]);
-            // Inside a supervisor batch the columns may be as of the
-            // batch's start (plan step S2f(3)'s named exception,
-            // `batch_columns`).
+            // Inside a supervisor batch the columns may be as of the last
+            // drain (plan step S2f(3)'s named exception, `batch_columns`).
             if !self.on_demand.batch_columns {
                 self.check_settled(&[Fact::Columns]);
             }
@@ -1603,10 +1602,12 @@ impl Core {
     pub(super) fn query_resources(&mut self, owner: u64) {
         self.log_reclaim(owner);
         let now = self.now_ms();
-        // A stop earlier in this batch may have asked the interface to drop
-        // its panels: this busy check reads the column facts as they were at
-        // the batch's start (plan step S2f(3), a named exception: core code
-        // cannot drain in the middle of a turn).
+        // This busy check reads the column facts as of the last drain (the
+        // start of the event or step that runs the batch): not after a stop
+        // earlier in this batch asked the interface to drop its panels, nor
+        // after panel or layout commands queued earlier in the same turn
+        // (plan step S2f(3), a named exception: core code cannot drain in
+        // the middle of a turn).
         #[cfg(debug_assertions)]
         {
             self.on_demand.batch_columns = true;

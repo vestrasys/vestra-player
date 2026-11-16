@@ -186,7 +186,11 @@ fn changes(command: &UiCommand, fact: Fact) -> bool {
             command,
             UiCommand::Review(_) | UiCommand::Ask(_) | UiCommand::DropConfirm { .. }
         ),
-        Fact::Options => matches!(command, UiCommand::Settings(_)),
+        // Only `settings.show` opens the options window (`settings_show`);
+        // it closes only on its own close button (`settings_event`, input,
+        // not a command). The other settings commands mark an open window
+        // stale or write into it and leave `options_open` as it was.
+        Fact::Options => matches!(command, UiCommand::Settings(SettingsOp::Show { .. })),
         Fact::Columns | Fact::Tabs | Fact::Floating => {
             matches!(command, UiCommand::Layout(_) | UiCommand::Panels(_))
         }
@@ -269,6 +273,44 @@ impl Core {
             }
             Then::Event(event) => self.handle(event),
             Then::SupervisorRun => self.supervisor_run(),
+        }
+    }
+}
+
+#[cfg(all(test, debug_assertions))]
+mod tests {
+    use super::*;
+
+    /// Plan step S2f(3) review: of the settings commands only `Show` can
+    /// change the options window's open fact, so a stop's `OwnerGone` or a
+    /// wake's `Rekeyed` queued before a supervisor batch's busy check does
+    /// not read as an unsettled `Fact::Options`.
+    #[test]
+    fn only_settings_show_changes_the_options_fact() {
+        let reply = |id| Reply { owner: 7, id };
+        let show = UiCommand::Settings(SettingsOp::Show {
+            reply: reply(1),
+            params: json!({}),
+        });
+        assert!(changes(&show, Fact::Options));
+        for command in [
+            UiCommand::Settings(SettingsOp::Removed {
+                owner: 7,
+                id: "main".into(),
+            }),
+            UiCommand::Settings(SettingsOp::Set {
+                reply: reply(2),
+                params: json!({}),
+                prepared: None,
+            }),
+            UiCommand::Settings(SettingsOp::OwnerGone { owner: 7 }),
+            UiCommand::Settings(SettingsOp::Rekeyed {
+                serials: vec![1],
+                to: 8,
+            }),
+            UiCommand::DropConfirm { owner: 7 },
+        ] {
+            assert!(!changes(&command, Fact::Options));
         }
     }
 }
