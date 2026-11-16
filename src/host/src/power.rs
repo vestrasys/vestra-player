@@ -9,7 +9,9 @@
 use std::collections::BTreeSet;
 
 /// A started assertion; `stop` ends it (it also ends with the host process).
-pub trait Assertion {
+/// `Send`, with the launcher, so that `Power` lives in the core (plan step
+/// S2f(2); it runs on the core thread from S3a, K10).
+pub trait Assertion: Send {
     fn stop(&mut self);
 }
 
@@ -21,7 +23,7 @@ pub struct Hold {
 }
 
 /// Starts an assertion; injectable for tests.
-pub type Launcher = Box<dyn FnMut(Hold) -> std::io::Result<Box<dyn Assertion>>>;
+pub type Launcher = Box<dyn FnMut(Hold) -> std::io::Result<Box<dyn Assertion>> + Send>;
 
 /// What the host currently plays.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -123,9 +125,21 @@ impl Drop for Power {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{cell::RefCell, rc::Rc};
+    use std::sync::{Arc, Mutex, MutexGuard};
 
-    type Log = Rc<RefCell<Vec<String>>>;
+    /// The fake's log, thread-safe so that the fake is `Send` (user ruling
+    /// 2026-11-16, the named exception of plan step S2f(2)): `borrow` and
+    /// `borrow_mut` as `RefCell`'s, so no assertion changes.
+    #[derive(Clone, Default)]
+    struct Log(Arc<Mutex<Vec<String>>>);
+    impl Log {
+        fn borrow(&self) -> MutexGuard<'_, Vec<String>> {
+            self.0.lock().unwrap()
+        }
+        fn borrow_mut(&self) -> MutexGuard<'_, Vec<String>> {
+            self.0.lock().unwrap()
+        }
+    }
     struct Fake(Log, String);
     impl Assertion for Fake {
         fn stop(&mut self) {
@@ -136,7 +150,7 @@ mod tests {
         if hold.display { "display" } else { "system" }.into()
     }
     fn power() -> (Power, Log) {
-        let log: Log = Rc::default();
+        let log = Log::default();
         let sink = log.clone();
         let power = Power::new(Box::new(move |hold| {
             sink.borrow_mut().push(format!("start {}", name(hold)));
@@ -200,7 +214,7 @@ mod tests {
 
     #[test]
     fn a_failed_start_waits_for_a_different_assertion_and_drop_ends_it() {
-        let log: Log = Rc::default();
+        let log = Log::default();
         let sink = log.clone();
         let mut power = Power::new(Box::new(move |hold| {
             if hold.display {

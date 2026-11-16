@@ -198,6 +198,20 @@ pub(crate) enum PanelsOp {
         to: u64,
         keys: Vec<(u64, u64)>,
     },
+    /// The panels waiting for their plugin's restart and the line over each
+    /// changed (`Core::restarts`, plan step S2f(2)): the interface keeps
+    /// them whole. `back`: that panel was mounted again (or went) and its
+    /// line went, so the keys it held go back to the video; `redraw`: the
+    /// lines are written now (else at the next `sync_panels`, as before).
+    Restarting {
+        lines: BTreeMap<u64, String>,
+        back: Option<u64>,
+        redraw: bool,
+    },
+    /// Kept panels a restarted run did not mount again: the interface lets
+    /// their images go (each panel's plugin and view), before they go
+    /// (plan step S2f(2)).
+    ImagesReleased(Vec<(u64, &'static str)>),
 }
 
 /// See [`UiCommand::CancelMount`].
@@ -724,6 +738,10 @@ pub(crate) enum UiInput {
     /// to be applied one at a time; the first stays in the batching
     /// window.
     MountRetry(Vec<MountChange>),
+    /// A batch applied the change of panel `key`, which waited for its
+    /// plugin's restart (`prepare_mount_tick`, plan step S2f(2)): the core
+    /// ends the wait (`Host::panel_back`).
+    PanelBack(u64),
 }
 
 /// See [`UiInput::Line`]: what the interface tells, and to whom.
@@ -1335,6 +1353,8 @@ mod tests {
                 PanelsOp::Gone(_) => "Panels.Gone",
                 PanelsOp::PlaceholderGone(_) => "Panels.PlaceholderGone",
                 PanelsOp::Rekeyed { .. } => "Panels.Rekeyed",
+                PanelsOp::Restarting { .. } => "Panels.Restarting",
+                PanelsOp::ImagesReleased(_) => "Panels.ImagesReleased",
             },
             UiCommand::DropConfirm { .. } => "DropConfirm",
             UiCommand::RefreshMenu => "RefreshMenu",
@@ -1389,6 +1409,29 @@ mod tests {
             UiReport::Event(event) => event.0.label().0,
             UiReport::Input(_) => "Input",
             UiReport::UiFacts(_) => "UiFacts",
+        }
+    }
+
+    /// What plan step S2f(2) added: the restart record's interface parts
+    /// are ordered and never collapse.
+    #[test]
+    fn the_restart_commands_are_ordered() {
+        let added = || {
+            vec![
+                UiCommand::Panels(PanelsOp::Restarting {
+                    lines: BTreeMap::from([(28, "A is restarting…".into())]),
+                    back: Some(29),
+                    redraw: true,
+                }),
+                UiCommand::Panels(PanelsOp::ImagesReleased(vec![(7, "$mount")])),
+            ]
+        };
+        let names: Vec<_> = added().iter().map(command_name).collect();
+        assert_eq!(names, ["Panels.Restarting", "Panels.ImagesReleased"]);
+        for command in added() {
+            for other in added().iter().chain(every_command().iter()) {
+                assert!(!command.replaces(other) && !other.replaces(&command));
+            }
         }
     }
 
@@ -1456,6 +1499,7 @@ mod tests {
                 }))),
                 UiReport::Input(UiInput::MountTick),
                 UiReport::Input(UiInput::MountRetry(vec![mount_change()])),
+                UiReport::Input(UiInput::PanelBack(28)),
             ]
         };
         for input in inputs() {

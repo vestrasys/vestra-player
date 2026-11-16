@@ -414,6 +414,17 @@ pub(crate) struct Core {
     /// The interface's facts as last reported (`UiReport::UiFacts`; design
     /// §5.3 group A, plan step S2f(1)).
     pub(crate) ui_facts: messages::UiFacts,
+    /// Panels kept while their plugin restarts after a crash
+    /// (`panel_restart.rs`): the core's record (plan step S2f(2); design
+    /// §5.3 group C), and the waiting lines last sent to the interface.
+    pub(crate) restarts: panel_restart::Restarts,
+    pub(crate) restart_lines_sent: BTreeMap<u64, String>,
+    /// `power.preventSleep` (K10; plan step S2f(2): its launcher and
+    /// assertion are `Send`, by the ruled change of its test fake).
+    pub(crate) power: power::Power,
+    /// When the shell last received a video frame (`power` keeps the
+    /// display awake): `UiReport::FrameShown`, last value wins.
+    pub(crate) last_frame: Option<Instant>,
     /// Mount requests of other plugins waiting for the built-ins to start: reply, method, params.
     pub(crate) held_mounts: slot_claims::Gate<(Reply, String, Value)>,
     /// The mount registry (K6; plan step S2c(3)): every plugin's panel by
@@ -665,9 +676,10 @@ pub(crate) struct Host {
     /// The panels of the mount batch being applied whose file was compiled
     /// for it (for the log line of a panel kept over its plugin's restart).
     pub(crate) compiled_now: std::collections::BTreeSet<u64>,
-    /// Panels kept while their plugin restarts after a crash
-    /// (`panel_restart.rs`).
-    pub(crate) restarts: panel_restart::Restarts,
+    /// The interface's copy of the panels waiting for their plugin's
+    /// restart, with the line drawn over each (`Core::restarts`;
+    /// `PanelsOp::Restarting`, plan step S2f(2)).
+    pub(crate) restart_lines: BTreeMap<u64, String>,
     /// The interface's copy of `Core::startup_panels` (plan step S2d(2);
     /// `UiSnapshot::StartupSettled`): its columns read it (`current_in`).
     pub(crate) startup_panels: bool,
@@ -714,13 +726,6 @@ pub(crate) struct Host {
     /// Window generation the open menu belongs to (shell or floating).
     pub(crate) menu_generation: u64,
     pub(crate) window_title: String,
-    /// `power.preventSleep` (K10: the core's, on the core thread from plan
-    /// step S3a). Still here after plan step S2c(7): its platform launcher
-    /// and assertion are not `Send` (`power::Launcher`), so it moves with
-    /// the thread in S3a, and `last_frame` with it (`UiReport::FrameShown`).
-    pub(crate) power: power::Power,
-    /// When the shell last received a video frame (`power` keeps the display awake).
-    pub(crate) last_frame: Option<Instant>,
     /// C-SIZE: the video area -> the renderer's target area (throttled).
     pub(crate) sizing: render_target::Sizing,
     /// `VESTRA_FRAME_LOG=1` diagnostics and the size last set on the UI.

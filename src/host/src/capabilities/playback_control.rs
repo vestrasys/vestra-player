@@ -40,7 +40,7 @@ impl Capability for PlaybackControl {
     /// What it holds in the playback worker is answered there (`owner.resources`).
     fn record(&self, host: &Host, owner: u64, _: &Value) -> Recorded {
         if host.core.step_seek.contains_key(&owner)
-            || host.power.holds(owner)
+            || host.core.power.holds(owner)
             || host
                 .core
                 .sequence
@@ -72,10 +72,11 @@ impl Capability for PlaybackControl {
                 Ok(Some(Value::Null))
             }
             "power.preventSleep" => {
-                host.power
+                host.core
+                    .power
                     .request(reply.owner, params["mode"].as_str().unwrap_or(""))
                     .map_err(RpcError::invalid)?;
-                host.power_tick();
+                host.core.power_tick();
                 Ok(Some(Value::Null))
             }
             "sequence.set" => {
