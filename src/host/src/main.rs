@@ -191,6 +191,83 @@ fn ui_stall_switch(launched: Instant, offscreen: bool) -> Option<(Instant, Durat
     }
 }
 
+/// `VESTRA_TEST_KEY=<binding>@<ms>[,...]`, a test switch (core thread plan
+/// S3a brief item 12; tests/core_thread_spec.rs, R8): `<ms>` after the
+/// player process started, a test-only thread posts each key to the UI's
+/// event loop (`slint::invoke_from_event_loop`, the way the core's commands
+/// reach the interface from plan step S3a(3)), and the UI judges it as the
+/// main window's key callback does (`host::fire`, against the interface's
+/// copy of the tables). Binding syntax as `bindings.set`. Only on the
+/// offscreen platform (`VESTRA_TEST_OFFSCREEN=1`); ignored, with a line
+/// saying so, anywhere else. Each key with when it is due.
+fn test_keys_switch(launched: Instant, offscreen: bool) -> Vec<(Instant, bindings::Input)> {
+    let Some(value) = std::env::var("VESTRA_TEST_KEY")
+        .ok()
+        .filter(|value| !value.is_empty())
+    else {
+        return Vec::new();
+    };
+    if !offscreen {
+        diag!("VESTRA_TEST_KEY ignored: only with VESTRA_TEST_OFFSCREEN=1 and a window");
+        return Vec::new();
+    }
+    match test_keys(&value) {
+        Some(keys) => keys
+            .into_iter()
+            .map(|(input, ms)| (launched + Duration::from_millis(ms), input))
+            .collect(),
+        None => {
+            diag!("VESTRA_TEST_KEY={value}: not <binding>@<ms>[,...]; ignored");
+            Vec::new()
+        }
+    }
+}
+
+/// The keys `VESTRA_TEST_KEY` names, each with its time in ms (`None`: not
+/// that form).
+fn test_keys(value: &str) -> Option<Vec<(bindings::Input, u64)>> {
+    value
+        .split(',')
+        .map(|entry| {
+            let (binding, ms) = entry.trim().rsplit_once('@')?;
+            Some((
+                bindings::parse(binding.trim()).ok()?,
+                ms.trim().parse().ok()?,
+            ))
+        })
+        .collect()
+}
+
+/// How the UI thread judges a key `VESTRA_TEST_KEY` posted.
+type KeyJudge = Box<dyn Fn(&bindings::Input)>;
+
+thread_local! {
+    /// The UI thread's handler of a key `VESTRA_TEST_KEY` posted.
+    static TEST_KEY: RefCell<Option<KeyJudge>> = const { RefCell::new(None) };
+}
+
+/// Posts each key of `VESTRA_TEST_KEY` at its time from a thread of its
+/// own (`test_keys_switch`).
+fn post_test_keys(keys: Vec<(Instant, bindings::Input)>) {
+    if keys.is_empty() {
+        return;
+    }
+    let _ = std::thread::Builder::new()
+        .name("test-keys".into())
+        .spawn(move || {
+            for (due, input) in keys {
+                std::thread::sleep(due.saturating_duration_since(Instant::now()));
+                let _ = slint::invoke_from_event_loop(move || {
+                    TEST_KEY.with(|sink| {
+                        if let Some(judge) = &*sink.borrow() {
+                            judge(&input);
+                        }
+                    })
+                });
+            }
+        });
+}
+
 fn player() -> Result<()> {
     let launched = Instant::now();
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -305,6 +382,7 @@ fn player() -> Result<()> {
     // (`ui::offscreen`): software rendering, as headless runs.
     let offscreen = !headless && ui::offscreen::requested();
     let mut ui_stall = ui_stall_switch(launched, offscreen);
+    let test_keys = test_keys_switch(launched, offscreen);
     let startup = host::rendering_startup(headless || offscreen);
     let mut render = render_mode::decide(&startup.facts, startup.preference);
     logged!("{}", render.line());
@@ -614,6 +692,9 @@ fn player() -> Result<()> {
         pages: Vec::new(),
         view: Default::default(),
         plugins: Default::default(),
+        tick_facts: Default::default(),
+        displays: Default::default(),
+        displays_read: None,
         views: BTreeMap::new(),
         shell: None,
         preparing: None,
@@ -957,6 +1038,33 @@ fn player() -> Result<()> {
                 }
             }))
         });
+        // `VESTRA_TEST_KEY` (plan step S3a(2)): each key posted to the
+        // event loop is judged as the main window's key callback does.
+        let key_host = Rc::downgrade(&host);
+        TEST_KEY.with(|sink| {
+            *sink.borrow_mut() = Some(Box::new(move |input: &bindings::Input| {
+                let Some(host) = key_host.upgrade() else {
+                    return;
+                };
+                let Ok(host) = host.try_borrow() else {
+                    diag!("test: key {} lost: the host is busy", bindings::text(input));
+                    return;
+                };
+                let (shared, events, generation) = (
+                    host.input.clone(),
+                    host.events.clone(),
+                    host.shell_generation,
+                );
+                drop(host);
+                let bound = host::fire(&shared, &events, generation, input, false, None);
+                diag!(
+                    "test: key {} {}",
+                    bindings::text(input),
+                    if bound { "fired" } else { "unbound" }
+                );
+            }))
+        });
+        post_test_keys(test_keys);
         frames.set_waker(Box::new(|| {
             let _ = slint::invoke_from_event_loop(|| {
                 FRAME_SINK.with(|sink| {
@@ -992,11 +1100,16 @@ fn player() -> Result<()> {
                     // A slow turn, or a gap before it, goes to the host log
                     // (`host/stall.rs`).
                     host::stall::tick_began(began);
-                    let mut turn = host::stall::Turn::new(began);
+                    // One record per thread's part (plan step S3a(2)): the
+                    // core's turn and the interface's tick, each paused while
+                    // the other runs.
+                    let mut core_turn = host::stall::Turn::core(began);
                     let mut host = tick_host.borrow_mut();
                     // The core's turn, first half (plan step S2e): the events.
-                    host.core_events(&receiver, began, None, Some(&mut turn), |_| ());
-                    turn.step("events");
+                    host.core_events(&receiver, began, None, Some(&mut core_turn), |_| ());
+                    core_turn.step("events");
+                    core_turn.pause();
+                    let mut turn = host::stall::Turn::new(Instant::now());
                     // The UI part of the turn starts here. The UI stall test
                     // switch holds it once (`ui_stall_switch`).
                     if let Some((due, length)) = ui_stall
@@ -1022,16 +1135,27 @@ fn player() -> Result<()> {
                     host.mount_callbacks();
                     host.prepare_mount_tick();
                     turn.step("mounts");
+                    turn.pause();
+                    core_turn.resume();
                     host.panel_restart_tick();
-                    turn.step("panel restarts");
+                    core_turn.step("panel restarts");
+                    core_turn.pause();
+                    turn.resume();
                     host.window_tick();
                     turn.step("window tick");
                     platform::tool_windows_tick();
                     turn.step("tool windows");
+                    // The displays, once a second (plan step S3a(2)).
+                    host.displays_tick();
+                    turn.step("displays");
                     // The core's turn, second half (plan step S2e): its periodic
                     // steps, with the binding table's disabled set and the state
                     // file's write.
-                    host.core_steps(Some(&mut turn));
+                    turn.pause();
+                    core_turn.resume();
+                    host.core_steps(Some(&mut core_turn));
+                    host::stall::turn_ended(&core_turn, |owner| host.plugins.plugin_id(owner));
+                    turn.resume();
                     // The interface's steps after it: a complete file drop goes
                     // to the core (`UiReport::Drop`), the options window, the
                     // palette, the tables, the menu, the frame.
@@ -1178,6 +1302,7 @@ fn player() -> Result<()> {
         FRAME_SINK.with(|sink| sink.borrow_mut().take());
         PIP_GPU_SINK.with(|sink| sink.borrow_mut().take());
         RESIZE_SINK.with(|sink| sink.borrow_mut().take());
+        TEST_KEY.with(|sink| sink.borrow_mut().take());
         host.borrow_mut().quitting(|core| core.ui_state.flush());
         // Native windows/resources must be released before process teardown.
         teardown_step("closing the secondary windows");
@@ -1196,4 +1321,22 @@ fn player() -> Result<()> {
     // Headless: the host drops when `main` returns.
     teardown_step("dropping the windows, mpv and the plugins");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Plan step S3a(2): `VESTRA_TEST_KEY`'s keys and times; anything else
+    /// is not that form.
+    #[test]
+    fn the_test_keys_are_read_with_their_times() {
+        let keys = test_keys("F7@1500, Ctrl+F8@1600").unwrap();
+        assert_eq!(keys.len(), 2);
+        assert_eq!(keys[0], (bindings::parse("F7").unwrap(), 1500));
+        assert_eq!(keys[1], (bindings::parse("Ctrl+F8").unwrap(), 1600));
+        for bad in ["", "F7", "F7@", "F7@soon", "NoSuchKey@10"] {
+            assert!(test_keys(bad).is_none(), "{bad}");
+        }
+    }
 }

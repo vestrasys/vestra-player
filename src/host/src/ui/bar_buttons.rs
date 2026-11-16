@@ -286,7 +286,15 @@ impl Host {
             };
             (id, state)
         });
-        self.ui_report(UiReport::Input(UiInput::ColumnCommands(states)));
+        // Only when one differs from the registry's (plan step S3a(2),
+        // `TickFacts`): the core's side writes only those.
+        let changed = states
+            .iter()
+            .zip(&self.tick_facts.columns)
+            .any(|((_, state), registered)| registered.as_ref().is_some_and(|r| r != state));
+        if changed {
+            self.ui_report(UiReport::Input(UiInput::ColumnCommands(states)));
+        }
     }
 
     /// The plugins' cells (the strip's, then the ones past eight), and the

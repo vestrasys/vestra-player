@@ -159,6 +159,9 @@ impl Host {
         if let Some(facts) = copies.facts {
             self.view = facts;
         }
+        if let Some(tick) = copies.tick {
+            self.tick_facts = tick;
+        }
         if let Some(plugins) = copies.plugins {
             self.plugins = plugins;
         }
@@ -361,6 +364,10 @@ impl Host {
         debug_assert!(
             self.view == core.facts_now(),
             "the interface's copy of the core's facts is behind the core's"
+        );
+        debug_assert!(
+            self.tick_facts == core.tick_facts(),
+            "the interface's copy of the core's tick facts is behind the core's"
         );
         debug_assert!(
             self.plugins.shape() == core.plugins_view().shape(),

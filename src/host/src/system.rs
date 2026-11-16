@@ -105,6 +105,65 @@ pub fn facts_json(facts: &platform::OsFacts) -> Value {
 }
 
 /// `displays` of `plugin.app.system()`.
+/// The displays as the platform reports them on this thread (plan step
+/// S3a(2)): `None` where it cannot answer here (macOS: `NSScreen` off the
+/// main thread). `VESTRA_TEST_DISPLAYS` (offscreen only) answers instead.
+pub fn displays_here() -> Option<Vec<platform::Display>> {
+    if let Some(test) = test_displays() {
+        return Some(test.clone());
+    }
+    #[cfg(target_os = "macos")]
+    if objc2::MainThreadMarker::new().is_none() {
+        return None;
+    }
+    Some(platform::displays())
+}
+
+/// `VESTRA_TEST_DISPLAYS=<width>x<height>[,...]`, a test switch (plan S3a
+/// brief item 12, the spec test of groups A and G): with
+/// `VESTRA_TEST_OFFSCREEN=1` the platform's displays are these (the first
+/// primary, scale 1, 60 Hz), so an offscreen run, which has no window to
+/// ask, reports displays. Ignored, with a line saying so, without
+/// `VESTRA_TEST_OFFSCREEN=1`.
+fn test_displays() -> Option<&'static Vec<platform::Display>> {
+    static DISPLAYS: OnceLock<Option<Vec<platform::Display>>> = OnceLock::new();
+    DISPLAYS
+        .get_or_init(|| {
+            let value = std::env::var("VESTRA_TEST_DISPLAYS")
+                .ok()
+                .filter(|value| !value.is_empty())?;
+            if std::env::var_os("VESTRA_TEST_OFFSCREEN").is_none_or(|v| v != "1") {
+                diag!("VESTRA_TEST_DISPLAYS ignored: only with VESTRA_TEST_OFFSCREEN=1");
+                return None;
+            }
+            let parsed = test_display_list(&value);
+            if parsed.is_none() {
+                diag!("VESTRA_TEST_DISPLAYS={value}: not <width>x<height>[,...]; ignored");
+            }
+            parsed
+        })
+        .as_ref()
+}
+
+/// The displays `VESTRA_TEST_DISPLAYS` names (`None`: not that form).
+fn test_display_list(value: &str) -> Option<Vec<platform::Display>> {
+    value
+        .split(',')
+        .enumerate()
+        .map(|(index, size)| {
+            let (width, height) = size.trim().split_once('x')?;
+            Some(platform::Display {
+                name: Some(format!("Test display {}", index + 1)),
+                width: width.trim().parse().ok()?,
+                height: height.trim().parse().ok()?,
+                scale: 1.0,
+                refresh_rate: Some(60.0),
+                primary: index == 0,
+            })
+        })
+        .collect()
+}
+
 pub fn displays_json(displays: &[platform::Display]) -> Value {
     displays
         .iter()
@@ -184,14 +243,23 @@ impl Core {
                 }
             }
             "app.system" => {
-                // The displays, read where this is answered: on Windows
-                // from any thread (plan step S2f(1), `platform::displays`);
-                // on macOS `NSScreen` is main-thread only, which the core
-                // still is until plan step S3a.
+                // The displays, read where this is answered when the
+                // platform answers there: on Windows from any thread (plan
+                // step S2f(1), `platform::displays`); on macOS `NSScreen` is
+                // main-thread only, so off it the core answers from the
+                // displays the interface reported (`UiFacts::displays`, plan
+                // step S3a(2)). One thread (until plan step S3a(3)): read
+                // here, as before.
                 let displays = if self.headless {
                     Value::Array(Vec::new())
                 } else {
-                    displays_json(&platform::displays())
+                    match displays_here() {
+                        Some(displays) => displays_json(&displays),
+                        None => match &*self.ui_facts.displays {
+                            Value::Null => Value::Array(Vec::new()),
+                            reported => reported.clone(),
+                        },
+                    }
                 };
                 // Player 0.5.13 (SDK 1.5.35): why it renders that way (0.5.19:
                 // in software rendering with the windows named).
@@ -222,6 +290,26 @@ impl Core {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Plan step S3a(2): the test switch's displays, the first primary;
+    /// anything else is not that form.
+    #[test]
+    fn the_test_displays_are_read_from_their_sizes() {
+        let list = test_display_list("1920x1080, 2560x1440").unwrap();
+        assert_eq!(list.len(), 2);
+        assert_eq!(
+            (list[0].width, list[0].height, list[0].primary),
+            (1920, 1080, true)
+        );
+        assert_eq!(
+            (list[1].width, list[1].height, list[1].primary),
+            (2560, 1440, false)
+        );
+        assert_eq!(displays_json(&list)[1]["refreshRate"], 60.0);
+        for bad in ["", "1920", "1920x", "x1080", "1920x1080,big"] {
+            assert!(test_display_list(bad).is_none(), "{bad}");
+        }
+    }
 
     #[test]
     fn paths_must_be_absolute_and_present_and_reveal_skips_the_missing() {

@@ -709,6 +709,14 @@ pub(crate) struct UiFacts {
     /// support), shown now, and the plugin whose request is in effect
     /// (`window.state`, `WindowControl::record`; plan step S2f(3)).
     pub(crate) pip: PipFact,
+    /// The displays as `app.system` lists them (`system::displays_json`;
+    /// plan step S3a(2)): read by the interface at start and once a second
+    /// after, on macOS only (`NSScreen` is main-thread only; elsewhere the
+    /// core reads them itself). The core answers from it where it cannot
+    /// read them itself. Null before the first read (always, but on
+    /// macOS). Shared, so copying the facts at every hand-over copies no
+    /// list; a new read is a new `Arc` only when the list changed.
+    pub(crate) displays: Arc<Value>,
 }
 
 /// See [`UiFacts::pip`].

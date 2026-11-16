@@ -93,6 +93,32 @@ impl Core {
         self.handed = Some(HandedMount::of(&change));
         Some(UiCommand::Mount(change))
     }
+    /// The core cancels the change the interface's batching window holds
+    /// (plan step S2d(2)): its record goes now, and the interface drops the
+    /// change when `UiCommand::CancelMount` reaches it.
+    pub(crate) fn cancel_handed(&mut self, cancel: MountCancel) {
+        self.handed = None;
+        self.ui_command(UiCommand::CancelMount(cancel));
+    }
+    /// The core's side of `UiReport::Batching` (plan step S2d(2)): the
+    /// change the interface's window holds now, or none, recorded as
+    /// reported. Hand-overs are only asked by the interface (`Take::Mount`,
+    /// plan step S3a(1)), and its reports and requests reach the core in
+    /// their order, so a `Batching(None)` never overtakes a later
+    /// hand-over.
+    ///
+    /// On one thread a report of a change the core cancelled can still
+    /// arrive: a cancel issued while the interface prepares a hand-over
+    /// (`prepare_mount_tick`: the `ui.preparing` write fails, the run
+    /// stops) is drained before the window holds the change, and the
+    /// window's `Batching(Some)` then records it again until the window
+    /// closes (up to 32 ms), as before plan step S3a. That is today's
+    /// behaviour and stays (zero difference). Dropping such a late report
+    /// (the S3a brief's risk 3) belongs to plan step S3a(3), with the
+    /// thread that makes a report able to cross a cancel.
+    pub(crate) fn batching(&mut self, held: Option<HandedMount>) {
+        self.handed = held;
+    }
     /// The change of panel `key` the interface's batching window holds,
     /// as the core recorded it (`handed`), or one in the core's queue.
     pub(crate) fn mount_pending(&self, key: u64) -> bool {
@@ -267,8 +293,11 @@ impl Host {
     /// place, at the point today's code did its work, so order and timing
     /// are unchanged.
     pub(crate) fn prepare_mount_tick(&mut self) {
-        // The core answers what it held first (plan step S2f(1)).
-        self.ui_report(UiReport::Input(messages::UiInput::MountTick));
+        // The core answers what it held first (plan step S2f(1)): only
+        // while it holds something (plan step S3a(2), `TickFacts`).
+        if self.tick_facts.held_mounts {
+            self.ui_report(UiReport::Input(messages::UiInput::MountTick));
+        }
         if self.preparing.is_none() {
             // Taken from the core's queue (`Take::Mount`, plan step S3a(1)).
             let taken = self.take(messages::Take::Mount).into_iter().next();

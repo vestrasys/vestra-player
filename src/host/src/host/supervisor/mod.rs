@@ -274,6 +274,15 @@ impl OnDemand {
     pub fn held_all(&self) -> &BTreeMap<u64, Held> {
         &self.held
     }
+    /// The runs whose declared work has `Busy::ShownTab` (their tab is
+    /// current): `Core::tab_work` does nothing for them (plan step S3a(2)).
+    pub fn shown_tab_owners(&self) -> BTreeSet<u64> {
+        self.work
+            .iter()
+            .filter(|(_, busy)| busy.contains(&Busy::ShownTab))
+            .map(|(owner, _)| *owner)
+            .collect()
+    }
     /// The shown names of the units ever held, by manifest id (`name_of`).
     pub fn names(&self) -> &BTreeMap<String, String> {
         &self.names

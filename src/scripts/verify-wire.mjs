@@ -13,11 +13,17 @@
  *     (verify-runtime.mjs run --wire-trace: raw/<scenario>/<step>.wire.jsonl,
  *     compared step by step; their run.json gives the roots), or two
  *     directories of trace files (paired by relative path).
- *     --allow-reorders  rule R4 (core-thread.md §5): within a plugin the
- *                       UI-independent and the UI-bound stream may
- *                       interleave differently; the order inside each
- *                       stream must match. Each such reorder is listed and
- *                       not counted. Unused until S3a.
+ *     --allow-reorders  rule R4 and the S3a row's three classes
+ *                       (core-thread-plan.md §3): a plugin's lines read may
+ *                       interleave its UI-independent and UI-bound streams
+ *                       differently, each in order; of its lines written,
+ *                       (1) core lines keep their order, (2) UI-bound
+ *                       replies and (3) lines an interface report caused
+ *                       (`lineClass`) keep their order and their places
+ *                       among each other and may move against the core
+ *                       lines. Each reorder is listed, each moved line of
+ *                       class 2 or 3 counted per class; anything else is
+ *                       a difference.
  *     --root <path>=<token>  a path replaced by <token> (repeatable)
  *     --noise <file>    report only differences outside the noise set that
  *                       `noise` recorded (below), and how many were inside it
@@ -302,14 +308,67 @@ function firstDifference(a, b) {
 }
 
 /**
+ * The lines the core writes because of an interface report (core thread
+ * plan S3a row, class 3; design §8): `window.state`, `ui.preparing`,
+ * `ui.callback`, `ui.closed`, `ui.error`, `drops.*`, and `host.error` of an
+ * interface failure (its codes below).
+ */
+export const REPORT_EVENTS = new Set([
+  "window.state",
+  "ui.preparing",
+  "ui.callback",
+  "ui.closed",
+  "ui.error",
+]);
+export const INTERFACE_ERRORS = new Set([
+  "menu-bridge",
+  "menu-projection",
+  "window-policy",
+  "ui-owner-cleanup",
+]);
+
+/**
+ * The class of a line written to a plugin (the S3a row's wire-trace rule):
+ * 1 a core line, 2 a reply to a UI-bound request (R4), 3 a line caused by
+ * an interface report.
+ */
+export function lineClass(entry) {
+  if (entry.kind.startsWith("reply:")) return entry.stream === "B" ? 2 : 1;
+  if (!entry.kind.startsWith("event:")) return 1;
+  const name = entry.kind.slice("event:".length);
+  if (REPORT_EVENTS.has(name) || name.startsWith("drops.")) return 3;
+  if (name === "host.error") {
+    let code;
+    try {
+      code = JSON.parse(entry.text).data?.code;
+    } catch {
+      code = undefined;
+    }
+    if (INTERFACE_ERRORS.has(code)) return 3;
+  }
+  return 1;
+}
+
+/**
  * Two normalised traces: `{ differences: [text], reorders: [text] }`, at
- * most one difference per plugin (its first). With `allowReorders` a
- * plugin's direction whose UI-bound and UI-independent streams each match
- * on their own is a reorder, listed apart.
+ * most one difference per plugin (its first), with `moves: { 2, 3 }` in
+ * the allowed-reorders mode.
+ *
+ * With `allowReorders` (the S3a row's three classes): the lines read from
+ * a plugin may interleave its UI-bound and UI-independent streams
+ * differently, each stream in order (R4). The lines written to it are in
+ * three classes (`lineClass`): (1) core lines keep their order; (2) the
+ * replies of UI-bound requests and (3) the lines an interface report
+ * caused keep their order among themselves and their place relative to
+ * each other (a class-3 line keeps its place relative to the reply it
+ * belongs to: R5, R13), and both may move against the core lines. Each
+ * line of class 2 or 3 that has a different number of core lines before it
+ * is a move, counted per class in `moves` and listed in `reorders`.
  */
 export function compareTraces(a, b, { allowReorders = false } = {}) {
   const differences = [];
   const reorders = [];
+  const moves = { 2: 0, 3: 0 };
   const plugins = [
     ...new Set([...Object.keys(a.plugins), ...Object.keys(b.plugins)]),
   ].sort();
@@ -329,26 +388,65 @@ export function compareTraces(a, b, { allowReorders = false } = {}) {
       if (at < 0) continue;
       const label = dir === "in" ? "read from it" : "written to it";
       if (allowReorders) {
-        const split = (list, stream) =>
-          list.filter((entry) => entry.stream === stream);
-        const broken = ["I", "B"]
-          .map((stream) => [
-            stream,
-            firstDifference(split(x, stream), split(y, stream)),
+        const parts =
+          dir === "in"
+            ? [
+                ["UI-independent stream", (e) => e.stream === "I"],
+                ["UI-bound stream", (e) => e.stream === "B"],
+              ]
+            : [
+                ["UI-independent stream", (e) => lineClass(e) === 1],
+                ["UI-bound stream", (e) => lineClass(e) === 2],
+                ["interface-report lines", (e) => lineClass(e) === 3],
+                [
+                  "UI-bound replies with the interface-report lines",
+                  (e) => lineClass(e) !== 1,
+                ],
+              ];
+        const broken = parts
+          .map(([name, keep]) => [
+            name,
+            x.filter(keep),
+            y.filter(keep),
           ])
-          .find(([, index]) => index >= 0);
-        if (!broken) {
+          .map(([name, xs, ys]) => [name, xs, ys, firstDifference(xs, ys)])
+          .find(([, , , index]) => index >= 0);
+        if (broken) {
+          const [name, xs, ys, index] = broken;
+          differences.push(
+            `${plugin} (${label}), ${name}, line ${index + 1}:\n    A ${where(xs[index])}\n    B ${where(ys[index])}`,
+          );
+          break;
+        }
+        if (dir === "out") {
+          // Each line of class 2 or 3 with a different number of core
+          // lines before it moved.
+          const placed = (list) => {
+            let core = 0;
+            const out = [];
+            for (const entry of list) {
+              if (lineClass(entry) === 1) core++;
+              else out.push([lineClass(entry), core]);
+            }
+            return out;
+          };
+          const before = placed(x);
+          const after = placed(y);
+          const moved = { 2: 0, 3: 0 };
+          before.forEach(([kind, core], i) => {
+            if (after[i][1] !== core) moved[kind]++;
+          });
+          moves[2] += moved[2];
+          moves[3] += moved[3];
+          reorders.push(
+            `${plugin} (${label}): the UI-bound replies (${moved[2]} moved) and the interface-report lines (${moved[3]} moved) interleave differently with the core lines from line ${at + 1}; each class in order\n    A ${where(x[at])}\n    B ${where(y[at])}`,
+          );
+        } else {
           reorders.push(
             `${plugin} (${label}): the UI-bound and UI-independent streams interleave differently from line ${at + 1}; each stream in order\n    A ${where(x[at])}\n    B ${where(y[at])}`,
           );
-          continue;
         }
-        const [stream, index] = broken;
-        const name = stream === "B" ? "UI-bound" : "UI-independent";
-        differences.push(
-          `${plugin} (${label}), ${name} stream, line ${index + 1}:\n    A ${where(split(x, stream)[index])}\n    B ${where(split(y, stream)[index])}`,
-        );
-        break;
+        continue;
       }
       differences.push(
         `${plugin} (${label}), line ${at + 1}:\n    A ${where(x[at])}\n    B ${where(y[at])}`,
@@ -356,7 +454,8 @@ export function compareTraces(a, b, { allowReorders = false } = {}) {
       break;
     }
   }
-  return { differences, reorders };
+  // The move counts belong to the allowed-reorders mode only.
+  return allowReorders ? { differences, reorders, moves } : { differences, reorders };
 }
 
 // ------------------------------------------------------------------ noise
@@ -776,7 +875,11 @@ function sideReader(options) {
   return { read, unknown, streams };
 }
 
-/** `diff`: returns `{ text, failed }`. */
+/**
+ * `diff`: returns `{ text, failed, reorders, moved }` (`reorders`: the
+ * allowed reorders listed; `moved`: per class 2 and 3, the lines moved
+ * against the core lines; both 0 outside --allow-reorders).
+ */
 export function diffPaths(a, b, options = {}) {
   const pairs = pairsOf(a, b);
   const { read, unknown } = sideReader(options);
@@ -787,11 +890,12 @@ export function diffPaths(a, b, options = {}) {
     "Wire trace differential",
     `  A  ${resolve(a)}`,
     `  B  ${resolve(b)}`,
-    `  mode: ${noise ? `against the noise of ${options.noise}` : options.allowReorders ? "allowed reorders (R4)" : "strict"}`,
+    `  mode: ${noise ? `against the noise of ${options.noise}` : options.allowReorders ? "allowed reorders (R4; classes 1-3 of the S3a row)" : "strict"}`,
   ];
   let failed = 0;
   let suppressed = 0;
   const allReorders = [];
+  const moved = { 2: 0, 3: 0 };
   for (const pair of pairs) {
     if (!pair.a || !pair.b) {
       failed++;
@@ -810,8 +914,10 @@ export function diffPaths(a, b, options = {}) {
       for (const text of result.differences) lines.push(`  ${text}`);
       continue;
     }
-    const { differences, reorders } = compareTraces(left, right, options);
+    const { differences, reorders, moves } = compareTraces(left, right, options);
     failed += differences.length;
+    moved[2] += moves?.[2] ?? 0;
+    moved[3] += moves?.[3] ?? 0;
     lines.push(
       `${pair.name}: ${differences.length ? `${differences.length} plugin(s) differ` : "no difference"}${reorders.length ? `, ${reorders.length} allowed reorder(s)` : ""}`,
     );
@@ -826,7 +932,7 @@ export function diffPaths(a, b, options = {}) {
   if (allReorders.length)
     lines.push(
       "",
-      `ALLOWED REORDERS (rule R4), not counted: ${allReorders.length}`,
+      `ALLOWED REORDERS (rule R4; the S3a row's classes 2 and 3), not counted as differences: ${allReorders.length}; lines moved against the core lines: class 2 (UI-bound replies) ${moved[2]}, class 3 (interface-report lines) ${moved[3]}`,
       ...allReorders,
     );
   if (unknown.size)
@@ -834,7 +940,12 @@ export function diffPaths(a, b, options = {}) {
       "",
       `Methods not in the stream map (counted UI-independent): ${[...unknown].join(", ")}`,
     );
-  return { text: lines.join("\n"), failed: failed > 0 };
+  return {
+    text: lines.join("\n"),
+    failed: failed > 0,
+    reorders: allReorders.length,
+    moved: { ...moved },
+  };
 }
 
 /** `noise`: the noise set of two base runs; returns `{ text, noise }`. */

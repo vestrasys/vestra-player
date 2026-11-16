@@ -226,3 +226,107 @@ fn the_interfaces_copies_follow_the_core() {
     assert!(core.copies().facts.is_some_and(|facts| facts.dialog_busy));
     assert!(core.copies().facts.is_none());
 }
+
+/// Plan step S3a(2), change-only reports: where the interface skips a
+/// per-tick report because the core's facts (`TickFacts`) say its handler
+/// would change nothing, handling it changes nothing indeed: no registry
+/// write, no command to the playback worker, no request to the interface,
+/// no reply. The reports it still sends reach the core as before.
+#[test]
+fn a_skipped_tick_report_changes_nothing_in_the_core() {
+    use messages::{UiInput, UiReport};
+    let root = tempfile::tempdir().unwrap();
+    let (mut core, _events, commands) = core(root.path());
+    core.register_host_commands().unwrap();
+    let _ = core.copies();
+    // Nothing waits: the video area and the mount step are skipped.
+    let facts = core.tick_facts();
+    assert!(!facts.area_waiting && !facts.held_mounts);
+    let unchanged = |core: &mut Core, report: UiReport| {
+        let revision = core.commands.revision();
+        let host = core.host_revision;
+        let replies = core.area_replies.len();
+        core.report(report);
+        assert_eq!(core.commands.revision(), revision);
+        assert_eq!(core.host_revision, host);
+        assert_eq!(core.area_replies.len(), replies);
+        assert!(core.outbox.is_empty());
+        assert!(
+            commands.try_recv().is_err(),
+            "a command to the playback worker"
+        );
+    };
+    unchanged(
+        &mut core,
+        UiReport::VideoArea {
+            size: (640., 360.),
+            now: 5,
+        },
+    );
+    unchanged(&mut core, UiReport::Input(UiInput::MountTick));
+    // The window tick: sent while the fullscreen command's state differs;
+    // once the core has it (and the cover art as no backdrop wants it),
+    // the same report changes nothing.
+    let window_tick = |fullscreen| UiReport::Input(UiInput::WindowTick { fullscreen });
+    if core.tick_facts().fullscreen_checked != Some(false) {
+        core.report(window_tick(false));
+    }
+    let facts = core.tick_facts();
+    assert_eq!(facts.fullscreen_checked, Some(false));
+    assert!(!facts.cover_art_off);
+    unchanged(&mut core, window_tick(false));
+    // A change is not skipped and does write.
+    assert_ne!(core.tick_facts().fullscreen_checked, Some(true));
+    let revision = core.commands.revision();
+    core.report(window_tick(true));
+    assert_ne!(core.commands.revision(), revision);
+    assert_eq!(core.tick_facts().fullscreen_checked, Some(true));
+    // The column toggles: equal to the registry's, nothing changes.
+    let [Some(sidebar), Some(adjust)] = core.tick_facts().columns else {
+        panic!("the column toggles are host commands");
+    };
+    unchanged(
+        &mut core,
+        UiReport::Input(UiInput::ColumnCommands([
+            (crate::ui::bar_buttons::SIDEBAR, sidebar),
+            (crate::ui::bar_buttons::ADJUST, adjust),
+        ])),
+    );
+}
+
+/// Plan step S3a(2) keeps today's record of the batching window on one
+/// thread (zero difference): a cancel takes the record and tells the
+/// interface; a report of the window holding a change records it as
+/// reported, a cancelled one too (a cancel drained while the interface
+/// prepares a hand-over, `prepare_mount_tick`), until the window closes.
+/// Dropping such a late report (the S3a brief's risk 3) is plan step
+/// S3a(3)'s, with the core's thread; this test changes with it.
+#[test]
+fn the_batching_record_follows_the_interfaces_reports_on_one_thread() {
+    use messages::MountCancel;
+    let root = tempfile::tempdir().unwrap();
+    let (mut core, _events, _commands) = core(root.path());
+    let key = panel_key(7, composition::Slot::Bottom);
+    let held = super::mounts::HandedMount {
+        reply: Reply { owner: 7, id: 3 },
+        key,
+        slot: Some(composition::Slot::Bottom),
+        call: Value::Null,
+    };
+    core.batching(Some(held.clone()));
+    assert!(core.handed.is_some());
+    core.cancel_handed(MountCancel::Owner(7));
+    assert!(core.handed.is_none());
+    assert!(matches!(
+        core.outbox.front(),
+        Some(super::outbox::Out::Ui(messages::UiCommand::CancelMount(_)))
+    ));
+    // The window's report of the change after the cancel: recorded, as
+    // before plan step S3a (the slot stays taken until the window closes).
+    core.batching(Some(held));
+    assert!(core.handed.is_some());
+    assert!(core.mount_pending(key));
+    // The window closed.
+    core.batching(None);
+    assert!(core.handed.is_none());
+}

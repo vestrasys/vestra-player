@@ -437,8 +437,7 @@ fn mount(
     // One the interface's batching window holds already: the core cancels
     // it there (plan step S2d(2)).
     if core.handed.as_ref().is_some_and(|h| h.removes(key)) {
-        core.handed = None;
-        core.ui_command(UiCommand::CancelMount(MountCancel::Removal { key }));
+        core.cancel_handed(MountCancel::Removal { key });
     }
     if pending_change(core, key) {
         return Err(RpcError::new(
