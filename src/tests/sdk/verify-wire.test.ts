@@ -24,6 +24,7 @@ const {
   noiseOf,
   noiseSize,
   diffPaths,
+  lineClass,
   normaliseTrace,
   readTrace,
   streamOf,
@@ -236,6 +237,61 @@ test("allowed reorders: the two streams may interleave differently, nothing else
   });
   assert.equal(broken.differences.length, 1);
   assert.match(broken.differences[0], /UI-independent stream, line 1:/);
+});
+
+test("allowed reorders, class 3: interface-report lines keep their order and their place by their reply", () => {
+  // A plugin with a mount (UI-bound: its ui.preparing lines and its
+  // reply), an independent read, a window.state broadcast, a ui.error, a
+  // core broadcast and an interface failure's host.error.
+  const steps: Step[] = [
+    ["z.three", "in", { id: 1, method: "ui.mount", params: { slot: "sidebar" } }],
+    ["z.three", "in", { id: 2, method: "source.state", params: {} }],
+    ["z.three", "out", { id: 2, result: { phase: "idle" } }],
+    ["z.three", "out", { event: "source.state", data: { phase: "idle" } }],
+    ["z.three", "out", { event: "ui.preparing", data: { phase: "preparing" } }],
+    ["z.three", "out", { event: "ui.preparing", data: { phase: "ready" } }],
+    ["z.three", "out", { id: 1, result: { ok: true } }],
+    ["z.three", "out", { event: "window.state", data: { fullscreen: false } }],
+    ["z.three", "out", { event: "ui.error", data: { code: "ui", message: "m" } }],
+    ["z.three", "out", { event: "host.error", data: { code: "menu-bridge", message: "b" } }],
+    ["z.three", "out", { event: "host.error", data: { code: "decode", message: "c" } }],
+  ];
+  const a = normalise(trace(steps, A), A);
+  const at = (list: Step[]) => normalise(trace(list, B), B);
+  const classes = a.plugins["z.three"].out.map(lineClass);
+  assert.deepEqual(classes, [1, 1, 3, 3, 2, 3, 3, 3, 1]);
+  // The UI side (preparing, preparing, reply, window.state, ui.error,
+  // menu-bridge) moved ahead of the core's reply and broadcast, in its
+  // order: allowed, six moves (one of class 2, five of class 3).
+  const moved: Step[] = [...steps.slice(0, 2), ...steps.slice(4, 10), ...steps.slice(2, 4), steps[10]];
+  const allowed = compareTraces(a, at(moved), { allowReorders: true });
+  assert.deepEqual(allowed.differences, []);
+  assert.deepEqual(allowed.moves, { 2: 1, 3: 5 });
+  assert.equal(allowed.reorders.length, 1);
+  assert.match(allowed.reorders[0], /1 moved\) and the interface-report lines \(5 moved\)/);
+  // Strict mode sees a difference.
+  assert.equal(compareTraces(a, at(moved)).differences.length, 1);
+  // ui.preparing after its reply: a class-3 line left its place by the
+  // reply (R5).
+  const late: Step[] = [...steps];
+  [late[5], late[6]] = [late[6], late[5]];
+  const afterReply = compareTraces(a, at(late), { allowReorders: true });
+  assert.equal(afterReply.differences.length, 1);
+  assert.match(
+    afterReply.differences[0],
+    /UI-bound replies with the interface-report lines, line 2:/,
+  );
+  // Two interface-report lines swapped among themselves.
+  const swapped: Step[] = [...steps];
+  [swapped[7], swapped[8]] = [swapped[8], swapped[7]];
+  const among = compareTraces(a, at(swapped), { allowReorders: true });
+  assert.equal(among.differences.length, 1);
+  assert.match(among.differences[0], /interface-report lines, line 3:/);
+  // A core host.error is a core line: moving it fails.
+  const core: Step[] = [...steps.slice(0, 2), steps[10], ...steps.slice(2, 10)];
+  const coreMoved = compareTraces(a, at(core), { allowReorders: true });
+  assert.equal(coreMoved.differences.length, 1);
+  assert.match(coreMoved.differences[0], /UI-independent stream, line 1:/);
 });
 
 test("the command line compares V2 run directories step by step", () => {

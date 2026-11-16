@@ -35,6 +35,10 @@ pub(crate) struct Outbox {
     /// The core's own changes of `Core::mounts`, in order, since the last
     /// drain.
     pub(crate) mount_ops: Vec<MountOp>,
+    /// The batching window's changes the core cancelled whose cancel the
+    /// interface has not confirmed by a closed window yet
+    /// (`Core::cancel_handed`, `Core::batching`; plan step S3a(2)).
+    pub(crate) cancelled: Vec<super::mounts::HandedMount>,
     /// What the interface was last given (`Core::copies`).
     pub(crate) sent: Sent,
 }
@@ -70,6 +74,7 @@ pub(crate) enum MountOp {
 #[derive(Default)]
 pub(crate) struct Sent {
     facts: Option<CoreFacts>,
+    tick: Option<TickFacts>,
     plugins: Option<(u64, u64)>,
     pages: Option<u64>,
 }
@@ -86,6 +91,33 @@ pub(crate) struct CoreFacts {
     pub(crate) runs: crate::capabilities::RunsView,
     /// Where the user last acted for each plugin (`Core::origins`).
     pub(crate) origins: origins::Origins,
+}
+
+/// What tells the interface that a report it sends every window tick would
+/// change nothing in the core (plan step S3a(2), change-only reports): each
+/// is the state the core's handler of that report returns early on, as of
+/// the last drain (the core's state changes only in a core call, and every
+/// core call is drained). The interface skips such a report
+/// (`Host::tick_report_needed`); the reports it sends still reach the core
+/// at today's points, so the core's answers are today's.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(crate) struct TickFacts {
+    /// A `window.setVideoArea` reply waits (`Core::area_replies`;
+    /// `UiReport::VideoArea`).
+    pub(crate) area_waiting: bool,
+    /// A request waits for the built-ins to start (`Core::held_mounts`;
+    /// `UiInput::MountTick`).
+    pub(crate) held_mounts: bool,
+    /// The runs whose declared work has `Busy::ShownTab` already
+    /// (`UiInput::TabWork`).
+    pub(crate) shown_tab: std::collections::BTreeSet<u64>,
+    /// The host's Toggle Fullscreen command's checked state, and whether
+    /// mpv was told not to show cover art (`UiInput::WindowTick`).
+    pub(crate) fullscreen_checked: Option<bool>,
+    pub(crate) cover_art_off: bool,
+    /// The bottom bar's column toggles' states in the registry, sidebar
+    /// then adjust (`UiInput::ColumnCommands`).
+    pub(crate) columns: [Option<commands::CommandState>; 2],
 }
 
 /// What the interface knows of the running and the held plugins: their
@@ -180,6 +212,7 @@ impl PluginsView {
 #[derive(Default)]
 pub(crate) struct Copies {
     pub(crate) facts: Option<CoreFacts>,
+    pub(crate) tick: Option<TickFacts>,
     pub(crate) plugins: Option<PluginsView>,
     pub(crate) pages: Option<Vec<crate::ui::settings_window::Page>>,
     pub(crate) mount_ops: Vec<MountOp>,
@@ -206,6 +239,11 @@ impl Core {
             self.outbox.sent.facts = Some(facts.clone());
             copies.facts = Some(facts);
         }
+        let tick = self.tick_facts();
+        if self.outbox.sent.tick.as_ref() != Some(&tick) {
+            self.outbox.sent.tick = Some(tick.clone());
+            copies.tick = Some(tick);
+        }
         let plugins = (self.plugins_revision, self.on_demand.held_revision());
         if self.outbox.sent.plugins != Some(plugins) {
             self.outbox.sent.plugins = Some(plugins);
@@ -225,6 +263,27 @@ impl Core {
     pub(crate) fn pages_echoed(&mut self, before: u64) {
         if self.outbox.sent.pages == Some(before) {
             self.outbox.sent.pages = Some(self.settings.pages_revision());
+        }
+    }
+    /// What makes the interface's per-tick reports change nothing
+    /// ([`TickFacts`]).
+    pub(crate) fn tick_facts(&self) -> TickFacts {
+        let state = |id: &str| {
+            self.commands
+                .get(crate::bindings::HOST, id)
+                .map(|entry| entry.state.clone())
+        };
+        TickFacts {
+            area_waiting: !self.area_replies.is_empty(),
+            held_mounts: !self.held_mounts.is_empty(),
+            shown_tab: self.on_demand.shown_tab_owners(),
+            fullscreen_checked: state("fullscreen").and_then(|state| state.checked),
+            cover_art_off: self.cover_art_off,
+            columns: [
+                crate::ui::bar_buttons::SIDEBAR,
+                crate::ui::bar_buttons::ADJUST,
+            ]
+            .map(state),
         }
     }
     /// The core's small values as the interface copies them.

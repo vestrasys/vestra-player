@@ -93,6 +93,43 @@ impl Core {
         self.handed = Some(HandedMount::of(&change));
         Some(UiCommand::Mount(change))
     }
+    /// The core cancels the change the interface's batching window holds
+    /// (plan step S2d(2)): its record goes now, and the interface drops the
+    /// change when `UiCommand::CancelMount` reaches it. Plan step S3a(2):
+    /// the cancelled record is kept (`Outbox::cancelled`) until the
+    /// interface reports its window closed, so a report of that change the
+    /// interface sent before the cancel reached it does not bring the
+    /// record back (`Core::batching`; two threads only: on one, the cancel
+    /// is carried out before any later report).
+    pub(crate) fn cancel_handed(&mut self, cancel: MountCancel) {
+        if let Some(handed) = self.handed.take() {
+            self.outbox.cancelled.push(handed);
+        }
+        self.ui_command(UiCommand::CancelMount(cancel));
+    }
+    /// The core's side of `UiReport::Batching` (plan step S2d(2)): the
+    /// change the interface's window holds now, or none. Hand-overs are
+    /// only asked by the interface (`Take::Mount`, plan step S3a(1)), and
+    /// its reports and requests reach the core in their order, so a
+    /// `Batching(None)` never overtakes a later hand-over; a report of a
+    /// change the core cancelled since (`cancel_handed`) is stale and
+    /// dropped (plan step S3a(2), the S3a brief's risk 3). A closed window
+    /// ends every cancel's wait.
+    pub(crate) fn batching(&mut self, held: Option<HandedMount>) {
+        if let Some(held) = &held
+            && self
+                .outbox
+                .cancelled
+                .iter()
+                .any(|cancelled| cancelled.same(held))
+        {
+            return;
+        }
+        if held.is_none() {
+            self.outbox.cancelled.clear();
+        }
+        self.handed = held;
+    }
     /// The change of panel `key` the interface's batching window holds,
     /// as the core recorded it (`handed`), or one in the core's queue.
     pub(crate) fn mount_pending(&self, key: u64) -> bool {
@@ -227,8 +264,8 @@ impl HandedMount {
     pub(crate) fn removes(&self, key: u64) -> bool {
         self.key == key && self.reply.id == 0 && self.slot.is_none()
     }
-    /// The same change (debug check of the record against the window).
-    #[cfg(debug_assertions)]
+    /// The same change (the debug check of the record against the window;
+    /// a cancelled change's late report, `Core::batching`).
     pub(crate) fn same(&self, other: &Self) -> bool {
         self.reply.owner == other.reply.owner
             && self.reply.id == other.reply.id
@@ -267,8 +304,11 @@ impl Host {
     /// place, at the point today's code did its work, so order and timing
     /// are unchanged.
     pub(crate) fn prepare_mount_tick(&mut self) {
-        // The core answers what it held first (plan step S2f(1)).
-        self.ui_report(UiReport::Input(messages::UiInput::MountTick));
+        // The core answers what it held first (plan step S2f(1)): only
+        // while it holds something (plan step S3a(2), `TickFacts`).
+        if self.tick_facts.held_mounts {
+            self.ui_report(UiReport::Input(messages::UiInput::MountTick));
+        }
         if self.preparing.is_none() {
             // Taken from the core's queue (`Take::Mount`, plan step S3a(1)).
             let taken = self.take(messages::Take::Mount).into_iter().next();

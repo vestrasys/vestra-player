@@ -249,8 +249,7 @@ impl Core {
         // One the interface's batching window holds: the core cancels it
         // there (plan step S2d(2)).
         if self.handed.as_ref().is_some_and(|h| h.reply.owner == owner) {
-            self.handed = None;
-            self.ui_command(UiCommand::CancelMount(MountCancel::Owner(owner)));
+            self.cancel_handed(MountCancel::Owner(owner));
         }
         for key in gone {
             if self.mount_remove(key).is_none() {

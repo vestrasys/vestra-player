@@ -114,9 +114,19 @@ impl Host {
         // the shell's sizes were read; neither reads or writes anything of
         // the core, and the cover-art command is still the tick's first
         // command to the playback worker.
-        self.ui_report(UiReport::Input(super::messages::UiInput::WindowTick {
-            fullscreen,
-        }));
+        // Only when it changes something in the core (plan step S3a(2),
+        // `TickFacts`): the fullscreen commands' state, or the cover art.
+        let backdrop = self
+            .mounts
+            .values()
+            .any(|mount| mount.spec.slot == composition::Slot::Backdrop);
+        if self.tick_facts.fullscreen_checked != Some(fullscreen)
+            || self.tick_facts.cover_art_off != backdrop
+        {
+            self.ui_report(UiReport::Input(super::messages::UiInput::WindowTick {
+                fullscreen,
+            }));
+        }
         // The sidebar and plugin panels show and hide `if` elements.
         view::settle_layout(shell.window());
         let number = |name: &str| match shell.get_property(name) {
@@ -317,7 +327,11 @@ impl Host {
         let video = self.follow_video_area(&shell, fullscreen);
         // The core answers the `window.setVideoArea` requests this layout
         // shows, or whose second is up (plan step S2d).
-        self.ui_report(UiReport::VideoArea { size: video, now });
+        // Only while a reply waits (plan step S3a(2), `TickFacts`): with
+        // none the core's side does nothing.
+        if self.tick_facts.area_waiting {
+            self.ui_report(UiReport::VideoArea { size: video, now });
+        }
         self.bar_tick(&shell, columns_seen);
         match result {
             Ok(facts) => {
@@ -433,6 +447,22 @@ impl Host {
                 .unwrap_or_default(),
             views: self.views.keys().map(|(owner, _)| *owner).collect(),
             pip: self.pip_fact(),
+            displays: self.displays.clone(),
+        }
+    }
+    /// The displays as the platform reports them, read at start and once a
+    /// second after (plan step S3a(2), brief item 6): the interface's fact
+    /// `UiFacts::displays`, for where the core cannot read them itself.
+    pub(crate) fn displays_tick(&mut self) {
+        if self
+            .displays_read
+            .is_some_and(|at| at.elapsed() < Duration::from_secs(1))
+        {
+            return;
+        }
+        self.displays_read = Some(Instant::now());
+        if let Some(displays) = crate::system::displays_here() {
+            self.displays = crate::system::displays_json(&displays);
         }
     }
     /// The interface hands the turn to the core (an event of the core, a
@@ -529,7 +559,7 @@ impl Core {
             } => self.area_fitted(reply, video, result),
             UiReport::VideoArea { size, now } => self.answer_video_area(size, now),
             // Plan step S2d(2): the change the batching window holds.
-            UiReport::Batching(held) => self.handed = held,
+            UiReport::Batching(held) => self.batching(held),
             // Plan step S2f(1): the core's part of the UI's events.
             UiReport::Event(event) => self.core_ui_event(event),
             UiReport::Input(input) => self.core_input(input),
@@ -798,7 +828,11 @@ impl Host {
         // Both are the core's (plan step S2f(1)): reported.
         let plugin = mount.plugin;
         if !mount.recorded {
-            self.ui_report(UiReport::Input(super::messages::UiInput::TabWork(plugin)));
+            // Unless its work has the shown tab already, where the core's
+            // side does nothing (plan step S3a(2), `TickFacts`).
+            if !self.tick_facts.shown_tab.contains(&plugin) {
+                self.ui_report(UiReport::Input(super::messages::UiInput::TabWork(plugin)));
+            }
             self.columns[index].woken = None;
         } else if self.columns[index].woken != Some(owner) {
             self.columns[index].woken = Some(owner);

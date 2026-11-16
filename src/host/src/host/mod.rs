@@ -665,6 +665,12 @@ pub(crate) struct Host {
     /// The interface's copy of what it reads of the plugins (ids, names,
     /// packages).
     pub(crate) plugins: outbox::PluginsView,
+    /// What makes its per-tick reports change nothing in the core
+    /// (`outbox::TickFacts`; plan step S3a(2)): they are sent only otherwise.
+    pub(crate) tick_facts: outbox::TickFacts,
+    /// The displays last read (`Host::displays_tick`) and when.
+    pub(crate) displays: Value,
+    pub(crate) displays_read: Option<Instant>,
     pub(crate) views: BTreeMap<(u64, String), view::View>,
     pub(crate) shell: Option<slint_interpreter::ComponentInstance>,
     /// The interface's mount batching window (K6): the change that opened

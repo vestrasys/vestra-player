@@ -95,6 +95,9 @@ struct Open {
 /// changes as `UiCommand::Settings` (host/messages.rs).
 #[derive(Default)]
 pub struct Settings {
+    /// Every write goes through `pages_mut` (its revision moves: the
+    /// interface's copy, `Core::copies`); nothing else checks it since plan
+    /// step S3a(1) dropped the `Revised` wrapper.
     pages: Vec<Page>,
     next_serial: u64,
     /// Registrations whose page compiles on the `settings-check` thread:
