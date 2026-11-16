@@ -574,6 +574,7 @@ fn player() -> Result<()> {
         cover_art_off: false,
         drops: Default::default(),
         ui_state,
+        area_replies: Vec::new(),
         // Made above, before the clock, as before plan step S2c moved it
         // from `Host`.
         on_demand,
@@ -645,7 +646,6 @@ fn player() -> Result<()> {
         on_top: false,
         cursor_playing: false,
         on_top_applied: None,
-        area_replies: Vec::new(),
         images: Default::default(),
         no_video: true,
         video_absent: true,

@@ -548,6 +548,10 @@ pub(crate) struct Core {
     /// options window's last page) the interface reports whole as
     /// `UiReport::Remembered` when they change.
     pub(crate) ui_state: ui_state::Store,
+    /// `window.setVideoArea` requests the interface fitted
+    /// (`UiReport::AreaFitted`; plan step S2d), answered once the layout
+    /// shows their size (`UiReport::VideoArea`) or a second after.
+    pub(crate) area_replies: Vec<AreaReply>,
     /// On-demand start: the Host's side of standby, wake and
     /// classification (`supervisor/`, supervisor.md §4). Moved from `Host`
     /// in plan step S2c as its last field, so it drops after every other
@@ -702,12 +706,6 @@ pub(crate) struct Host {
     pub(crate) cursor_playing: bool,
     /// The level last applied: (floating, window count when applied).
     pub(crate) on_top_applied: Option<(bool, usize)>,
-    /// `window.setVideoArea` answered once the video area shows the target.
-    /// Still here after plan step S2c(7): the window tick answers them
-    /// from the size its layout shows, on its own clock; plan step S2d
-    /// gives them the explicit pair (`WindowOp::VideoArea`,
-    /// `UiReport::AreaFitted`, answered from the window facts).
-    pub(crate) area_replies: Vec<AreaReply>,
     /// Decoded `plugin.ui.image` files (R-U1).
     pub(crate) images: ui_image::Images,
     /// No video frame to show (R-U3): the backdrop is effective.

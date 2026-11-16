@@ -28,7 +28,13 @@ impl Capability for WindowControl {
     /// §4.8): they hold nothing that keeps the plugin running.
     /// Picture-in-picture and a video area being applied still do.
     fn record(&self, host: &Host, owner: u64, _: &Value) -> Recorded {
-        if host.pip.holds(owner) || host.area_replies.iter().any(|a| a.reply.owner == owner) {
+        if host.pip.holds(owner)
+            || host
+                .core
+                .area_replies
+                .iter()
+                .any(|a| a.reply.owner == owner)
+        {
             return Recorded::Live("a window setting");
         }
         Recorded::Nothing

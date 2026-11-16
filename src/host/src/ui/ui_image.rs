@@ -448,20 +448,24 @@ pub fn image_count(value: &Value) -> usize {
     }
 }
 
-impl Host {
+impl crate::host::Core {
     /// Where a plugin's images may live: its package and data directories;
     /// a parked plugin's too (lazy activation: its bar button and settings
-    /// pages still show).
+    /// pages still show). Core data only (the running plugins and the
+    /// parked origins; plan step S2d). The interface reads it in place
+    /// until plan step S3a gives it a per-owner copy.
     pub(crate) fn image_roots(&self, owner: u64) -> Vec<PathBuf> {
-        if let Some(plugin) = self.core.plugins.get(&owner) {
+        if let Some(plugin) = self.plugins.get(&owner) {
             return plugin.origin().image_roots();
         }
-        self.core
-            .on_demand
+        self.on_demand
             .held(owner)
             .map(|held| held.origin.image_roots())
             .unwrap_or_default()
     }
+}
+
+impl Host {
     /// A property value for `owner`'s `view`: JSON, Markdown documents at
     /// any depth, image references as the whole value or at any depth (checked again on
     /// every use, whoever produced the wire value). A failure names the
@@ -496,7 +500,7 @@ impl Host {
         value: &Value,
         prepared: Option<&ui_values::PlainRows>,
     ) -> std::result::Result<SValue, RpcError> {
-        let roots = self.image_roots(owner);
+        let roots = self.core.image_roots(owner);
         // An array without documents: plain rows (`ui_rows`), images
         // loaded once per reference.
         if let Some(rows) = value.as_array()

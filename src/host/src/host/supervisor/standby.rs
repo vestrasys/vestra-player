@@ -52,7 +52,7 @@ pub(crate) struct Held {
     /// Its package: its catalog (registered for its settings pages' Slint,
     /// `i18n::catalog_for`: an `Arc` of its own, since the stopped plugin
     /// unregisters its own on another thread), and where its images come
-    /// from (`Host::image_roots`).
+    /// from (`Core::image_roots`).
     pub origin: Origin,
     /// Its name, for `Starting <name>…`.
     pub name: String,

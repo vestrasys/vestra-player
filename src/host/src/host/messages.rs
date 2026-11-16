@@ -13,8 +13,11 @@
 //! order in [`WindowFacts`]; S2c(6): [`UiCommand::ResetWrites`]; S2c(7):
 //! [`UiSnapshot::LastSource`], [`UiSnapshot::InfoPanels`],
 //! [`UiSnapshot::Theme`], [`UiSnapshot::CursorAutoHide`],
-//! [`WindowOp::OnTop`], [`UiReport::Remembered`] and [`UiReport::Drop`]), S3a
-//! moves the core to its own thread.
+//! [`WindowOp::OnTop`], [`UiReport::Remembered`] and [`UiReport::Drop`];
+//! S2d(1): [`UiCommand::View`] with the view requests' [`UiReport::Answered`],
+//! [`WindowOp::VideoArea`] with [`UiReport::AreaFitted`] and
+//! [`UiReport::VideoArea`], [`WindowOp::Pip`]), S3a moves the core to its
+//! own thread.
 //!
 //! Each variant names the rows of the design's method table (§5.1, "row
 //! 36") and the rules it serves. A variant is one of two kinds:
@@ -205,6 +208,12 @@ pub(crate) enum ViewKind {
     Show { params: Value },
     /// `ui.close`.
     Close,
+    /// `ui.open` refused by the core's checks (the package file, the
+    /// properties, the callbacks; plan step S2d). Not answered by the core:
+    /// a view of that id already open is refused `conflict` before them,
+    /// as before, and the open views are the interface's. The interface
+    /// answers `conflict` or this error.
+    Refused(RpcError),
 }
 
 /// `ui.setMount`: the property of the plugin's panel `key` (`panel_key`).
@@ -236,18 +245,23 @@ pub(crate) enum SettingsOp {
 }
 
 pub(crate) enum WindowOp {
-    /// `window.setVideoArea` (row 71; stream B). The UI fits the window and
-    /// reports [`UiReport::AreaFitted`] (or an error as
-    /// [`UiReport::Answered`]); the core answers when the window facts show
-    /// the size or after its 1 s deadline (R13).
+    /// `window.setVideoArea` (row 71; stream B). The core checks the size;
+    /// the UI fits the window and reports [`UiReport::AreaFitted`] (or an
+    /// error as [`UiReport::Answered`]); the core answers when the layout
+    /// shows the size ([`UiReport::VideoArea`]) or after its 1 s deadline
+    /// (R13). As built in plan step S2d.
     VideoArea {
         reply: Reply,
         width: f64,
         height: f64,
     },
     /// `window.setPictureInPicture { on }` (row 74; stream B). Answered from
-    /// the PiP state machine through [`UiReport::Answered`], whose handoff
-    /// carries the facts with the new `active` flag (R13).
+    /// the PiP state machine through [`UiReport::Answered`] (at once, or
+    /// when the system window has opened or closed). Plan step S2d sends no
+    /// handoff with it: `window.state` reads the interface's live PiP state
+    /// on this thread, and a handoff with the new `active` flag would
+    /// broadcast `window.state` before today's window tick does. R13's
+    /// handoff of the flag is plan step S3a's (the core's own copy).
     Pip { reply: Reply, on: bool },
     /// `window.setAlwaysOnTop` (row 72): every ordinary window at the
     /// floating level, or not. Answered by the core at once. Plan step
@@ -450,15 +464,25 @@ pub(crate) enum UiReport {
     },
     /// `window.setVideoArea` was fitted: the video size it waits for and
     /// the reply it will carry. The core keeps it with its deadline
-    /// (request time + 1000 ms) and answers from [`Self::WindowFacts`].
-    /// On receipt it first checks the facts it already has: they may show
-    /// the size already (a fact that arrived before this report), and then
-    /// it answers at once instead of waiting out the deadline.
+    /// (receipt + 1000 ms, `Core::area_replies`) and answers from
+    /// [`Self::VideoArea`]. As built in plan step S2d it is not checked on
+    /// receipt: today's reply waits for the next window tick's layout even
+    /// when the size is shown already, and the wire trace keeps that.
+    /// Answering at once when the core's copy already shows the size is
+    /// plan step S3a's choice (design §5, the 1 s timeout).
     AreaFitted {
         reply: Reply,
         video: (f64, f64),
         result: Value,
     },
+    /// The size of the video area the window tick's layout shows, at that
+    /// tick's time (`now`, the core clock's ms), after the bar, the columns
+    /// and fullscreen changed it (plan step S2d): the core answers each
+    /// pending `window.setVideoArea` the size matches, or whose deadline
+    /// passed. Last value wins: the newest layout is what the window shows.
+    /// The core's window facts are measured earlier in the same tick, so
+    /// they cannot stand in for it without moving the reply a tick later.
+    VideoArea { size: (f64, f64), now: u64 },
     /// Mount changes left the batching queue: the core sends their
     /// `ui.preparing` (`phase: preparing`) lines, in this order. Only
     /// changes not announced before (a failed batch's changes are put back
@@ -651,6 +675,7 @@ impl UiReport {
                 | (Self::Displays(_), Self::Displays(_))
                 | (Self::FrameShown(_), Self::FrameShown(_))
                 | (Self::Remembered { .. }, Self::Remembered { .. })
+                | (Self::VideoArea { .. }, Self::VideoArea { .. })
         )
     }
 }
@@ -1004,6 +1029,7 @@ mod tests {
                 ViewKind::Set { .. } => "View.Set",
                 ViewKind::Show { .. } => "View.Show",
                 ViewKind::Close => "View.Close",
+                ViewKind::Refused(_) => "View.Refused",
             },
             UiCommand::Mount(_) => "Mount",
             UiCommand::SetMount(_) => "SetMount",
@@ -1069,6 +1095,7 @@ mod tests {
             UiReport::Acted { .. } => "Acted",
             UiReport::Remembered { .. } => "Remembered",
             UiReport::Drop(_) => "Drop",
+            UiReport::VideoArea { .. } => "VideoArea",
             UiReport::Event(event) => event.0.label().0,
         }
     }
@@ -1135,6 +1162,36 @@ mod tests {
             for new in [remembered(1), drop()] {
                 assert!(!new.replaces(&other) && !other.replaces(&new));
             }
+        }
+    }
+
+    /// What plan step S2d added (`every_command` and `every_report` keep
+    /// the S2a set): a refused `ui.open` is ordered like the other view
+    /// requests; the layout's video area is a fact that replaces only an
+    /// older one.
+    #[test]
+    fn a_refused_open_is_ordered_and_the_video_area_coalesces() {
+        let refused = || {
+            UiCommand::View(ViewOp {
+                reply: reply(16),
+                id: "w".into(),
+                kind: ViewKind::Refused(RpcError::invalid("bad file")),
+            })
+        };
+        assert_eq!(command_name(&refused()), "View.Refused");
+        assert!(!refused().replaces(&refused()));
+        for other in every_command() {
+            assert!(!refused().replaces(&other) && !other.replaces(&refused()));
+            assert_ne!(command_name(&other), "View.Refused");
+        }
+        let area = |width| UiReport::VideoArea {
+            size: (width, 360.),
+            now: 5,
+        };
+        assert_eq!(report_name(&area(640.)), "VideoArea");
+        assert!(area(641.).replaces(&area(640.)));
+        for other in every_report() {
+            assert!(!area(640.).replaces(&other) && !other.replaces(&area(640.)));
         }
     }
 

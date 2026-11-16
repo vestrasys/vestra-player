@@ -296,7 +296,7 @@ impl Host {
         } else {
             (*max_side).min(64)
         };
-        let roots = self.image_roots(owner);
+        let roots = self.core.image_roots(owner);
         match self.images.load_within(owner, &roots, path, side) {
             Ok((key, image)) => {
                 self.images.assign(owner, "$palette", "lead", Some(key));

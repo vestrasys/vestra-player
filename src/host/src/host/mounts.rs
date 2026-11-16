@@ -329,7 +329,10 @@ impl Host {
     /// (`ResetWrites`, `ui::ui_image::Images::reset_writes`); S2c(7): the
     /// last `source.state`, the info panels, the palette, the window
     /// settings in effect (`LastSource`, `InfoPanels`, `Theme`,
-    /// `CursorAutoHide`, `WindowOp::OnTop`). The other commands follow in
+    /// `CursorAutoHide`, `WindowOp::OnTop`); S2d(1): the view requests
+    /// (`View`, `Host::view_command`), the video area and
+    /// picture-in-picture (`WindowOp::VideoArea`, `WindowOp::Pip`;
+    /// `video_area_command`, `pip_command`). The other commands follow in
     /// later steps.
     pub(crate) fn ui_command(&mut self, command: UiCommand) {
         match command {
@@ -370,6 +373,13 @@ impl Host {
             UiCommand::Dialog(request) => self.dialog_command(request),
             UiCommand::Confirm(request) => self.confirm_command(request),
             UiCommand::Review(request) => self.review_command(request),
+            UiCommand::View(op) => self.view_command(op),
+            UiCommand::Window(WindowOp::VideoArea {
+                reply,
+                width,
+                height,
+            }) => self.video_area_command(reply, width, height),
+            UiCommand::Window(WindowOp::Pip { reply, on }) => self.pip_command(reply, on),
             _ => unreachable!("not sent before plan step S2d"),
         }
     }
