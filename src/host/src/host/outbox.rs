@@ -106,6 +106,42 @@ pub(crate) struct PluginsView {
 }
 
 impl PluginsView {
+    /// Debug builds: what two copies are compared by (the packages by
+    /// their id and directories; a catalog is shared, not compared).
+    #[cfg(debug_assertions)]
+    #[allow(clippy::type_complexity)]
+    pub(crate) fn shape(
+        &self,
+    ) -> (
+        &BTreeMap<u64, (String, String)>,
+        Vec<(u64, &str, &Path, Option<&Path>)>,
+        Vec<(u64, &str, &Path, Option<&Path>)>,
+        &BTreeMap<String, String>,
+        &BTreeMap<String, String>,
+    ) {
+        fn packages(
+            origins: &BTreeMap<u64, crate::host::Origin>,
+        ) -> Vec<(u64, &str, &Path, Option<&Path>)> {
+            origins
+                .iter()
+                .map(|(owner, o)| {
+                    (
+                        *owner,
+                        o.id.as_str(),
+                        o.directory.as_path(),
+                        o.data_directory.as_deref(),
+                    )
+                })
+                .collect()
+        }
+        (
+            &self.running,
+            packages(&self.origins),
+            packages(&self.held),
+            &self.names,
+            &self.held_names,
+        )
+    }
     /// `plugin_id`: the manifest id of a running plugin, else the owner.
     pub(crate) fn plugin_id(&self, owner: u64) -> String {
         self.running
@@ -158,13 +194,15 @@ impl Core {
             mount_ops: std::mem::take(&mut self.outbox.mount_ops),
             ..Copies::default()
         };
-        let facts = CoreFacts {
-            dialog_busy: self.dialog_busy,
-            lead: self.lead.clone(),
-            runs: self.command_runs.view(),
-            origins: self.origins.clone(),
-        };
-        if self.outbox.sent.facts.as_ref() != Some(&facts) {
+        // Compared before anything is copied: most drains change none.
+        let same = self.outbox.sent.facts.as_ref().is_some_and(|sent| {
+            sent.dialog_busy == self.dialog_busy
+                && sent.lead == self.lead
+                && sent.runs.matches(&self.command_runs)
+                && sent.origins == self.origins
+        });
+        if !same {
+            let facts = self.facts_now();
             self.outbox.sent.facts = Some(facts.clone());
             copies.facts = Some(facts);
         }
@@ -173,7 +211,7 @@ impl Core {
             self.outbox.sent.plugins = Some(plugins);
             copies.plugins = Some(self.plugins_view());
         }
-        let pages = self.settings.revision();
+        let pages = self.settings.pages_revision();
         if self.outbox.sent.pages != Some(pages) {
             self.outbox.sent.pages = Some(pages);
             copies.pages = Some(self.settings.pages().to_vec());
@@ -186,10 +224,20 @@ impl Core {
     /// again for that write alone.
     pub(crate) fn pages_echoed(&mut self, before: u64) {
         if self.outbox.sent.pages == Some(before) {
-            self.outbox.sent.pages = Some(self.settings.revision());
+            self.outbox.sent.pages = Some(self.settings.pages_revision());
         }
     }
-    fn plugins_view(&self) -> PluginsView {
+    /// The core's small values as the interface copies them.
+    pub(crate) fn facts_now(&self) -> CoreFacts {
+        CoreFacts {
+            dialog_busy: self.dialog_busy,
+            lead: self.lead.clone(),
+            runs: self.command_runs.view(),
+            origins: self.origins.clone(),
+        }
+    }
+    /// What the interface copies of the running and the held plugins.
+    pub(crate) fn plugins_view(&self) -> PluginsView {
         let mut view = PluginsView::default();
         for (owner, plugin) in &self.plugins {
             let origin = plugin.origin();

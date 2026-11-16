@@ -109,7 +109,9 @@ impl Host {
         if self.menu_open {
             self.close_menu();
         }
-        // The core revokes the physical input (plan step S3a(1)).
+        // The core revokes the physical input (plan step S3a(1)). As a
+        // report it drains the outbox where the in-place call did not; the
+        // revoke only sends to the playback worker, so nothing is queued.
         #[cfg(feature = "producer-audio")]
         self.ui_report(messages::UiReport::Input(messages::UiInput::Revoke(
             producer_input::RevokeReason::Menu,

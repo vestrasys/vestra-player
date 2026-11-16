@@ -817,14 +817,14 @@ pub(crate) enum UiInput {
     /// A mount of `owner` joins a batch: its earlier `slot-occupied`
     /// refusal no longer applies (`Core::clear_warning`).
     Mounted(u64),
-    /// The options window stored `value` as property `property` of page
-    /// `id` of `owner` (`settings.set`, whole or patched): the core's page
-    /// keeps it (its recording and a registration again read it).
+    /// The options window stored a value as property `property` of page
+    /// `id` of `owner` (`settings.set`, whole or a row patch): the core's
+    /// page keeps it (its recording and a registration again read it).
     Stored {
         owner: u64,
         id: String,
         property: String,
-        value: Value,
+        write: StoredWrite,
     },
     /// Picture-in-picture's play/pause or step (`pip::Effect::Action`,
     /// group E's leftover): the core runs the action.
@@ -836,6 +836,18 @@ pub(crate) enum UiInput {
     /// revokes the physical input.
     #[cfg(feature = "producer-audio")]
     Revoke(crate::playback::producer_input::RevokeReason),
+}
+
+/// What [`UiInput::Stored`] writes into the core's page: a whole value, or
+/// a row patch the core applies to its copy of the stored array as the
+/// interface did to its own (`ui_patch::apply_vec`), so a patch costs the
+/// rows it carries, not the whole array.
+pub(crate) enum StoredWrite {
+    Whole(Value),
+    Rows {
+        shapes: Vec<crate::ui::ui_patch::Shape>,
+        rows: Vec<Value>,
+    },
 }
 
 impl UiInput {

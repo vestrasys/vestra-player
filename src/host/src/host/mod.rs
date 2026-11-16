@@ -471,7 +471,7 @@ pub(crate) struct Core {
     /// pages and their recordings. The open options window is the
     /// interface's (`Host::settings`), told of changes as
     /// `UiCommand::Settings`.
-    pub(crate) settings: revised::Revised<settings_window::Settings>,
+    pub(crate) settings: settings_window::Settings,
     /// The large array of the request being answered, converted on its
     /// plugin's reader thread (`Event::Prepared`, `take_prepared`): owner,
     /// request id, rows.

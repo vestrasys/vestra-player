@@ -37,7 +37,7 @@ impl Capability for UiSettings {
     /// callbacks follow (the interface's part: `SettingsOp::Rekeyed`, plan
     /// step S2d(3)).
     fn rekey(&self, core: &mut Core, from: u64, to: u64) {
-        let serials = core.settings.edit().rekey(from, to);
+        let serials = core.settings.rekey(from, to);
         core.ui_command(UiCommand::Settings(SettingsOp::Rekeyed { serials, to }));
     }
     /// The core's pages of `owner` are kept as recorded or go; an open
@@ -45,13 +45,13 @@ impl Capability for UiSettings {
     /// `SettingsOp::OwnerGone`, plan step S2d(3)).
     fn revoke(&self, core: &mut Core, owner: u64, keep_recorded: bool) {
         if keep_recorded {
-            core.settings.edit().mark_recorded(owner);
-        } else if core.settings.edit().remove_owner(owner) {
+            core.settings.mark_recorded(owner);
+        } else if core.settings.remove_owner(owner) {
             core.ui_command(UiCommand::Settings(SettingsOp::OwnerGone { owner }));
         }
     }
     fn prune(&self, core: &mut Core, owner: u64) {
-        if core.settings.edit().remove_recorded(owner) {
+        if core.settings.remove_recorded(owner) {
             core.ui_command(UiCommand::Settings(SettingsOp::OwnerGone { owner }));
         }
     }

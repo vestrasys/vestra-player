@@ -723,8 +723,8 @@ impl Core {
                 owner,
                 id,
                 property,
-                value,
-            } => self.settings_stored(owner, &id, property, value),
+                write,
+            } => self.settings_stored(owner, &id, property, write),
             UiInput::PipAction { action, step } => {
                 if let Err(error) = self.run_core_action_with(action, None, step) {
                     diag!("pip: {action}: {}", error.message);

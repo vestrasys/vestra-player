@@ -264,6 +264,7 @@ impl Host {
         self.check_panel_tabs();
         self.check_handed();
         self.check_mounts();
+        self.check_core_copies();
     }
     /// Debug builds: the core's copy of the interface's facts is the
     /// interface's (plan step S2f(1)), and the current tabs the core derives
@@ -345,6 +346,25 @@ impl Host {
             shape(&self.mounts),
             shape(&self.link.core.mounts),
             "the interface's copy of the mount registry is behind the core's"
+        );
+    }
+    /// Debug builds (plan step S3a(1), from the static review): the
+    /// interface's copies of the settings pages, the core's small values
+    /// and the plugins are the core's.
+    #[cfg(debug_assertions)]
+    fn check_core_copies(&self) {
+        let core = &self.link.core;
+        debug_assert!(
+            self.pages == core.settings.pages(),
+            "the interface's copy of the settings pages is behind the core's"
+        );
+        debug_assert!(
+            self.view == core.facts_now(),
+            "the interface's copy of the core's facts is behind the core's"
+        );
+        debug_assert!(
+            self.plugins.shape() == core.plugins_view().shape(),
+            "the interface's copy of the plugins is behind the core's"
         );
     }
     /// Debug builds: the interface's restart lines are the core's record's

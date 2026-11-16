@@ -366,6 +366,24 @@ pub struct RunsView {
 }
 
 impl RunsView {
+    /// Whether this copy is still `runs`' (`CommandRuns::view` would give
+    /// an equal one), compared without copying.
+    pub fn matches(&self, runs: &CommandRuns) -> bool {
+        self.tickets.len() == runs.tickets.len()
+            && self
+                .tickets
+                .iter()
+                .zip(&runs.tickets)
+                .all(|((id, last), (other, ticket))| id == other && *last == ticket.last)
+            && self.confirming.len() == runs.confirming.len()
+            && self
+                .confirming
+                .iter()
+                .zip(&runs.confirming)
+                .all(|(((owner, id), names), run)| {
+                    *owner == run.reply.owner && *id == run.reply.id && *names == run.names
+                })
+    }
     /// Whether `ticket` is live at `now`, whoever holds it (the status
     /// strip shows a ticket's steps while it is; the sheet asks while it is).
     pub fn is_live(&self, ticket: &str, now: u64) -> bool {
