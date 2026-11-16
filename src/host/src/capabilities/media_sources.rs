@@ -7,7 +7,7 @@
 use super::{Capability, Handled, Info, Recorded, forward_media, plugin};
 use crate::host::{
     Host, Reply, RpcError,
-    messages::{DialogPurpose, DialogRequest, UiCommand},
+    messages::{DialogPurpose, UiCommand},
 };
 use serde_json::{Value, json};
 
@@ -107,17 +107,16 @@ pub(crate) fn locate_dialog(
     }
     // Busy before it shows (`dialogs.open`). The interface creates the
     // dialog (`UiCommand::Dialog`, plan step S2c(5)), owned like
-    // `dialogs.open`'s (`origins::dialog_place`); its choice comes back as
+    // `dialogs.open`'s, as the interface chooses (`origins::dialog_place`;
+    // `UiCommand::OpenDialog`, plan step S2f(3)); its choice comes back as
     // `Event::SourceLocated`.
     host.core.dialog_busy = true;
     #[cfg(feature = "producer-audio")]
     host.core
         .physical_revoke(crate::playback::producer_input::RevokeReason::Dialog);
-    let place = host.dialog_place(reply.owner);
-    host.ui_command(UiCommand::Dialog(DialogRequest {
+    host.ui_command(UiCommand::OpenDialog {
         reply: reply.clone(),
         purpose: DialogPurpose::Locate(fields),
-        place,
-    }));
+    });
     Ok(())
 }

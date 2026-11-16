@@ -1169,7 +1169,12 @@ impl Host {
         }
         // The interface's facts from the core's copy (plan step S2f(1)).
         #[cfg(debug_assertions)]
-        self.check_ui_facts();
+        {
+            use crate::host::outbox::Fact;
+            self.check_ui_facts();
+            self.core
+                .check_settled(&[Fact::Sheet, Fact::Options, Fact::Columns]);
+        }
         // A confirmation on the sheet counts as a dialog open (H5).
         if self.core.dialog_busy || self.core.confirm_waiting() {
             busy.insert(Busy::Dialog);
@@ -1710,6 +1715,11 @@ impl Host {
             return;
         }
         self.core.on_demand.next_check = now + CHECK_MS;
+        // What this step asked of the interface so far (a park, a column
+        // toggle of the test switch) is carried out first, so the checks
+        // below read the interface's facts as they are now (plan step
+        // S2f(3)).
+        self.drain_outbox();
         // Busy runs: their declared work ends when the Host's checks pass
         // (O(busy runs) every `CHECK_MS`).
         let busy = self.core.on_demand.work.keys().copied().collect::<Vec<_>>();

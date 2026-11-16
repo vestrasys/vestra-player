@@ -589,6 +589,7 @@ fn player() -> Result<()> {
             title: "Vestra Player".into(),
         },
         binding_revision: u64::MAX,
+        outbox: Default::default(),
         // Made above, before the clock, as before plan step S2c moved it
         // from `Host`.
         on_demand,
@@ -705,6 +706,9 @@ fn player() -> Result<()> {
         ui_fonts::install(i18n::locale());
     }
     host.register_host_commands()?;
+    // What the core asked of the interface is carried out after each of
+    // the start's core calls (plan step S2f(3), `host/outbox.rs`).
+    host.drain_outbox();
     {
         // Commands whose full id changed (`command_renames`): keys and
         // recent palette entries saved under the old id follow, once.
@@ -745,6 +749,7 @@ fn player() -> Result<()> {
     }
     for directory in &directories {
         host.load(directory, 120_000)?;
+        host.drain_outbox();
     }
     // A restart continues its first file where the replaced player was.
     if let (Some(resume), Some(file)) = (resume, files.first()) {
@@ -758,6 +763,7 @@ fn player() -> Result<()> {
     // only once its first picture was shown (the crash guard, below).
     let opened_at_start = !files.is_empty();
     host.open_files(files, false);
+    host.drain_outbox();
     let start = Instant::now();
     if headless {
         loop {
@@ -811,6 +817,7 @@ fn player() -> Result<()> {
         // step S2f(1)).
         host.report_ui_facts();
         host.shutdown_plugins(host::QUIT_BUDGET);
+        host.drain_outbox();
         stop_handoffs();
         host.core.shader_guard.quit();
         logged!("exit: normal");
@@ -992,6 +999,7 @@ fn player() -> Result<()> {
                     host.prepare_mount_tick();
                     turn.step("mounts");
                     host.panel_restart_tick();
+                    host.drain_outbox();
                     turn.step("panel restarts");
                     host.window_tick();
                     turn.step("window tick");
@@ -1114,6 +1122,7 @@ fn player() -> Result<()> {
         // interface's facts reaches the core first (plan step S2f(1)).
         host.borrow_mut().report_ui_facts();
         host.borrow_mut().shutdown_plugins(budget);
+        host.borrow_mut().drain_outbox();
         stop_handoffs();
         // Read now: only a loss that ended the loop restarts the player.
         if platform::window_device_lost() {

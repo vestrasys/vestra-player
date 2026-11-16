@@ -294,10 +294,13 @@ impl Host {
                     spawning.first.as_deref(),
                     spawning.kind.as_ref(),
                 );
+                // Each one after the interface carried out what the ones
+                // before it asked, as when each was handled alone, then the
+                // supervisor's jobs (plan step S2f(3), `outbox::Then`).
                 for event in spawning.events {
-                    self.handle(event);
+                    self.core.then(crate::host::outbox::Then::Event(event));
                 }
-                self.supervisor_run();
+                self.core.then(crate::host::outbox::Then::SupervisorRun);
             }
             Err(error) => {
                 self.core.supervisor.activation_end(Pid(owner));

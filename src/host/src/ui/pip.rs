@@ -211,9 +211,10 @@ impl<S: Surface> PictureInPicture<S> {
             surface.stop();
         }
     }
-    /// `owner` asked for picture-in-picture.
-    pub fn holds(&self, owner: u64) -> bool {
-        self.owner == Some(owner)
+    /// The plugin that asked for picture-in-picture, while its request is
+    /// in effect (`UiFacts::pip`, plan step S2f(3)).
+    pub fn holder(&self) -> Option<u64> {
+        self.owner
     }
     /// A plugin stopped: if its request is in effect, the window closes.
     pub fn remove_owner(&mut self, owner: u64) {

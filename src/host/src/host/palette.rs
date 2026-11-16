@@ -337,16 +337,6 @@ impl Host {
             }
         }
     }
-    /// The lead's row activated with `query` (also `VESTRA_TEST_EXECUTE`'s
-    /// `lead:<query>@<ms>`, headless): the row showed the holder's status
-    /// when it has one and nothing is typed.
-    pub(crate) fn lead_activated(&mut self, query: String, keep: bool) {
-        let Some(lead) = &self.core.lead else {
-            return;
-        };
-        let status = command_palette::lead_shows_status(lead.row.status.is_some(), &query);
-        self.lead_request(query, keep, status);
-    }
     /// The interface's part of a request to the lead's holder (plan step
     /// S2f(1)): the core sends it (`UiInput::Lead`, `lead_event`); a menu
     /// that is not kept closes after it.

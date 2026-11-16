@@ -10,8 +10,8 @@ use crate::{
     host::{
         Event, Host, Reply, RpcError,
         messages::{
-            ConfirmRequest, ConfirmSheet, DialogPurpose, DialogRequest, ReviewKind, ReviewRequest,
-            UiCommand, UiReport,
+            AskRequest, ConfirmRequest, ConfirmSheet, DialogPurpose, DialogRequest, ReviewKind,
+            ReviewRequest, UiCommand, UiInput, UiReport,
         },
         origins::{Origin, Route},
         string,
@@ -49,6 +49,19 @@ impl Capability for UiDialog {
     /// S2d(3)).
     fn revoke(&self, host: &mut Host, owner: u64, keep_recorded: bool) {
         host.ui_command(UiCommand::DropConfirm { owner });
+        // The interface drops the plugin's confirmation where the command
+        // is carried out, after this turn's handler; the core's copy of
+        // its facts drops it now, so what the core judges later in this
+        // turn (`Busy::Dialog` of another plugin) reads it gone, as when the
+        // command was carried out in place (plan step S2f(3)).
+        if host
+            .core
+            .ui_facts
+            .sheet
+            .is_some_and(|sheet| sheet.owner == owner && sheet.confirm)
+        {
+            host.core.ui_facts.sheet = None;
+        }
         if !keep_recorded {
             host.core.origins.forget(owner);
         }
@@ -77,7 +90,10 @@ fn ask(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<()
     }
     // The interface's facts from the core's copy (plan step S2f(1)).
     #[cfg(debug_assertions)]
-    host.check_ui_facts();
+    {
+        host.check_ui_facts();
+        host.core.check_settled(&[crate::host::outbox::Fact::Sheet]);
+    }
     // Refused while another waits; that one comes into view, so the wait
     // is never somewhere the user cannot see.
     if host.core.dialog_busy {
@@ -109,59 +125,25 @@ fn ask(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<()
         shown[field] = host.core.plugin_sentence(reply.owner, text, args)?.into();
     }
     let options = confirm::parse(&shown)?;
-    // The window where the user last acted for the caller (`host/origins`):
-    // a tool window owns a system dialog, the main window gets the sheet.
-    // Without an origin or a window of the caller's shown, the focus at
-    // arrival decides, as before (a tool window's: the owner
-    // `platform::confirm` gives its dialog).
-    // Systems without system alerts draw every one on the sheet.
-    let route = match host.confirm_route(reply.owner) {
-        _ if !platform::SYSTEM_ALERTS && host.core.ui_facts.shell.is_some() => Route::Sheet,
-        Route::Focus if host.core.ui_facts.shell.is_some() && !platform::tool_window_focused() => {
-            Route::Sheet
-        }
-        route => route,
-    };
-    let place = match route {
-        Route::Sheet => {
-            // The main window's: drawn in the player. The main window comes
-            // forward when the sheet first shows (`Host::present_review`:
-            // with the focus while the player is in the foreground, asking
-            // for attention otherwise); a tool window over the sheet's place
-            // stays above it (owned windows, the floating level on macOS):
-            // the sheet is only for requests made in the main window, where
-            // the user is looking. The request box only for a request typed
-            // in the palette's first row: the caller holds the lead, the
-            // user last acted for it there (not in its panel, say, while an
-            // older request's ticket is still live) and that request is live.
-            let now = host.core.now_ms();
-            let request = host
-                .core
-                .lead
-                .as_ref()
-                .filter(|lead| lead.owner == reply.owner)
-                .filter(|_| host.core.origins.get(reply.owner) == Some(&Origin::Lead))
-                .and_then(|_| host.core.command_runs.live_request(reply.owner, now));
-            host.ui_command(UiCommand::Review(ReviewRequest {
-                reply: reply.clone(),
-                kind: ReviewKind::Confirm(ConfirmSheet { options, request }),
-            }));
-            return Ok(());
-        }
-        Route::Owned(place) => Some(place),
-        Route::Focus => None,
-    };
-    // A system dialog. Busy before it shows: macOS without a window runs
-    // it modally (`Host::confirm_command`).
-    host.core.dialog_busy = true;
-    host.core.confirm_open = true;
-    #[cfg(feature = "producer-audio")]
-    host.core
-        .physical_revoke(crate::playback::producer_input::RevokeReason::Dialog);
-    host.ui_command(UiCommand::Confirm(ConfirmRequest {
+    // The request box, should the sheet ask it: only for a request typed in
+    // the palette's first row: the caller holds the lead, the user last
+    // acted for it there (not in its panel, say, while an older request's
+    // ticket is still live) and that request is live. Reads nothing of the
+    // interface, so the core takes it whichever window the dialog goes to.
+    let now = host.core.now_ms();
+    let request = host
+        .core
+        .lead
+        .as_ref()
+        .filter(|lead| lead.owner == reply.owner)
+        .filter(|_| host.core.origins.get(reply.owner) == Some(&Origin::Lead))
+        .and_then(|_| host.core.command_runs.live_request(reply.owner, now));
+    // Where it shows is the interface's choice, from its live windows and
+    // focus (`Host::ask_command`, plan step S2f(3)).
+    host.ui_command(UiCommand::Ask(AskRequest {
         reply: reply.clone(),
         options,
-        place,
+        request,
     }));
     Ok(())
 }
@@ -214,17 +196,76 @@ fn open(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<(
     host.core
         .physical_revoke(crate::playback::producer_input::RevokeReason::Dialog);
     // Owned like a confirmation: the tool window the user acted in, else
-    // the main window (`origins::dialog_place`).
-    let place = host.dialog_place(reply.owner);
-    host.ui_command(UiCommand::Dialog(DialogRequest {
+    // the main window, as the interface chooses (`origins::dialog_place`;
+    // `UiCommand::OpenDialog`, plan step S2f(3)).
+    host.ui_command(UiCommand::OpenDialog {
         reply: reply.clone(),
         purpose: DialogPurpose::Open(json!({"kind":kind,"title":title,"fileName":name})),
-        place,
-    }));
+    });
     Ok(())
 }
 
 impl Host {
+    /// The interface's side of `UiCommand::Ask` (plan step S2f(3)): where a
+    /// `dialogs.confirm` shows. The window where the user last acted for
+    /// the caller (`host/origins`): a tool window owns a system dialog, the
+    /// main window gets the sheet. Without an origin or a window of the
+    /// caller's shown, the focus at arrival decides, as before (a tool
+    /// window's: the owner `platform::confirm` gives its dialog). Systems
+    /// without system alerts draw every one on the sheet.
+    pub(crate) fn ask_command(&mut self, ask: AskRequest) {
+        let AskRequest {
+            reply,
+            options,
+            request,
+        } = ask;
+        let route = match self.confirm_route(reply.owner) {
+            _ if !platform::SYSTEM_ALERTS && self.shell.is_some() => Route::Sheet,
+            Route::Focus if self.shell.is_some() && !platform::tool_window_focused() => {
+                Route::Sheet
+            }
+            route => route,
+        };
+        let place = match route {
+            Route::Sheet => {
+                // The main window's: drawn in the player. The main window
+                // comes forward when the sheet first shows
+                // (`Host::present_review`: with the focus while the player
+                // is in the foreground, asking for attention otherwise); a
+                // tool window over the sheet's place stays above it (owned
+                // windows, the floating level on macOS): the sheet is only
+                // for requests made in the main window, where the user is
+                // looking.
+                self.apply_ui_command(UiCommand::Review(ReviewRequest {
+                    reply,
+                    kind: ReviewKind::Confirm(ConfirmSheet { options, request }),
+                }));
+                return;
+            }
+            Route::Owned(place) => Some(place),
+            Route::Focus => None,
+        };
+        // A system dialog. Busy before it shows (the core's flags, and the
+        // physical input revoked): macOS without a window runs it modally
+        // (`Host::confirm_command`).
+        self.ui_report(UiReport::Input(UiInput::SystemConfirm));
+        self.apply_ui_command(UiCommand::Confirm(ConfirmRequest {
+            reply,
+            options,
+            place,
+        }));
+    }
+    /// The interface's side of `UiCommand::OpenDialog` (plan step S2f(3)):
+    /// the picker is owned like a confirmation (`origins::dialog_place`),
+    /// then carried out as `UiCommand::Dialog`.
+    pub(crate) fn open_dialog_command(&mut self, reply: Reply, purpose: DialogPurpose) {
+        let place = self.dialog_place(reply.owner);
+        self.apply_ui_command(UiCommand::Dialog(DialogRequest {
+            reply,
+            purpose,
+            place,
+        }));
+    }
     /// The interface's side of `UiCommand::Dialog` (plan step S2c(5)):
     /// RFD creates the native operation on this Slint main thread; only
     /// awaiting its completion belongs to a worker, which sends the choice

@@ -18,7 +18,13 @@ impl Host {
                     unit, kind, result, ..
                 } => self.core.job_finished(unit, &kind, result),
                 Action::RemoveData { unit } => self.core.remove_unit_data(unit),
-                Action::QueryResources { pid, .. } => self.query_resources(pid.0),
+                Action::QueryResources { pid, .. } => {
+                    // A stop earlier in this batch asked the interface to
+                    // drop its panels: carried out first, so the busy check
+                    // reads the columns as they are now (plan step S2f(3)).
+                    self.drain_outbox();
+                    self.query_resources(pid.0);
+                }
                 Action::Checkpoint {
                     unit,
                     pid,

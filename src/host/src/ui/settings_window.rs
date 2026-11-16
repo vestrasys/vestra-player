@@ -669,9 +669,10 @@ impl Host {
                 if let Some(before) = self.core.settings.reregister(&page, sent_page(params)) {
                     // The same source: an open window keeps its component
                     // and its native window; only what changed is written.
-                    // Delivered where today's code wrote it, before the
-                    // reply: what the window reports to the plugin (a value
-                    // that no longer converts) precedes the reply (R6).
+                    // What the window reports to the plugin (a value that
+                    // no longer converts) precedes the refused values'
+                    // lines and the reply (R6): those ride behind the
+                    // command (plan step S2f(3), `outbox::Then::Registered`).
                     let page = Page {
                         serial: before.serial,
                         ..page
@@ -680,8 +681,11 @@ impl Host {
                         before: Box::new(before),
                         page: Box::new(page),
                     }));
-                    self.report_refused(owner, refused);
-                    return Ok(Some(Value::Null));
+                    self.core.then(crate::host::outbox::Then::Registered {
+                        reply: reply.clone(),
+                        refused,
+                    });
+                    return Ok(None);
                 }
                 // Compile the page alone, so a broken page fails its own
                 // registration instead of the shared window: on the

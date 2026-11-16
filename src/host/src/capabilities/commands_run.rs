@@ -20,7 +20,7 @@ use crate::{
     bindings,
     host::{
         Event, Host, Reply, RpcError,
-        messages::{ReviewKind, ReviewRequest, RunSheet, UiCommand},
+        messages::{LeadOp, ReviewKind, ReviewRequest, RunSheet, UiCommand},
         palette::PALETTE,
         review_sheet, string,
     },
@@ -486,7 +486,8 @@ fn trust_plugins(host: &mut Host, caller: u64, plugins: &[String]) {
 pub(crate) fn ask_again(host: &mut Host) {
     // A sheet open now does not trust anything either.
     host.core.command_runs.forget_remembered(None);
-    host.review_offer_changed();
+    // The open sheet's offer is the interface's (plan step S2f(3)).
+    host.ui_command(UiCommand::ReviewOffer);
     if host.core.ui_state.state.clear_trust() {
         // Written now, not a second later: a crash right after must not
         // bring the trust back.
@@ -502,7 +503,8 @@ pub(crate) fn forget_trust(host: &mut Host, id: &str) {
     // Nor does a sheet opened before (it would trust the new source).
     host.core.command_runs.forget_remembered(Some(id));
     // Its checkbox no longer names it (and goes when it named only it).
-    host.review_offer_changed();
+    // The open sheet's offer is the interface's (plan step S2f(3)).
+    host.ui_command(UiCommand::ReviewOffer);
     if host.core.ui_state.state.forget_trust(id) {
         host.core.ui_state.flush();
     }
@@ -692,7 +694,12 @@ fn perform(
     ));
     if holds_lead {
         let progress = step.map_or(1., |(step, of)| step as f32 / of.max(1) as f32);
-        host.lead_step(ticket, &line, progress);
+        // The strip is the interface's (plan step S2f(3)).
+        host.ui_command(UiCommand::Lead(LeadOp::Step {
+            ticket: ticket.to_owned(),
+            line,
+            progress,
+        }));
     } else {
         host.show_osd(&line);
     }
@@ -742,7 +749,10 @@ fn run(host: &mut Host, reply: &Reply, params: &Value) -> Handled {
     let plan_asks = steps.iter().any(Judged::dangerous);
     let now = host.core.now_ms();
     #[cfg(debug_assertions)]
-    host.check_ui_facts();
+    {
+        host.check_ui_facts();
+        host.core.check_settled(&[crate::host::outbox::Fact::Sheet]);
+    }
     // A confirmation on the sheet (`dialogs.confirm`, H5): one sheet at a
     // time, as `admit` keeps it among runs; a dead ticket is refused as such.
     if host.core.confirm_waiting()
@@ -775,7 +785,11 @@ fn run(host: &mut Host, reply: &Reply, params: &Value) -> Handled {
         // Nothing asks, or a step of the approved plan (used up now): no
         // sheet, and no new plan is kept.
         perform(host, reply.owner, &ticket, &item, step)?;
-        return Ok(Some(json!({"ran": true})));
+        // After the lines the run's interface part writes (a column
+        // toggle's window tick), as before (plan step S2f(3),
+        // `outbox::Then::Respond`).
+        host.respond_in_order(reply.clone(), Ok(json!({"ran": true})));
+        return Ok(None);
     }
     let query = host
         .core
@@ -916,7 +930,9 @@ pub(crate) fn answered(host: &mut Host, reply: Reply, yes: bool, remember: bool)
             .and_then(|item| perform(host, reply.owner, &run.ticket, &item, run.step))
             .map(|()| json!({"ran": true}))
     };
-    host.respond(reply, result);
+    // After the lines the run's interface part writes, as at once (plan
+    // step S2f(3)).
+    host.respond_in_order(reply, result);
 }
 
 impl Capability for CommandsRun {

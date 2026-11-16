@@ -1619,7 +1619,8 @@ impl Host {
         }
         let builtins = self.core.builtins_to_load();
         self.core.supervisor.set_builtins_to_load(builtins);
-        if self.frame_log.is_some() {
+        // The core reads the switch itself (plan step S2f(3)).
+        if crate::playback::render_target::FrameLog::enabled() {
             diag!(
                 "vestra packages: {started} started in {:.1} ms, {} to go",
                 began.elapsed().as_secs_f64() * 1000.,

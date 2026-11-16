@@ -176,6 +176,24 @@ pub(crate) enum UiCommand {
     /// `SourceLocated`; plan step S2f(1), group B): it counts as activity
     /// for the panel policy (the pointer, the popped-out columns).
     Activity,
+    /// `dialogs.confirm` as the core admitted it (row 48; plan step
+    /// S2f(3)): the interface chooses where it shows from its live windows
+    /// and focus (`origins::route`): the main window's sheet (carried out as
+    /// [`Self::Review`]) or a system confirmation (reported as
+    /// [`UiInput::SystemConfirm`], then carried out as [`Self::Confirm`]).
+    Ask(AskRequest),
+    /// `dialogs.open` (row 47) and `media.sources.locate` (row 65c) as the
+    /// core admitted them (plan step S2f(3)): the interface chooses the
+    /// window that owns the picker (`origins::dialog_place`) and carries it
+    /// out as [`Self::Dialog`].
+    OpenDialog {
+        reply: Reply,
+        purpose: DialogPurpose,
+    },
+    /// What the approval sheet offers to remember changed
+    /// (`CommandRuns::forget_remembered`: Ask Again, an uninstall; plan
+    /// step S2f(3)): an open sheet's checkbox is written again.
+    ReviewOffer,
 }
 
 /// See [`UiCommand::Panels`].
@@ -419,6 +437,14 @@ pub(crate) struct ConfirmRequest {
     pub(crate) place: Option<origins::Place>,
 }
 
+/// See [`UiCommand::Ask`]: the caller's texts, and its live ticket and
+/// request when it holds the lead (shown in the sheet's request box).
+pub(crate) struct AskRequest {
+    pub(crate) reply: Reply,
+    pub(crate) options: crate::ui::confirm::Options,
+    pub(crate) request: Option<(String, String)>,
+}
+
 pub(crate) enum ReviewKind {
     /// `dialogs.confirm` shown in the main window.
     Confirm(ConfirmSheet),
@@ -524,6 +550,18 @@ pub(crate) enum LeadOp {
     },
     /// `palette.lead.clear`, or its holder gone.
     Clear { owner: u64 },
+    /// `commands.run` ran a step of the holder's request (plan step
+    /// S2f(3)): the status strip shows `line` and `progress` for
+    /// `ticket` (`LeadStrip::step`).
+    Step {
+        ticket: String,
+        line: String,
+        progress: f32,
+    },
+    /// A request went to the holder (the `VESTRA_TEST_EXECUTE` hook's
+    /// `lead:`; plan step S2f(3)): a menu not `keep` open closes, as
+    /// after the palette's first row.
+    Sent { keep: bool },
 }
 
 /// UI → core: results of UI-bound requests, the UI's facts (snapshots) and
@@ -658,6 +696,27 @@ pub(crate) struct UiFacts {
     pub(crate) no_video: bool,
     /// The plugin whose OSD message has buttons now (`UiOsd::record`).
     pub(crate) osd_buttons: Option<u64>,
+    /// A menu is open (`ui.menu`'s `VESTRA_DEBUG_KEYS` line; plan step
+    /// S2f(3)).
+    pub(crate) menu_open: bool,
+    /// The panels the floating sidebar window shows (`ui.menu`: a panel
+    /// there is shown; plan step S2f(3)).
+    pub(crate) floating: Vec<u64>,
+    /// The plugins with a window of their own open (`UiWindow::record`;
+    /// plan step S2f(3)).
+    pub(crate) views: std::collections::BTreeSet<u64>,
+    /// Picture-in-picture: offered here (a native window and system
+    /// support), shown now, and the plugin whose request is in effect
+    /// (`window.state`, `WindowControl::record`; plan step S2f(3)).
+    pub(crate) pip: PipFact,
+}
+
+/// See [`UiFacts::pip`].
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct PipFact {
+    pub(crate) supported: bool,
+    pub(crate) active: bool,
+    pub(crate) holder: Option<u64>,
 }
 
 /// See [`UiFacts::sheet`].
@@ -738,6 +797,11 @@ pub(crate) enum UiInput {
     /// to be applied one at a time; the first stays in the batching
     /// window.
     MountRetry(Vec<MountChange>),
+    /// The interface shows a `dialogs.confirm` as a system confirmation
+    /// ([`UiCommand::Ask`], plan step S2f(3)): the core marks a native
+    /// dialog open (`dialog_busy`, `confirm_open`) and revokes the
+    /// physical input, before it shows.
+    SystemConfirm,
     /// A batch applied the change of panel `key`, which waited for its
     /// plugin's restart (`prepare_mount_tick`, plan step S2f(2)): the core
     /// ends the wait (`Host::panel_back`).
@@ -1186,6 +1250,22 @@ mod tests {
                 park: true,
             },
             UiCommand::RekeyOwner { from: 7, to: 8 },
+            UiCommand::Ask(AskRequest {
+                reply: reply(9),
+                options: options(),
+                request: None,
+            }),
+            UiCommand::OpenDialog {
+                reply: reply(9),
+                purpose: DialogPurpose::Open(json!({"kind":"openFile"})),
+            },
+            UiCommand::ReviewOffer,
+            UiCommand::Lead(LeadOp::Step {
+                ticket: "t".into(),
+                line: "1/2".into(),
+                progress: 0.5,
+            }),
+            UiCommand::Lead(LeadOp::Sent { keep: false }),
         ]);
         all
     }
@@ -1343,6 +1423,8 @@ mod tests {
             UiCommand::Lead(op) => match op {
                 LeadOp::Set { .. } => "Lead.Set",
                 LeadOp::Clear { .. } => "Lead.Clear",
+                LeadOp::Step { .. } => "Lead.Step",
+                LeadOp::Sent { .. } => "Lead.Sent",
             },
             UiCommand::OpenPalette => "OpenPalette",
             UiCommand::RevokeOwner { .. } => "RevokeOwner",
@@ -1360,6 +1442,9 @@ mod tests {
             UiCommand::RefreshMenu => "RefreshMenu",
             UiCommand::ShowWaiting => "ShowWaiting",
             UiCommand::Activity => "Activity",
+            UiCommand::Ask(_) => "Ask",
+            UiCommand::OpenDialog { .. } => "OpenDialog",
+            UiCommand::ReviewOffer => "ReviewOffer",
         }
     }
 
@@ -1515,7 +1600,7 @@ mod tests {
         let names: Vec<_> = every_command().iter().map(command_name).collect();
         let unique: std::collections::BTreeSet<_> = names.iter().collect();
         assert_eq!(unique.len(), names.len(), "{names:?}");
-        assert_eq!(names.len(), 6 + 36);
+        assert_eq!(names.len(), 6 + 41);
     }
 
     /// The variant plan step S2c(6) added, constructed and matched on its

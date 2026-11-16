@@ -367,7 +367,10 @@ impl Host {
     /// delivery (plan S3a).
     #[cfg(debug_assertions)]
     pub(crate) fn check_handed(&self) {
-        if self.handing_over {
+        // Nor while a cancel of the core's waits in its outbox (plan step
+        // S2f(3)): the core cleared its record, the window drops the
+        // change when the cancel is carried out.
+        if self.handing_over || self.core.cancel_pending() {
             return;
         }
         let window = self
@@ -443,8 +446,8 @@ impl Host {
             self.broadcast("window.state", facts);
         }
     }
-    /// A command of the core reaches the interface (rule R3), delivered in
-    /// place on this thread until plan step S3a. Plan step S2c(3):
+    /// A command of the core reaches the interface (rule R3), on this
+    /// thread until plan step S3a. Plan step S2c(3):
     /// `ui.setMount`, answered from the interface's `UiReport::Answered`
     /// (a mount change is taken by the batching window instead,
     /// `Core::mount_command`); S2c(4): `settings.*`
@@ -459,15 +462,15 @@ impl Host {
     /// `CursorAutoHide`, `WindowOp::OnTop`); S2d(1): the view requests
     /// (`View`, `Host::view_command`), the video area and
     /// picture-in-picture (`WindowOp::VideoArea`, `WindowOp::Pip`;
-    /// `video_area_command`, `pip_command`). The other commands follow in
-    /// later steps.
+    /// `video_area_command`, `pip_command`). Plan step S2f(3): the command
+    /// goes into the core's outbox (`Core::ui_command`) and is carried out
+    /// where the driver drains it (`Host::drain_outbox`: after the event,
+    /// report or step that issued it), followed by the interface's facts.
     pub(crate) fn ui_command(&mut self, command: UiCommand) {
-        self.apply_ui_command(command);
-        // Plan step S2f(1): what the command changed in the interface's
-        // facts reaches the core before the core reads them again.
-        self.report_ui_facts();
+        self.core.ui_command(command);
     }
-    fn apply_ui_command(&mut self, command: UiCommand) {
+    /// The interface carries out one command of the core.
+    pub(crate) fn apply_ui_command(&mut self, command: UiCommand) {
         match command {
             UiCommand::Snapshot(UiSnapshot::LastSource(source)) => self.source = source,
             UiCommand::Snapshot(UiSnapshot::InfoPanels(panels)) => {
@@ -544,6 +547,11 @@ impl Host {
             UiCommand::ShowWaiting => self.show_waiting_confirmation(),
             UiCommand::Activity => self.policy.activity(self.core.now_ms()),
             UiCommand::Window(WindowOp::ApplyOnTop) => self.apply_on_top(),
+            // Plan step S2f(3): the dialogs placed by the interface, and the
+            // sheet's offer written again.
+            UiCommand::Ask(ask) => self.ask_command(ask),
+            UiCommand::OpenDialog { reply, purpose } => self.open_dialog_command(reply, purpose),
+            UiCommand::ReviewOffer => self.review_offer_changed(),
             _ => unreachable!(
                 "not sent here: the tables go by `sync_tables`; `RekeyOwner` is not sent"
             ),

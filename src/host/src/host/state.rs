@@ -322,6 +322,8 @@ impl Host {
     /// with `appearance`, the file resolvers' extensions (`fileTypes`, from
     /// the `resolvers.fileTypes` event), `language` and `locale`.
     pub(crate) fn window_state(&self) -> Value {
+        #[cfg(debug_assertions)]
+        self.core.check_settled(&[super::outbox::Fact::Pip]);
         let facts = &self.core.window_facts;
         json!({"fullscreen":facts["fullscreen"] == true,
             "maximized":reported_maximized(facts),
@@ -332,10 +334,30 @@ impl Host {
             "language":self.core.language_preference().unwrap_or_else(|| i18n::SYSTEM.into()),
             "locale":i18n::locale()})
     }
-    /// `WindowState.pictureInPicture`: offered here, and the window showing.
+    /// `WindowState.pictureInPicture`: offered here, and the window showing,
+    /// as the interface reported them with its facts at this hand-over
+    /// (`UiFacts::pip`, plan step S2f(3)): the live state, not R13's
+    /// handoff of the flag (S3a).
     pub(crate) fn pip_state(&self) -> Value {
+        let pip = &self.core.ui_facts.pip;
+        json!({"supported":pip.supported,"active":pip.active})
+    }
+    /// `WindowState.pictureInPicture` as the interface has it now: what the
+    /// window tick measures into the window facts (the live state; the
+    /// core's `pip_state` reads its copy, plan step S2f(3)).
+    pub(crate) fn pip_shown(&self) -> Value {
+        let pip = self.pip_fact();
+        json!({"supported":pip.supported,"active":pip.active})
+    }
+    /// What the interface reports of picture-in-picture (`UiFacts::pip`):
+    /// offered here, the window showing, and whose request is in effect.
+    pub(crate) fn pip_fact(&self) -> super::messages::PipFact {
         let facts = self.pip_facts();
-        json!({"supported":facts.window && facts.supported,"active":self.pip.active()})
+        super::messages::PipFact {
+            supported: facts.window && facts.supported,
+            active: self.pip.active(),
+            holder: self.pip.holder(),
+        }
     }
     /// `window.setVideoArea { width, height }`: resize the window so the video
     /// column gets that size (bars added, fitted to the screen). Answered when
@@ -454,8 +476,11 @@ impl Host {
     /// it reads them (`apply_on_top`, `window_tick`), as the binding table
     /// and the command registry do (`sync_tables`).
     pub(crate) fn sync_window_settings(&mut self) {
+        // Taken by the interface, so carried out here, not through the
+        // core's outbox (plan step S2f(3)).
         for command in self.core.window_settings() {
-            self.ui_command(command);
+            self.apply_ui_command(command);
+            self.report_ui_facts();
         }
     }
     /// The core's info panels changed (`osd.panel`, a plugin stopped): the
@@ -476,7 +501,11 @@ impl Host {
     /// Current layout of both positions, or `pending` until the shell is measured.
     pub(crate) fn layout_state(&self) -> std::result::Result<Value, RpcError> {
         #[cfg(debug_assertions)]
-        self.check_ui_facts();
+        {
+            self.check_ui_facts();
+            self.core
+                .check_settled(&[super::outbox::Fact::NoVideo, super::outbox::Fact::Tabs]);
+        }
         if self.core.window_facts["shellGeneration"].as_u64()
             != Some(self.core.ui_facts.shell_generation)
         {

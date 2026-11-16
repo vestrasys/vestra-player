@@ -383,6 +383,18 @@ impl Host {
                 self.lead_changed(appeared);
             }
             LeadOp::Clear { .. } => self.lead_changed(true),
+            // Plan step S2f(3): a step of `commands.run` in the strip, and a
+            // menu not kept open after a request to the holder.
+            LeadOp::Step {
+                ticket,
+                line,
+                progress,
+            } => self.lead_step(&ticket, &line, progress),
+            LeadOp::Sent { keep } => {
+                if !keep && self.menu_open {
+                    self.close_menu();
+                }
+            }
         }
     }
 }

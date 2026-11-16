@@ -192,7 +192,21 @@ impl Host {
         for test in due {
             if test.lead {
                 diag!("lazy: VESTRA_TEST_EXECUTE lead:{}", test.command);
-                self.lead_activated(test.command, false);
+                // As the palette's first row activated with this query (the
+                // row shows the holder's status when it has one and nothing
+                // is typed): the core sends the request, then a menu not
+                // kept open closes on the interface's side (plan step
+                // S2f(3), `LeadOp::Sent`).
+                if let Some(lead) = &self.core.lead {
+                    let status = crate::ui::command_palette::lead_shows_status(
+                        lead.row.status.is_some(),
+                        &test.command,
+                    );
+                    self.lead_event(test.command, false, status);
+                    self.ui_command(crate::host::messages::UiCommand::Lead(
+                        crate::host::messages::LeadOp::Sent { keep: false },
+                    ));
+                }
                 continue;
             }
             let owner = self

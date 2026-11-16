@@ -20,6 +20,7 @@ mod menus;
 pub(crate) mod messages;
 mod mounts;
 pub(crate) mod origins;
+pub(crate) mod outbox;
 pub(crate) mod palette;
 pub(crate) mod panel_restart;
 mod rendering;
@@ -588,6 +589,10 @@ pub(crate) struct Core {
     /// last followed (`core_steps`; plan step S2e moved it from the
     /// windowed tick).
     pub(crate) binding_revision: u64,
+    /// What the core asks of the interface, in order, and the core work
+    /// kept behind it (plan step S2f(3), `outbox.rs`): drained by the
+    /// driver after every event, report and core step.
+    pub(crate) outbox: std::collections::VecDeque<outbox::Out>,
     /// On-demand start: the Host's side of standby, wake and
     /// classification (`supervisor/`, supervisor.md §4). Moved from `Host`
     /// in plan step S2c as its last field, so it drops after every other

@@ -232,8 +232,13 @@ impl Host {
         let panels = gone
             .iter()
             .filter_map(|key| self.core.mounts.get(key).map(|m| (*key, m.spec.slot)))
-            .collect();
-        self.ui_command(UiCommand::Panels(PanelsOp::Gone(panels)));
+            .collect::<Vec<_>>();
+        // None: nothing to tell (plan step S2f(3): an empty `Gone` would
+        // wait in the outbox for nothing and keep the core's copy of the
+        // columns marked unsettled).
+        if !panels.is_empty() {
+            self.ui_command(UiCommand::Panels(PanelsOp::Gone(panels)));
+        }
         self.ui_command(UiCommand::RevokeOwner { owner, park });
         if self.core.info_panels.remove(&owner).is_some() {
             self.info_panels_changed();

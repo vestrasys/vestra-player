@@ -815,7 +815,13 @@ pub struct FrameLog {
 }
 impl FrameLog {
     pub fn from_env() -> Option<Self> {
-        (std::env::var("VESTRA_FRAME_LOG").as_deref() == Ok("1")).then(Self::new)
+        Self::enabled().then(Self::new)
+    }
+    /// `VESTRA_FRAME_LOG=1` for this run (read once): what `from_env` gives
+    /// a log for, also for the core's own lines (plan step S2f(3)).
+    pub fn enabled() -> bool {
+        static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        *ON.get_or_init(|| std::env::var("VESTRA_FRAME_LOG").as_deref() == Ok("1"))
     }
     fn new() -> Self {
         Self {

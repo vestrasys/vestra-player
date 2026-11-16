@@ -427,6 +427,9 @@ impl Host {
                     if let Err(error) = self.run_core_action_with(action, None, step) {
                         diag!("pip: {action}: {}", error.message);
                     }
+                    // What the core's action asked of the interface (plan
+                    // step S2f(3)).
+                    self.drain_outbox();
                 }
             }
         }
