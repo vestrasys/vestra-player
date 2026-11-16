@@ -19,8 +19,10 @@
 //! [`UiReport::VideoArea`], [`WindowOp::Pip`]; S2d(2): [`UiReport::Batching`],
 //! [`UiCommand::CancelMount`], [`UiSnapshot::StartupSettled`]; S2d(3):
 //! [`UiCommand::RevokeOwner`], [`UiCommand::Panels`], [`UiCommand::DropConfirm`],
-//! [`SettingsOp::OwnerGone`], [`SettingsOp::Rekeyed`]), S3a moves the core to
-//! its own thread.
+//! [`SettingsOp::OwnerGone`], [`SettingsOp::Rekeyed`]; S2d(4): [`UiCommand::Osd`],
+//! [`UiSnapshot::Source`], [`UiCommand::PanelMenu`], [`WindowOp::Fullscreen`],
+//! [`WindowOp::Raise`], [`WindowOp::Quit`], [`UiCommand::OpenPalette`]), S3a
+//! moves the core to its own thread.
 //!
 //! Each variant names the rows of the design's method table (§5.1, "row
 //! 36") and the rules it serves. A variant is one of two kinds:

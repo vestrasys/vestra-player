@@ -5,7 +5,7 @@ use crate::{
     host::{
         Host, LayoutChange, MenuMode, Mount, MountChange, Origin, Reply, RpcError, debug_keys,
         layout_change,
-        messages::{LayoutOp, MountCancel, PanelsOp, SetMount, UiCommand, UiReport},
+        messages::{LayoutOp, MountCancel, PanelMenu, PanelsOp, SetMount, UiCommand, UiReport},
         mount_view, panel_key, panel_slot, policy_slot, refuse_initial, string,
     },
     i18n, process,
@@ -984,8 +984,35 @@ fn menu(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<V
             .set_property("menu-origin-y", y.into())
             .map_err(anyhow::Error::from)?;
     }
-    host.open_menu(generation, MenuMode::Panel(reply.owner, ids));
+    // The menu opens in the interface (`UiCommand::PanelMenu`, plan step
+    // S2d(4)); the refusals above and the origin's properties still read
+    // and write its windows in place (design §5.1 note 7: from S3a the
+    // core judges them from the facts and the shell's definition).
+    host.ui_command(UiCommand::PanelMenu(PanelMenu {
+        owner: reply.owner,
+        key,
+        ids,
+        params: params.clone(),
+    }));
     Ok(Value::Null)
+}
+
+impl Host {
+    /// The interface's side of `UiCommand::PanelMenu` (plan step S2d(4)):
+    /// the panel's menu opens in the window that shows the panel (the
+    /// floating sidebar's, else the main window's).
+    pub(crate) fn panel_menu(&mut self, menu: PanelMenu) {
+        let PanelMenu {
+            owner, key, ids, ..
+        } = menu;
+        let floating = self
+            .floating
+            .as_ref()
+            .filter(|f| panel_slot(key) == composition::Slot::Sidebar && f.owners.contains(&key))
+            .map(|f| f.generation);
+        let generation = floating.unwrap_or(self.shell_generation);
+        self.open_menu(generation, MenuMode::Panel(owner, ids));
+    }
 }
 
 impl Host {

@@ -253,8 +253,12 @@ impl Host {
                         ));
                     }
                     self.core.timeline_source(&previous, &data);
-                    self.backdrop_source();
-                    self.update_title();
+                    // What it shows is the core's to decide (plan step
+                    // S2d(4)): the interface shows it.
+                    let shown = self.core.source_display_next();
+                    self.ui_command(messages::UiCommand::Snapshot(messages::UiSnapshot::Source(
+                        shown,
+                    )));
                     self.core.core_action_states();
                     // The discrete source events this state adds, after it:
                     // a listener of both reads the state first.
