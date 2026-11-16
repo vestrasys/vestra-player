@@ -111,10 +111,8 @@ impl Capability for Commands {
                     .remove(reply.owner, id)
                     .map_err(|e| RpcError::new(e.code(), e.to_string()))?;
                 host.core.bindings_mut().remove(reply.owner, id);
-                if host.menu_open {
-                    let result = host.refresh_menu();
-                    host.report_menu(result);
-                }
+                // An open menu is the interface's (plan step S2f(1)).
+                host.ui_command(crate::host::messages::UiCommand::RefreshMenu);
                 Ok(Some(Value::Null))
             }
             _ => register_or_update(host, reply, method, params).map(Some),

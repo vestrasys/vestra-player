@@ -41,6 +41,15 @@ pub const SYSTEM_ALERTS: bool = true;
 
 // ------------------------------------------------------------------ windows
 
+/// The same windows as [`WINDOWS`], kept process-wide for [`displays`] alone
+/// (core thread plan S2f(1)): winit reaches the monitors through any
+/// window, and its monitor calls (`EnumDisplayMonitors`, `GetMonitorInfoW`,
+/// `EnumDisplaySettingsExW`, `GetDpiForMonitor`) work from any thread, so
+/// `app.system` reads the displays wherever it is answered. Written only
+/// by [`set_up`] on the UI thread, read only by [`displays`].
+static DISPLAY_WINDOWS: std::sync::Mutex<Vec<(i64, Weak<winit::window::Window>)>> =
+    std::sync::Mutex::new(Vec::new());
+
 thread_local! {
     /// Every window the host showed, newest last (UI thread only).
     static WINDOWS: RefCell<Vec<(i64, Weak<winit::window::Window>)>> = const { RefCell::new(Vec::new()) };
@@ -233,6 +242,11 @@ fn set_up(native: &Arc<winit::window::Window>) {
         list.retain(|(known, weak)| *known != id && weak.strong_count() > 0);
         list.push((id, Arc::downgrade(native)));
     });
+    let mut list = DISPLAY_WINDOWS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    list.retain(|(known, weak)| *known != id && weak.strong_count() > 0);
+    list.push((id, Arc::downgrade(native)));
 }
 
 // ------------------------------------------------------------ owned windows
@@ -1268,8 +1282,17 @@ pub fn os_facts() -> OsFacts {
 
 /// winit's monitors (seen from any host window), the primary one first.
 /// Names are the device names (`\\.\DISPLAY1`).
+/// Any thread (plan step S2f(1)): through the oldest live host window of
+/// [`DISPLAY_WINDOWS`], as [`live`] gives it on the UI thread.
 pub fn displays() -> Vec<Display> {
-    let Some((_, window)) = live().into_iter().next() else {
+    let first = {
+        let mut list = DISPLAY_WINDOWS
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        list.retain(|(_, weak)| weak.strong_count() > 0);
+        list.iter().find_map(|(_, weak)| weak.upgrade())
+    };
+    let Some(window) = first else {
         return Vec::new();
     };
     let primary = window.primary_monitor();

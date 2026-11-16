@@ -376,12 +376,14 @@ impl Host {
                 Asks::Confirm { .. } => true,
             })
     }
-    /// A confirmation waits on the sheet: as a native dialog open, its wait
-    /// keeps the plugins running (`Busy::Dialog`).
-    pub(crate) fn confirm_waiting(&self) -> bool {
-        self.review
-            .as_ref()
-            .is_some_and(|review| matches!(review.asks, Asks::Confirm { .. }))
+    /// The sheet as the core reads it (`UiFacts::sheet`, plan step
+    /// S2f(1)): its request, and whether it is a confirmation.
+    pub(crate) fn sheet_fact(&self) -> Option<messages::SheetFact> {
+        self.review.as_ref().map(|review| messages::SheetFact {
+            owner: review.reply.owner,
+            id: review.reply.id,
+            confirm: matches!(review.asks, Asks::Confirm { .. }),
+        })
     }
     /// `owner` stopped: its confirmation goes unanswered (a plan's goes
     /// with `CommandRuns::revoke`, at the next tick).

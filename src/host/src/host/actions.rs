@@ -440,8 +440,25 @@ impl Host {
         let owner = self.osd_actions.as_ref().map_or(0, |actions| actions.owner);
         self.hide_osd("action pressed");
         // The message is on the main window's video area.
-        self.act(owner, origins::Origin::Main);
-        if let Err(error) = self.execute_command(owner, &id) {
+        self.ui_report(messages::UiReport::Input(messages::UiInput::Command {
+            from: messages::CommandFrom::Osd,
+            owner,
+            id,
+            origin: Some(origins::Origin::Main),
+        }));
+    }
+    /// The core's part of a message's button (`UiInput::Command`, plan step
+    /// S2f(1)): the window it came from is recorded, the command runs.
+    pub(crate) fn osd_command_run(
+        &mut self,
+        owner: u64,
+        id: &str,
+        origin: Option<origins::Origin>,
+    ) {
+        if let Some(origin) = origin {
+            self.core.act(owner, origin);
+        }
+        if let Err(error) = self.execute_command(owner, id) {
             diag!("osd action {id}: {}", error.message);
         }
     }
@@ -491,10 +508,12 @@ impl Host {
     /// `fullscreen` toggles (in when windowed, out when fullscreen),
     /// `enter-fullscreen` enters, `exit-fullscreen` leaves. False without
     /// a window. The change goes as `WindowOp::Fullscreen` (plan step
-    /// S2d(4)); "a window exists" is still read from the interface in
-    /// place (S3a: from the window facts' shell generation).
+    /// S2d(4)); "a window exists" is the interface's fact (`UiFacts::shell`, plan
+    /// step S2f(1)).
     pub(crate) fn window_command(&mut self, id: &str) -> bool {
-        if self.shell.is_none() {
+        #[cfg(debug_assertions)]
+        self.check_ui_facts();
+        if self.core.ui_facts.shell.is_none() {
             return false;
         }
         let change = match id {

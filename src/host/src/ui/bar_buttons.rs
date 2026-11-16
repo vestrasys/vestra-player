@@ -19,6 +19,7 @@
 //! Nothing is left out silently, so the remaining log lines are debug
 //! (`VESTRA_DEBUG_BAR=1`).
 #![forbid(unsafe_code)]
+use crate::host::messages::{CommandFrom, UiInput, UiReport};
 use crate::host::*;
 use crate::ui::{composition, window_state};
 use crate::{bindings, commands, i18n, input_trace};
@@ -262,11 +263,14 @@ impl Host {
 
     /// Sidebar's and Adjustments and Effects' states: available while a panel is in
     /// their column, checked while it is wanted shown.
+    /// The core writes them into the registry (plan step S2f(1),
+    /// `UiInput::ColumnCommands`).
     fn sidebar_command_state(&mut self) {
-        for (id, slot) in [
+        let states = [
             (SIDEBAR, window_state::Slot::Sidebar),
             (ADJUST, window_state::Slot::Adjust),
-        ] {
+        ]
+        .map(|(id, slot)| {
             let preferred = self
                 .policy
                 .column_state(slot)
@@ -280,19 +284,9 @@ impl Host {
                     _ => i18n::tr("No panel is in the adjust column"),
                 }),
             };
-            if self
-                .core
-                .commands
-                .get(bindings::HOST, id)
-                .is_some_and(|entry| entry.state != state)
-            {
-                self.core.host_revision += 1;
-                let _ =
-                    self.core
-                        .commands
-                        .update(bindings::HOST, id, self.core.host_revision, state);
-            }
-        }
+            (id, state)
+        });
+        self.ui_report(UiReport::Input(UiInput::ColumnCommands(states)));
     }
 
     /// The plugins' cells (the strip's, then the ones past eight), and the
@@ -652,9 +646,50 @@ impl Host {
         };
         input_trace::mark(&format!("host loop: bar button → {owner}/{id}"));
         self.policy.activity(self.core.now_ms());
-        self.acted_in(owner, generation);
-        if let Err(error) = self.execute_command(owner, &id) {
+        let origin = self.origin_of(generation);
+        self.ui_report(UiReport::Input(UiInput::Command {
+            from: CommandFrom::Bar,
+            owner,
+            id,
+            origin,
+        }));
+    }
+    /// The core's part of a click on a cell (`UiInput::Command`, plan step
+    /// S2f(1)): the window it came from is recorded, the command runs.
+    pub(crate) fn bar_command(
+        &mut self,
+        owner: u64,
+        id: &str,
+        origin: Option<crate::host::origins::Origin>,
+    ) {
+        if let Some(origin) = origin {
+            self.core.act(owner, origin);
+        }
+        if let Err(error) = self.execute_command(owner, id) {
             diag!("bar button execute: {error:?}");
+        }
+    }
+}
+
+impl Core {
+    /// The bottom bar's column toggles' states (`UiInput::ColumnCommands`):
+    /// each one that changed is written into the registry with a new host
+    /// revision.
+    pub(crate) fn column_command_states(
+        &mut self,
+        states: [(&'static str, commands::CommandState); 2],
+    ) {
+        for (id, state) in states {
+            if self
+                .commands
+                .get(bindings::HOST, id)
+                .is_some_and(|entry| entry.state != state)
+            {
+                self.host_revision += 1;
+                let _ = self
+                    .commands
+                    .update(bindings::HOST, id, self.host_revision, state);
+            }
         }
     }
 }

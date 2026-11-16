@@ -411,6 +411,9 @@ pub(crate) struct Core {
     pub(crate) window_facts: Value,
     /// The `seq` of the facts last applied (`None`: none yet).
     pub(crate) window_facts_seq: Option<u64>,
+    /// The interface's facts as last reported (`UiReport::UiFacts`; design
+    /// §5.3 group A, plan step S2f(1)).
+    pub(crate) ui_facts: messages::UiFacts,
     /// Mount requests of other plugins waiting for the built-ins to start: reply, method, params.
     pub(crate) held_mounts: slot_claims::Gate<(Reply, String, Value)>,
     /// The mount registry (K6; plan step S2c(3)): every plugin's panel by
@@ -692,6 +695,9 @@ pub(crate) struct Host {
     pub(crate) source: Arc<Value>,
     pub(crate) osd_until: Option<u64>,
     pub(crate) osd_actions: Option<OsdActions>,
+    /// The facts last reported to the core (`UiReport::UiFacts`, plan step
+    /// S2f(1)): a value is sent only when it differs.
+    pub(crate) ui_facts_sent: Option<messages::UiFacts>,
     /// When the message on screen showed (`osd_hold`).
     pub(crate) osd_shown_at: u64,
     /// When the hidden message's button titles are cleared (`OSD_CLEAR_MS`).

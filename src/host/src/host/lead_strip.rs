@@ -310,7 +310,7 @@ impl Host {
         match action {
             "stop" if !self.lead_strip.shown.kind.ended() => {
                 input_trace::follow("lead strip: stop");
-                self.lead_event(String::new(), false, true);
+                self.lead_request(String::new(), false, true);
             }
             "open" => self.open_palette(),
             "dismiss" => {

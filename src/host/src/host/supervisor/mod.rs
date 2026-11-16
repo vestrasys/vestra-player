@@ -1167,8 +1167,11 @@ impl Host {
         {
             busy.insert(Busy::Activation);
         }
+        // The interface's facts from the core's copy (plan step S2f(1)).
+        #[cfg(debug_assertions)]
+        self.check_ui_facts();
         // A confirmation on the sheet counts as a dialog open (H5).
-        if self.core.dialog_busy || self.confirm_waiting() {
+        if self.core.dialog_busy || self.core.confirm_waiting() {
             busy.insert(Busy::Dialog);
         }
         if self.core.package_rpc_busy(&id) {
@@ -1180,7 +1183,7 @@ impl Host {
         if self
             .core
             .settings
-            .busy(owner, self.settings.window().is_some())
+            .busy(owner, self.core.ui_facts.options_open)
         {
             busy.insert(Busy::Settings);
         }
@@ -1203,16 +1206,15 @@ impl Host {
             .any(|m| {
                 crate::host::policy_slot(m.spec.slot).is_some_and(|column| {
                     let open = column != crate::ui::window_state::Slot::Adjust
-                        || self
-                            .policy
-                            .column_state(column)
-                            .is_some_and(|(preferred, _)| preferred);
+                        || self.core.ui_facts.columns
+                            [crate::ui::sidebar_tabs::Column::Adjust.index()]
+                        .wanted;
                     // None while the column waits for its remembered tab.
                     open && crate::ui::sidebar_tabs::Column::of(m.spec.slot).is_some_and(|tabs| {
                         crate::ui::sidebar_tabs::shown_tab(
                             m.spec.slot,
                             m.spec.owner,
-                            self.current_tab(tabs),
+                            self.core.current_tab(tabs),
                         )
                     })
                 })

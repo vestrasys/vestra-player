@@ -38,8 +38,10 @@ impl Capability for UiOsd {
         if host.core.info_panels.contains_key(&owner) {
             return Recorded::Live("an OSD panel");
         }
+        #[cfg(debug_assertions)]
+        host.check_ui_facts();
         // Its buttons run its commands while the message shows.
-        if host.osd_actions.as_ref().is_some_and(|a| a.owner == owner) {
+        if host.core.ui_facts.osd_buttons == Some(owner) {
             return Recorded::Live("an OSD message with actions");
         }
         Recorded::Nothing

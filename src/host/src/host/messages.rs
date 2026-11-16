@@ -61,12 +61,13 @@
 //! run on their own threads (`DialogDone`, `ConfirmDone`, `SourceLocated`)
 //! reach the core as today's [`Event`]s, not through the UI. The UI's own
 //! events (keys, clicks, callbacks: the 26 UI-originated [`Event`]
-//! variants) reach the core inside [`UiReport::Event`], as the same
-//! values. Not all of them are core work: some only change the interface
-//! (`PipReturn` restores the window from picture-in-picture,
-//! `SidebarResized` writes the policy's width and the interface state;
-//! host/handle.rs:294-311). Which ones the UI handles itself and which it
-//! forwards is decided per event in S2c/S2d; this type only carries them.
+//! variants) are handled by the interface (`Host::ui_event`, plan step
+//! S2f(1)); where the core has work, the interface reports it: the event
+//! itself inside [`UiReport::Event`], or what it derived from it (the
+//! command and its window, the lead request) as [`UiReport::Input`]. Some
+//! are the interface's alone (`PipReturn` restores the window from
+//! picture-in-picture, `SidebarResized` writes the policy's width and the
+//! interface state; `InjectKey` and `ModifiersReleased` never leave it).
 
 // S2a: the message types exist before most callers (plan S2c/S2d); the
 // tests construct and match every variant but read no field.
@@ -162,6 +163,19 @@ pub(crate) enum UiCommand {
     /// interface drops it if its window holds it and reports
     /// [`UiReport::Batching`]; the core has cleared its record already.
     CancelMount(MountCancel),
+    /// The command registry or the binding table changed under an open
+    /// menu (`commands.unregister`, row 33; `bindings.set` / `.reset`, rows
+    /// 76, 77; plan step S2f(1), design §5.3 group B): an open menu is
+    /// written again from the interface's copies of the tables.
+    RefreshMenu,
+    /// A confirmation was refused `busy` because another waits (rows 48,
+    /// 96; plan step S2f(1), group B): the one waiting comes into view
+    /// (the sheet, or the system dialog).
+    ShowWaiting,
+    /// The user answered a native dialog (`ConfirmDone`, `DialogDone`,
+    /// `SourceLocated`; plan step S2f(1), group B): it counts as activity
+    /// for the panel policy (the pointer, the popped-out columns).
+    Activity,
 }
 
 /// See [`UiCommand::Panels`].
@@ -334,6 +348,10 @@ pub(crate) enum WindowOp {
     /// UI keeps it and applies it at `apply_on_top`, right after the
     /// request and at every window tick.
     OnTop(bool),
+    /// `window.setAlwaysOnTop` (row 72) was taken: the interface applies
+    /// the value in effect now (`apply_on_top`), as the core did in place
+    /// before plan step S2f(1) (design §5.3, group B).
+    ApplyOnTop,
     /// The shell window in or out of fullscreen: `host.run fullscreen`
     /// (row 34, note 4) and the host's `fullscreen`, `enter-fullscreen`,
     /// `exit-fullscreen` commands (`window_command`).
@@ -578,8 +596,160 @@ pub(crate) enum UiReport {
     /// delivers it from its registry (`drops.panel` to a listening panel,
     /// else `drops.drop` to the providers).
     Drop(FileDrop),
-    /// One of the 26 UI-originated events, unchanged.
+    /// One of the 26 UI-originated events, unchanged, whose core part needs
+    /// nothing but the event (plan step S2f(1)): `PhysicalInput`,
+    /// `MainClosed`, `UiCallback` (the core writes `ui.callback`),
+    /// `ViewClosed` (the core writes `ui.closed`, sent only for a view the
+    /// interface had open), `CommandRunAnswered`. The interface sends it at
+    /// the point of its own part where the core's work ran before.
     Event(UiEvent),
+    /// What the interface derived from a UI event for the core's part
+    /// (plan step S2f(1)): a command the user ran, with the window it came
+    /// from; a host command of the title strip; a request to the palette
+    /// lead's holder; a parked plugin's page or tab shown; the shown tab's
+    /// work. Ordered.
+    Input(UiInput),
+    /// The interface's facts core code reads (design §5.3, group A; plan
+    /// step S2f(1)): last value wins.
+    UiFacts(Box<UiFacts>),
+}
+
+/// The interface's own state that core code reads (design §5.3, group A;
+/// plan step S2f(1)), whole: reported as [`UiReport::UiFacts`] whenever it
+/// differs from the value sent last, checked at every point where the
+/// interface hands the turn to the core (an event of the core, a report,
+/// the end of a command, the core's steps), so the core's copy is the
+/// interface's whenever core code runs. Values the core can derive are not
+/// here: the core judges them from these and its own data (whether a
+/// plan's sheet still waits, a column's current tab).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(crate) struct UiFacts {
+    /// The approval sheet: its request and whether it is a
+    /// `dialogs.confirm` (else a `commands.run` plan) (`host_busy`'s
+    /// `Busy::Dialog`, the `busy` refusals of rows 48 and 96).
+    pub(crate) sheet: Option<SheetFact>,
+    /// The options window is open (`Busy::Settings`).
+    pub(crate) options_open: bool,
+    /// The sidebar's and the adjust column's (in `Column::ALL` order)
+    /// policy facts for `Busy::ShownTab`.
+    pub(crate) columns: [ColumnFacts; 2],
+    /// The shell's generation while a shell exists (`window_command`,
+    /// `diagnostics_tick`, `dialogs.confirm`'s route).
+    pub(crate) shell: Option<u64>,
+    /// The shell generation counter (`layout.state` is pending until the
+    /// window facts show it).
+    pub(crate) shell_generation: u64,
+    /// What the video area shows nothing (`layout.state`'s backdrop
+    /// `effective`).
+    pub(crate) no_video: bool,
+    /// The plugin whose OSD message has buttons now (`UiOsd::record`).
+    pub(crate) osd_buttons: Option<u64>,
+}
+
+/// See [`UiFacts::sheet`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct SheetFact {
+    pub(crate) owner: u64,
+    pub(crate) id: u64,
+    pub(crate) confirm: bool,
+}
+
+/// See [`UiFacts::columns`]: the column's current tab in the panel policy,
+/// whether the column is wanted shown, and its remembered tab (the
+/// interface state's, by manifest).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct ColumnFacts {
+    pub(crate) active: Option<u64>,
+    pub(crate) wanted: bool,
+    pub(crate) remembered: Option<String>,
+}
+
+/// See [`UiReport::Input`].
+pub(crate) enum UiInput {
+    /// The user ran command `id` of `owner` from `from`. `origin`: the
+    /// window it came from (`origins`), as the interface knows its windows
+    /// (`None`: no live window of that generation, nothing recorded). The
+    /// core records it and executes the command; a key whose command is
+    /// disabled with a reason shows the reason instead.
+    Command {
+        from: CommandFrom,
+        owner: u64,
+        id: String,
+        origin: Option<origins::Origin>,
+    },
+    /// One of the host's own commands from the interface's own buttons
+    /// (the fullscreen title strip: `exit-fullscreen`, `quit`).
+    HostCommand(&'static str),
+    /// The palette's first row or the status strip's Stop: the
+    /// `palette.lead` event to the lead's holder (`Host::lead_event`): the
+    /// core records the origin, mints the ticket and writes the line.
+    Lead {
+        query: String,
+        keep: bool,
+        status: bool,
+    },
+    /// The user reset the main menu (`MenuAction::Reset`): the core
+    /// revokes the physical input (`producer-audio`).
+    MenuReset,
+    /// A settings page of `owner` became the shown one (`settings_select`):
+    /// a parked plugin is woken (`Host::page_shown`).
+    PageShown(u64),
+    /// A column's tab of `owner`, a plugin in standby, became the current
+    /// one (`tab_demand`): it is woken (`Host::panel_shown`).
+    TabShown(u64),
+    /// The current tab's running plugin `owner` (every window tick,
+    /// `tab_demand`): its declared work `Busy::ShownTab` (`Host::tab_work`).
+    TabWork(u64),
+    /// The interface's work failed or a panel called back, for a plugin
+    /// (design §5.3, group E): the core writes the line (R6: one writer)
+    /// where the interface wrote it before.
+    Line(PluginLine),
+    /// The window tick saw the shell in or out of fullscreen (group E): the
+    /// core keeps the host's fullscreen commands' states
+    /// (`Core::host_command_states`) and the backdrop's cover art
+    /// (`Core::backdrop_cover_art`), at the tick's point where the
+    /// interface called them before.
+    WindowTick { fullscreen: bool },
+    /// The bottom bar's column toggles (`sidebar`, `adjust`): their states
+    /// from the panel policy (group E); the core writes the registry
+    /// (`Core::column_command_states`).
+    ColumnCommands([(&'static str, commands::CommandState); 2]),
+    /// The interface's mount step begins (`prepare_mount_tick`, group E):
+    /// the core first answers the requests it held while the built-ins
+    /// started (`Host::release_held_mounts`).
+    MountTick,
+    /// A batch of mount changes failed (`prepare_mount_tick`, group E):
+    /// its changes after the first, in batch order and marked announced,
+    /// go back to the front of the core's queue (`Core::mount_queue`),
+    /// to be applied one at a time; the first stays in the batching
+    /// window.
+    MountRetry(Vec<MountChange>),
+}
+
+/// See [`UiInput::Line`]: what the interface tells, and to whom.
+pub(crate) enum PluginLine {
+    /// `ui.error` to `owner` with `data` (`{code, message}`, a slot).
+    UiError { owner: u64, data: Value },
+    /// `ui.callback` of a docked panel to `owner` with `data`.
+    UiCallback { owner: u64, data: Value },
+    /// `host.error` to every plugin with `data` (`{code, message}`).
+    HostError(Value),
+}
+
+/// Where the user ran a command ([`UiInput::Command`]): each path keeps its
+/// own log line on a failure.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum CommandFrom {
+    /// The main or a panel's menu (`MenuAction::Invoke`).
+    Menu,
+    /// A key binding (`Event::Binding`).
+    Key,
+    /// A bottom-bar cell (`Event::BarButton`).
+    Bar,
+    /// An OSD message's button (`Event::OsdAction`).
+    Osd,
+    /// A palette row.
+    Palette,
 }
 
 /// What the UI knows of its windows, whole (R9). The R13 handoff data of
@@ -749,6 +919,7 @@ impl UiReport {
                 | (Self::Remembered { .. }, Self::Remembered { .. })
                 | (Self::VideoArea { .. }, Self::VideoArea { .. })
                 | (Self::Batching(_), Self::Batching(_))
+                | (Self::UiFacts(_), Self::UiFacts(_))
         )
     }
 }
@@ -761,6 +932,8 @@ const _: () = {
     send::<UiSnapshot>();
     send::<UiReport>();
     send::<UiEvent>();
+    send::<UiInput>();
+    send::<UiFacts>();
     send::<WindowFacts>();
     send::<MountApplied>();
     send::<FileDrop>();
@@ -1120,6 +1293,7 @@ mod tests {
                 WindowOp::VideoArea { .. } => "Window.VideoArea",
                 WindowOp::Pip { .. } => "Window.Pip",
                 WindowOp::OnTop(_) => "Window.OnTop",
+                WindowOp::ApplyOnTop => "Window.ApplyOnTop",
                 WindowOp::Fullscreen(FullscreenChange::Enter) => "Window.Fullscreen.Enter",
                 WindowOp::Fullscreen(FullscreenChange::Exit) => "Window.Fullscreen.Exit",
                 WindowOp::Fullscreen(FullscreenChange::Toggle) => "Window.Fullscreen.Toggle",
@@ -1163,6 +1337,38 @@ mod tests {
                 PanelsOp::Rekeyed { .. } => "Panels.Rekeyed",
             },
             UiCommand::DropConfirm { .. } => "DropConfirm",
+            UiCommand::RefreshMenu => "RefreshMenu",
+            UiCommand::ShowWaiting => "ShowWaiting",
+            UiCommand::Activity => "Activity",
+        }
+    }
+
+    /// What plan step S2f(1) added (design §5.3, group B): one-way
+    /// commands, ordered, never collapsed.
+    #[test]
+    fn the_group_b_commands_are_ordered() {
+        let added = || {
+            vec![
+                UiCommand::RefreshMenu,
+                UiCommand::ShowWaiting,
+                UiCommand::Activity,
+                UiCommand::Window(WindowOp::ApplyOnTop),
+            ]
+        };
+        let names: Vec<_> = added().iter().map(command_name).collect();
+        assert_eq!(
+            names,
+            [
+                "RefreshMenu",
+                "ShowWaiting",
+                "Activity",
+                "Window.ApplyOnTop"
+            ]
+        );
+        for command in added() {
+            for other in added().iter().chain(every_command().iter()) {
+                assert!(!command.replaces(other) && !other.replaces(&command));
+            }
         }
     }
 
@@ -1181,6 +1387,82 @@ mod tests {
             UiReport::VideoArea { .. } => "VideoArea",
             UiReport::Batching(_) => "Batching",
             UiReport::Event(event) => event.0.label().0,
+            UiReport::Input(_) => "Input",
+            UiReport::UiFacts(_) => "UiFacts",
+        }
+    }
+
+    /// What plan step S2f(1) added (group A): the interface's facts replace
+    /// only an older value of their kind.
+    #[test]
+    fn the_ui_facts_coalesce() {
+        let facts = |open| {
+            UiReport::UiFacts(Box::new(UiFacts {
+                options_open: open,
+                ..UiFacts::default()
+            }))
+        };
+        assert_eq!(report_name(&facts(true)), "UiFacts");
+        assert!(facts(true).replaces(&facts(false)));
+        for other in every_report() {
+            assert!(!facts(true).replaces(&other) && !other.replaces(&facts(true)));
+        }
+    }
+
+    /// What plan step S2f(1) added: the core's part of a UI event is
+    /// ordered and never collapses.
+    #[test]
+    fn the_inputs_are_ordered() {
+        let inputs = || {
+            vec![
+                UiReport::Input(UiInput::Command {
+                    from: CommandFrom::Key,
+                    owner: 7,
+                    id: "play".into(),
+                    origin: Some(origins::Origin::Main),
+                }),
+                UiReport::Input(UiInput::HostCommand("quit")),
+                UiReport::Input(UiInput::Lead {
+                    query: "q".into(),
+                    keep: false,
+                    status: false,
+                }),
+                UiReport::Input(UiInput::MenuReset),
+                UiReport::Input(UiInput::PageShown(7)),
+                UiReport::Input(UiInput::TabShown(7)),
+                UiReport::Input(UiInput::TabWork(7)),
+                UiReport::Input(UiInput::Line(PluginLine::UiError {
+                    owner: 7,
+                    data: json!({"code":"ui","message":"m"}),
+                })),
+                UiReport::Input(UiInput::Line(PluginLine::UiCallback {
+                    owner: 7,
+                    data: json!({"view":"$mount"}),
+                })),
+                UiReport::Input(UiInput::Line(PluginLine::HostError(
+                    json!({"code":"menu-bridge","message":"m"}),
+                ))),
+                UiReport::Input(UiInput::WindowTick { fullscreen: true }),
+                UiReport::Input(UiInput::ColumnCommands(["sidebar", "adjust"].map(|id| {
+                    (
+                        id,
+                        commands::CommandState {
+                            enabled: true,
+                            checked: Some(false),
+                            busy: false,
+                            reason: None,
+                        },
+                    )
+                }))),
+                UiReport::Input(UiInput::MountTick),
+                UiReport::Input(UiInput::MountRetry(vec![mount_change()])),
+            ]
+        };
+        for input in inputs() {
+            assert_eq!(report_name(&input), "Input");
+            for other in inputs().iter().chain(every_report().iter()) {
+                assert!(!input.replaces(other) && !other.replaces(&input));
+            }
         }
     }
 

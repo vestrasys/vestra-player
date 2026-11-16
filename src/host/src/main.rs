@@ -528,6 +528,7 @@ fn player() -> Result<()> {
         file_types: json!([]),
         window_facts: Value::Null,
         window_facts_seq: None,
+        ui_facts: Default::default(),
         held_mounts: Default::default(),
         mounts: BTreeMap::new(),
         mount_queue: std::collections::VecDeque::new(),
@@ -640,6 +641,7 @@ fn player() -> Result<()> {
         source: std::sync::Arc::new(Value::Null),
         osd_until: None,
         osd_actions: None,
+        ui_facts_sent: None,
         osd_shown_at: 0,
         osd_clear_at: None,
         osd_shown: Default::default(),
@@ -676,6 +678,9 @@ fn player() -> Result<()> {
         bar: bar_buttons::Strip::default(),
         registry: Default::default(),
     };
+    // The core's copy of the interface's facts from the start, not
+    // `Default` until the first hand-over (plan step S2f(1)).
+    host.report_ui_facts();
     // Kept trigger conditions: one file per installed instance.
     host.core.triggers = triggers::Triggers::new(Some(host.core.triggers_dir()));
     // The interface language of this run (doc/architecture/i18n.md §2):
@@ -800,6 +805,9 @@ fn player() -> Result<()> {
         }
         // Every plugin process stops within one deadline (supervisor.md
         // T31), each running plugin recorded first.
+        // What the last tick changed of the interface's facts first (plan
+        // step S2f(1)).
+        host.report_ui_facts();
         host.shutdown_plugins(host::QUIT_BUDGET);
         stop_handoffs();
         host.core.shader_guard.quit();
@@ -1015,10 +1023,10 @@ fn player() -> Result<()> {
                             if host.menu_open
                                 && let Err(error) = host.refresh_menu()
                             {
-                                host.broadcast(
-                                    "host.error",
+                                // The core writes the line (plan step S2f(1)).
+                                host.report_line(host::messages::PluginLine::HostError(
                                     json!({"code":"menu-projection","message":error.to_string()}),
-                                );
+                                ));
                             }
                         }
                     }
@@ -1100,6 +1108,9 @@ fn player() -> Result<()> {
         } else {
             host::QUIT_BUDGET
         };
+        // What the last tick (drops, the options window) changed of the
+        // interface's facts reaches the core first (plan step S2f(1)).
+        host.borrow_mut().report_ui_facts();
         host.borrow_mut().shutdown_plugins(budget);
         stop_handoffs();
         // Read now: only a loss that ended the loop restarts the player.

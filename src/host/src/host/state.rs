@@ -472,7 +472,11 @@ impl Host {
     }
     /// Current layout of both positions, or `pending` until the shell is measured.
     pub(crate) fn layout_state(&self) -> std::result::Result<Value, RpcError> {
-        if self.core.window_facts["shellGeneration"].as_u64() != Some(self.shell_generation) {
+        #[cfg(debug_assertions)]
+        self.check_ui_facts();
+        if self.core.window_facts["shellGeneration"].as_u64()
+            != Some(self.core.ui_facts.shell_generation)
+        {
             return Err(RpcError::new(
                 "pending",
                 "current shell layout is not yet confirmed",
@@ -511,7 +515,7 @@ impl Host {
                 "reason":slot["reason"],"detached":slot["detached"],"panels":panels})
         };
         Ok(
-            json!({"bottom":slot("bottom"),"sidebar":slot("sidebar"),"adjust":slot("adjust"),"backdrop":self.backdrop_state()}),
+            json!({"bottom":slot("bottom"),"sidebar":slot("sidebar"),"adjust":slot("adjust"),"backdrop":self.core.backdrop_state()}),
         )
     }
     /// `panels.backdrop.state`: `{ owner, effective }`, null without a backdrop.
@@ -527,6 +531,17 @@ impl Host {
     }
 }
 impl Core {
+    /// `Host::backdrop_state` from the interface's facts (`layout.state`,
+    /// plan step S2f(1)).
+    pub(crate) fn backdrop_state(&self) -> Value {
+        self.mounts
+            .values()
+            .find(|m| m.spec.slot == composition::Slot::Backdrop)
+            .map_or(
+                Value::Null,
+                |m| json!({"owner":m.spec.owner,"effective":self.ui_facts.no_video}),
+            )
+    }
     /// What `source.state` shows (plan step S2d(4); `UiSnapshot::Source`):
     /// no video (R-U3, from what it showed before), the empty phase, the
     /// window title, from the core's last source.

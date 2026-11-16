@@ -270,6 +270,9 @@ impl Host {
     /// run never ran them and still does not. `turn` names the steps for
     /// the windowed tick's record.
     pub(crate) fn core_steps(&mut self, mut turn: Option<&mut super::stall::Turn>) {
+        // The interface's facts as the core's steps read them (plan step
+        // S2f(1)).
+        self.report_ui_facts();
         let mut step = |what: &'static str| {
             if let Some(turn) = turn.as_deref_mut() {
                 turn.step(what);

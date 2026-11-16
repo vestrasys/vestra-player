@@ -184,7 +184,10 @@ impl Core {
                 }
             }
             "app.system" => {
-                // Displays are read on the UI thread, where the windows live.
+                // The displays, read where this is answered: on Windows
+                // from any thread (plan step S2f(1), `platform::displays`);
+                // on macOS `NSScreen` is main-thread only, which the core
+                // still is until plan step S3a.
                 let displays = if self.headless {
                     Value::Array(Vec::new())
                 } else {
