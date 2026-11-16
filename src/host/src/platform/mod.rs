@@ -25,6 +25,7 @@
 //! | child processes | `tool_command`, `hide_console` (Windows: `CREATE_NO_WINDOW` when the host has no console; elsewhere nothing) |
 //! | storage | `sync_dir` (Unix: `fsync` below; Windows: `FlushFileBuffers` on a directory handle) |
 //! | generated streams | `av_listen` → `AvListener` / `AvStream` (Unix: `av_unix` below; Windows: `av_tcp`) |
+//! | the tick | `keep_ticking` (Windows: the host's tick also runs inside the system's modal move/size loop, posted from a thread timer of `vestra-win32`; elsewhere the tick as it is) |
 //! | offline media | `HELD_FILE_INPUT` (how FFmpeg names its stdin, the held source file), `disk_space` (free bytes and volume of a path: Windows through `vestra-win32`; elsewhere `df -Pk`), `process_start` → `ProcessStart` (whether the owner of an export's intermediate parts still runs: Windows through `vestra-win32`; Linux `/proc`; macOS `ps`) |
 //! | opening windows | `cloak_until_drawn`, `window_drawing` (Windows: each window is cloaked from its show to its first draw, so it never opens white, through `vestra-win32`; elsewhere nothing) |
 //! | full screen | `fullscreen_resized` (Windows: a full-screen window is kept one pixel off its display's rectangle; elsewhere nothing) |
@@ -276,6 +277,9 @@ pub enum KeyLabels {
 
 mod shortcuts;
 pub use shortcuts::*;
+
+#[cfg(target_os = "windows")]
+mod move_size;
 
 /// The user's preferred interface languages, most preferred first, as BCP 47
 /// tags the way the system reports them (`zh-Hans-CN`, `de-DE`, `en_US`):
@@ -980,6 +984,14 @@ pub const VIDEO_TEXTURE: bool = false;
 /// is in `windows.rs`.
 #[cfg(not(target_os = "windows"))]
 pub fn fullscreen_resized(_window: &slint::Window) {}
+
+/// The host's tick as it is. Windows keeps it running inside the system's
+/// modal move/size loop, where winit serves no timers (`windows.rs`,
+/// `move_size.rs`).
+#[cfg(not(target_os = "windows"))]
+pub fn keep_ticking<F: FnMut() + 'static>(tick: F, _busy: impl Fn() -> bool + 'static) -> F {
+    tick
+}
 
 /// Windows hides each window until its first draw (no white frame when it
 /// opens; `windows.rs`). Elsewhere nothing: Slint's winit backend already

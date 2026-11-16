@@ -17,6 +17,8 @@ impl Host {
     /// An event of the core: a plugin, the playback worker, the reaper, the
     /// spawner, the recorder, the settings check, a dialog's thread.
     fn core_event(&mut self, event: Event) {
+        // The interface's facts as the core reads them (plan step S2f(1)).
+        self.report_ui_facts();
         // What a process said before the Host has it (its spawn on the
         // spawn thread is not answered yet) waits for it (`worker.rs`).
         let from_process = super::supervisor::worker::from_process(&event);
@@ -709,6 +711,11 @@ impl Host {
             }
             UiInput::ColumnCommands(states) => self.core.column_command_states(states),
             UiInput::MountTick => self.release_held_mounts(),
+            UiInput::MountRetry(changes) => {
+                for change in changes.into_iter().rev() {
+                    self.core.mount_queue.push_front(change);
+                }
+            }
         }
     }
     /// A plugin line the interface's work produced (design §5.3, group E):

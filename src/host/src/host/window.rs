@@ -404,6 +404,60 @@ impl Host {
         let report = self.window_facts_report(shell.as_ref(), facts);
         self.ui_report(UiReport::WindowFacts(Box::new(report)));
     }
+    /// The interface's facts core code reads, now (design §5.3, group A).
+    pub(crate) fn ui_facts_now(&self) -> super::messages::UiFacts {
+        let column = |column: Column| {
+            let slot = policy_column(column);
+            super::messages::ColumnFacts {
+                active: self.policy.active(slot),
+                wanted: self
+                    .policy
+                    .column_state(slot)
+                    .is_some_and(|(preferred, _)| preferred),
+                remembered: self.column_memory(column).active,
+            }
+        };
+        super::messages::UiFacts {
+            sheet: self.sheet_fact(),
+            options_open: self.settings.window().is_some(),
+            columns: Column::ALL.map(column),
+            shell: self.shell.as_ref().map(|_| self.shell_generation),
+            shell_generation: self.shell_generation,
+            no_video: self.no_video,
+            osd_buttons: self.osd_actions.as_ref().map(|actions| actions.owner),
+        }
+    }
+    /// The interface hands the turn to the core (an event of the core, a
+    /// report, the end of a command, the core's steps): its facts go first
+    /// when they changed (`UiReport::UiFacts`, last value wins; plan step
+    /// S2f(1)), so core code never reads an older copy than the
+    /// interface's state.
+    pub(crate) fn report_ui_facts(&mut self) {
+        let facts = self.ui_facts_now();
+        if self.ui_facts_sent.as_ref() != Some(&facts) {
+            self.ui_facts_sent = Some(facts.clone());
+            self.ui_report(UiReport::UiFacts(Box::new(facts)));
+        }
+    }
+    /// Debug builds: the core's copy of the interface's facts is the
+    /// interface's wherever core code reads it (plan step S2f(1)), and the
+    /// current tabs the core derives from it are the interface's. Removed
+    /// with the in-place delivery (plan S3a).
+    #[cfg(debug_assertions)]
+    pub(crate) fn check_ui_facts(&self) {
+        debug_assert_eq!(
+            self.core.ui_facts,
+            self.ui_facts_now(),
+            "the core's interface facts are behind the interface"
+        );
+        for column in Column::ALL {
+            debug_assert_eq!(
+                self.core.current_tab(column),
+                self.current_tab(column),
+                "the core's current tab of {column:?} differs"
+            );
+        }
+    }
     /// Debug builds: the core's copy of the tabs is the policy's wherever
     /// the core reads it (plan step S2c(5): `report_tabs` after every
     /// change). Removed with the in-place delivery (plan S3a).
@@ -428,7 +482,13 @@ impl Host {
     /// part of the UI's events (`Event`, `Input`). The other reports follow
     /// in later steps.
     pub(crate) fn ui_report(&mut self, report: UiReport) {
+        // Plan step S2f(1): the interface's facts reach the core before
+        // anything the core does for this report reads them.
+        if !matches!(report, UiReport::UiFacts(_)) {
+            self.report_ui_facts();
+        }
         match report {
+            UiReport::UiFacts(facts) => self.core.ui_facts = *facts,
             UiReport::WindowFacts(facts) => {
                 // A value older than the one applied is skipped (module
                 // `messages`: a coalesced snapshot can overtake a handoff).
@@ -1088,6 +1148,42 @@ impl Host {
     }
 }
 impl Core {
+    /// A column's current tab (`Host::current_tab`), judged from the
+    /// interface's facts and the core's mounts and start-up record: none
+    /// while the column waits for its remembered tab at start-up.
+    pub(crate) fn current_tab(&self, column: Column) -> Option<u64> {
+        let facts = &self.ui_facts.columns[column.index()];
+        let awaits = crate::ui::sidebar_tabs::awaits_remembered(
+            self.startup_panels,
+            facts.remembered.as_deref(),
+            facts
+                .active
+                .and_then(|active| self.mounts.get(&active))
+                .map(|mount| mount.manifest.as_str()),
+            self.mounts
+                .values()
+                .filter(|mount| mount.spec.slot == column.slot())
+                .map(|mount| mount.manifest.as_str()),
+        );
+        if awaits { None } else { facts.active }
+    }
+    /// The approval sheet waits for the user's answer (`Host::sheet_waiting`
+    /// from the core's copy): a confirmation always, a plan while its run
+    /// waits.
+    pub(crate) fn sheet_waiting(&self) -> bool {
+        self.ui_facts.sheet.is_some_and(|sheet| {
+            sheet.confirm
+                || self.command_runs.waiting(&Reply {
+                    owner: sheet.owner,
+                    id: sheet.id,
+                })
+        })
+    }
+    /// A confirmation waits on the sheet: as a native dialog open, its wait
+    /// keeps the plugins running (`Busy::Dialog`).
+    pub(crate) fn confirm_waiting(&self) -> bool {
+        self.ui_facts.sheet.is_some_and(|sheet| sheet.confirm)
+    }
     /// Window facts (`UiReport::WindowFacts`, or the handoff of
     /// `UiReport::Answered` and `UiReport::MountApplied`) reach the core's
     /// copy when newer than the last applied (module `messages`), with the

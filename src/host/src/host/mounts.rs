@@ -270,10 +270,15 @@ impl Host {
             self.mount_singly = changes.len();
             let mut changes = changes.into_iter();
             let first = changes.next().expect("more than one change");
-            for mut change in changes.rev() {
-                change.announced = true;
-                self.core.mount_queue.push_front(change);
-            }
+            // The queue is the core's: it puts them back at its front, in
+            // their order (plan step S2f(1), design §5.3 group E).
+            let rest = changes
+                .map(|mut change| {
+                    change.announced = true;
+                    change
+                })
+                .collect();
+            self.ui_report(UiReport::Input(messages::UiInput::MountRetry(rest)));
             let due = Instant::now()
                 .checked_sub(Duration::from_millis(32))
                 .unwrap_or_else(Instant::now);
@@ -457,6 +462,12 @@ impl Host {
     /// `video_area_command`, `pip_command`). The other commands follow in
     /// later steps.
     pub(crate) fn ui_command(&mut self, command: UiCommand) {
+        self.apply_ui_command(command);
+        // Plan step S2f(1): what the command changed in the interface's
+        // facts reaches the core before the core reads them again.
+        self.report_ui_facts();
+    }
+    fn apply_ui_command(&mut self, command: UiCommand) {
         match command {
             UiCommand::Snapshot(UiSnapshot::LastSource(source)) => self.source = source,
             UiCommand::Snapshot(UiSnapshot::InfoPanels(panels)) => {

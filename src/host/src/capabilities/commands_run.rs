@@ -741,9 +741,11 @@ fn run(host: &mut Host, reply: &Reply, params: &Value) -> Handled {
         .collect();
     let plan_asks = steps.iter().any(Judged::dangerous);
     let now = host.core.now_ms();
+    #[cfg(debug_assertions)]
+    host.check_ui_facts();
     // A confirmation on the sheet (`dialogs.confirm`, H5): one sheet at a
     // time, as `admit` keeps it among runs; a dead ticket is refused as such.
-    if host.confirm_waiting()
+    if host.core.confirm_waiting()
         && host
             .core
             .command_runs

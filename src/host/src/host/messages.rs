@@ -609,6 +609,59 @@ pub(crate) enum UiReport {
     /// lead's holder; a parked plugin's page or tab shown; the shown tab's
     /// work. Ordered.
     Input(UiInput),
+    /// The interface's facts core code reads (design §5.3, group A; plan
+    /// step S2f(1)): last value wins.
+    UiFacts(Box<UiFacts>),
+}
+
+/// The interface's own state that core code reads (design §5.3, group A;
+/// plan step S2f(1)), whole: reported as [`UiReport::UiFacts`] whenever it
+/// differs from the value sent last, checked at every point where the
+/// interface hands the turn to the core (an event of the core, a report,
+/// the end of a command, the core's steps), so the core's copy is the
+/// interface's whenever core code runs. Values the core can derive are not
+/// here: the core judges them from these and its own data (whether a
+/// plan's sheet still waits, a column's current tab).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(crate) struct UiFacts {
+    /// The approval sheet: its request and whether it is a
+    /// `dialogs.confirm` (else a `commands.run` plan) (`host_busy`'s
+    /// `Busy::Dialog`, the `busy` refusals of rows 48 and 96).
+    pub(crate) sheet: Option<SheetFact>,
+    /// The options window is open (`Busy::Settings`).
+    pub(crate) options_open: bool,
+    /// The sidebar's and the adjust column's (in `Column::ALL` order)
+    /// policy facts for `Busy::ShownTab`.
+    pub(crate) columns: [ColumnFacts; 2],
+    /// The shell's generation while a shell exists (`window_command`,
+    /// `diagnostics_tick`, `dialogs.confirm`'s route).
+    pub(crate) shell: Option<u64>,
+    /// The shell generation counter (`layout.state` is pending until the
+    /// window facts show it).
+    pub(crate) shell_generation: u64,
+    /// What the video area shows nothing (`layout.state`'s backdrop
+    /// `effective`).
+    pub(crate) no_video: bool,
+    /// The plugin whose OSD message has buttons now (`UiOsd::record`).
+    pub(crate) osd_buttons: Option<u64>,
+}
+
+/// See [`UiFacts::sheet`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct SheetFact {
+    pub(crate) owner: u64,
+    pub(crate) id: u64,
+    pub(crate) confirm: bool,
+}
+
+/// See [`UiFacts::columns`]: the column's current tab in the panel policy,
+/// whether the column is wanted shown, and its remembered tab (the
+/// interface state's, by manifest).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct ColumnFacts {
+    pub(crate) active: Option<u64>,
+    pub(crate) wanted: bool,
+    pub(crate) remembered: Option<String>,
 }
 
 /// See [`UiReport::Input`].
@@ -665,6 +718,12 @@ pub(crate) enum UiInput {
     /// the core first answers the requests it held while the built-ins
     /// started (`Host::release_held_mounts`).
     MountTick,
+    /// A batch of mount changes failed (`prepare_mount_tick`, group E):
+    /// its changes after the first, in batch order and marked announced,
+    /// go back to the front of the core's queue (`Core::mount_queue`),
+    /// to be applied one at a time; the first stays in the batching
+    /// window.
+    MountRetry(Vec<MountChange>),
 }
 
 /// See [`UiInput::Line`]: what the interface tells, and to whom.
@@ -860,6 +919,7 @@ impl UiReport {
                 | (Self::Remembered { .. }, Self::Remembered { .. })
                 | (Self::VideoArea { .. }, Self::VideoArea { .. })
                 | (Self::Batching(_), Self::Batching(_))
+                | (Self::UiFacts(_), Self::UiFacts(_))
         )
     }
 }
@@ -873,6 +933,7 @@ const _: () = {
     send::<UiReport>();
     send::<UiEvent>();
     send::<UiInput>();
+    send::<UiFacts>();
     send::<WindowFacts>();
     send::<MountApplied>();
     send::<FileDrop>();
@@ -1327,6 +1388,24 @@ mod tests {
             UiReport::Batching(_) => "Batching",
             UiReport::Event(event) => event.0.label().0,
             UiReport::Input(_) => "Input",
+            UiReport::UiFacts(_) => "UiFacts",
+        }
+    }
+
+    /// What plan step S2f(1) added (group A): the interface's facts replace
+    /// only an older value of their kind.
+    #[test]
+    fn the_ui_facts_coalesce() {
+        let facts = |open| {
+            UiReport::UiFacts(Box::new(UiFacts {
+                options_open: open,
+                ..UiFacts::default()
+            }))
+        };
+        assert_eq!(report_name(&facts(true)), "UiFacts");
+        assert!(facts(true).replaces(&facts(false)));
+        for other in every_report() {
+            assert!(!facts(true).replaces(&other) && !other.replaces(&facts(true)));
         }
     }
 
@@ -1376,6 +1455,7 @@ mod tests {
                     )
                 }))),
                 UiReport::Input(UiInput::MountTick),
+                UiReport::Input(UiInput::MountRetry(vec![mount_change()])),
             ]
         };
         for input in inputs() {

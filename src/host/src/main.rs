@@ -528,6 +528,7 @@ fn player() -> Result<()> {
         file_types: json!([]),
         window_facts: Value::Null,
         window_facts_seq: None,
+        ui_facts: Default::default(),
         held_mounts: Default::default(),
         mounts: BTreeMap::new(),
         mount_queue: std::collections::VecDeque::new(),
@@ -640,6 +641,7 @@ fn player() -> Result<()> {
         source: std::sync::Arc::new(Value::Null),
         osd_until: None,
         osd_actions: None,
+        ui_facts_sent: None,
         osd_shown_at: 0,
         osd_clear_at: None,
         osd_shown: Default::default(),
@@ -935,125 +937,135 @@ fn player() -> Result<()> {
         let tick_host = host.clone();
         let timer = slint::Timer::default();
         let mut menu_revision = u64::MAX;
+        // Busy: a post from Windows' move/size loop runs no tick then
+        // (`platform::keep_ticking`).
+        let held = Rc::downgrade(&host);
+        let busy = move || {
+            held.upgrade()
+                .is_none_or(|host| host.try_borrow_mut().is_err())
+        };
         timer.start(
             slint::TimerMode::Repeated,
             Duration::from_millis(16),
-            move || {
-                let began = Instant::now();
-                // A slow turn, or a gap before it, goes to the host log
-                // (`host/stall.rs`).
-                host::stall::tick_began(began);
-                let mut turn = host::stall::Turn::new(began);
-                let mut host = tick_host.borrow_mut();
-                // The core's turn, first half (plan step S2e): the events.
-                host.core_events(&receiver, began, None, Some(&mut turn), |_| ());
-                turn.step("events");
-                // The UI part of the turn starts here. The UI stall test
-                // switch holds it once (`ui_stall_switch`).
-                if let Some((due, length)) = ui_stall
-                    && began >= due
-                {
-                    ui_stall = None;
-                    diag!("test: UI stall of {} ms began", length.as_millis());
-                    std::thread::sleep(length);
-                    diag!("test: UI stall ended");
-                    turn.step("test UI stall");
-                }
-                if first_draws.is_some() {
-                    let (draws, pictures) = host.core.backend.render.presentation.counts();
-                    let opening = opened_at_start || host.source["phase"] == "loading";
-                    if playback::render_state::windows_started(draws, pictures, opening)
-                        && let Some(guard) = first_draws.take()
+            platform::keep_ticking(
+                move || {
+                    let began = Instant::now();
+                    // A slow turn, or a gap before it, goes to the host log
+                    // (`host/stall.rs`).
+                    host::stall::tick_began(began);
+                    let mut turn = host::stall::Turn::new(began);
+                    let mut host = tick_host.borrow_mut();
+                    // The core's turn, first half (plan step S2e): the events.
+                    host.core_events(&receiver, began, None, Some(&mut turn), |_| ());
+                    turn.step("events");
+                    // The UI part of the turn starts here. The UI stall test
+                    // switch holds it once (`ui_stall_switch`).
+                    if let Some((due, length)) = ui_stall
+                        && began >= due
                     {
-                        guard.settle();
+                        ui_stall = None;
+                        diag!("test: UI stall of {} ms began", length.as_millis());
+                        std::thread::sleep(length);
+                        diag!("test: UI stall ended");
+                        turn.step("test UI stall");
                     }
-                    turn.step("crash guard first draws");
-                }
-                host.placements.tick();
-                host.mount_callbacks();
-                host.prepare_mount_tick();
-                turn.step("mounts");
-                host.panel_restart_tick();
-                turn.step("panel restarts");
-                host.window_tick();
-                turn.step("window tick");
-                platform::tool_windows_tick();
-                turn.step("tool windows");
-                // The core's turn, second half (plan step S2e): its periodic
-                // steps, with the binding table's disabled set and the state
-                // file's write.
-                host.core_steps(Some(&mut turn));
-                // The interface's steps after it: a complete file drop goes
-                // to the core (`UiReport::Drop`), the options window, the
-                // palette, the tables, the menu, the frame.
-                host.drops_tick();
-                turn.step("drops");
-                host.settings_tick();
-                turn.step("settings");
-                if host.theme_pending {
-                    host.theme_all();
-                    turn.step("theme");
-                }
-                // The interface's step, on its copy of the registry (rule
-                // R8, `host/tables.rs`). The revision alone, not a snapshot:
-                // a snapshot builds the whole menu tree, longer than a frame
-                // with many plugins. A closed menu is built when it opens
-                // (`open_menu`).
-                host.sync_tables();
-                if host.shell.is_some() {
-                    let revision = host.registry.revision();
-                    if revision != menu_revision {
-                        menu_revision = revision;
-                        if host.menu_open
-                            && let Err(error) = host.refresh_menu()
+                    if first_draws.is_some() {
+                        let (draws, pictures) = host.core.backend.render.presentation.counts();
+                        let opening = opened_at_start || host.source["phase"] == "loading";
+                        if playback::render_state::windows_started(draws, pictures, opening)
+                            && let Some(guard) = first_draws.take()
                         {
-                            // The core writes the line (plan step S2f(1)).
-                            host.report_line(host::messages::PluginLine::HostError(
-                                json!({"code":"menu-projection","message":error.to_string()}),
-                            ));
+                            guard.settle();
+                        }
+                        turn.step("crash guard first draws");
+                    }
+                    host.placements.tick();
+                    host.mount_callbacks();
+                    host.prepare_mount_tick();
+                    turn.step("mounts");
+                    host.panel_restart_tick();
+                    turn.step("panel restarts");
+                    host.window_tick();
+                    turn.step("window tick");
+                    platform::tool_windows_tick();
+                    turn.step("tool windows");
+                    // The core's turn, second half (plan step S2e): its periodic
+                    // steps, with the binding table's disabled set and the state
+                    // file's write.
+                    host.core_steps(Some(&mut turn));
+                    // The interface's steps after it: a complete file drop goes
+                    // to the core (`UiReport::Drop`), the options window, the
+                    // palette, the tables, the menu, the frame.
+                    host.drops_tick();
+                    turn.step("drops");
+                    host.settings_tick();
+                    turn.step("settings");
+                    if host.theme_pending {
+                        host.theme_all();
+                        turn.step("theme");
+                    }
+                    // The interface's step, on its copy of the registry (rule
+                    // R8, `host/tables.rs`). The revision alone, not a snapshot:
+                    // a snapshot builds the whole menu tree, longer than a frame
+                    // with many plugins. A closed menu is built when it opens
+                    // (`open_menu`).
+                    host.sync_tables();
+                    if host.shell.is_some() {
+                        let revision = host.registry.revision();
+                        if revision != menu_revision {
+                            menu_revision = revision;
+                            if host.menu_open
+                                && let Err(error) = host.refresh_menu()
+                            {
+                                // The core writes the line (plan step S2f(1)).
+                                host.report_line(host::messages::PluginLine::HostError(
+                                    json!({"code":"menu-projection","message":error.to_string()}),
+                                ));
+                            }
                         }
                     }
-                }
-                turn.step("bindings and menu");
-                // The renderer's wake-up delivers frames; this only catches
-                // one whose wake-up found the host busy.
-                if host.core.backend.frame.missed() {
-                    host.show_frame();
-                }
-                frame_pacing::tick();
-                turn.step("frame");
-                // The key and mouse callbacks that Slint runs before the
-                // next tick read the tables as this tick left them (R8).
-                host.sync_tables();
-                if let Some(log) = host.frame_log.as_mut() {
-                    log.tick_took(began.elapsed());
-                }
-                host::stall::tick_ended(&turn, |owner| host.core.plugin_id(owner));
-                if seconds.is_some_and(|seconds| start.elapsed().as_secs_f64() >= seconds) {
-                    if let Some(path) = snapshot.as_ref()
-                        && let Some(window) = host.shell.as_ref()
-                    {
-                        let save = || -> Result<()> {
-                            let pixels = window.window().take_snapshot()?;
-                            let mut encoder = png::Encoder::new(
-                                std::fs::File::create(path)?,
-                                pixels.width(),
-                                pixels.height(),
-                            );
-                            encoder.set_color(png::ColorType::Rgba);
-                            encoder.set_depth(png::BitDepth::Eight);
-                            encoder
-                                .write_header()?
-                                .write_image_data(pixels.as_bytes())?;
-                            Ok(())
-                        };
-                        if let Err(error) = save() {
-                            diag!("snapshot failed: {error}");
-                        }
+                    turn.step("bindings and menu");
+                    // The renderer's wake-up delivers frames; this only catches
+                    // one whose wake-up found the host busy.
+                    if host.core.backend.frame.missed() {
+                        host.show_frame();
                     }
-                    let _ = slint::quit_event_loop();
-                }
-            },
+                    frame_pacing::tick();
+                    turn.step("frame");
+                    // The key and mouse callbacks that Slint runs before the
+                    // next tick read the tables as this tick left them (R8).
+                    host.sync_tables();
+                    if let Some(log) = host.frame_log.as_mut() {
+                        log.tick_took(began.elapsed());
+                    }
+                    host::stall::tick_ended(&turn, |owner| host.core.plugin_id(owner));
+                    if seconds.is_some_and(|seconds| start.elapsed().as_secs_f64() >= seconds) {
+                        if let Some(path) = snapshot.as_ref()
+                            && let Some(window) = host.shell.as_ref()
+                        {
+                            let save = || -> Result<()> {
+                                let pixels = window.window().take_snapshot()?;
+                                let mut encoder = png::Encoder::new(
+                                    std::fs::File::create(path)?,
+                                    pixels.width(),
+                                    pixels.height(),
+                                );
+                                encoder.set_color(png::ColorType::Rgba);
+                                encoder.set_depth(png::BitDepth::Eight);
+                                encoder
+                                    .write_header()?
+                                    .write_image_data(pixels.as_bytes())?;
+                                Ok(())
+                            };
+                            if let Err(error) = save() {
+                                diag!("snapshot failed: {error}");
+                            }
+                        }
+                        let _ = slint::quit_event_loop();
+                    }
+                },
+                busy,
+            ),
         );
         // GPU rendering that ran this long started: settle the crash guard.
         let started = guard.clone();

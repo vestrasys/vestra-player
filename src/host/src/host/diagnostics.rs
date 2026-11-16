@@ -804,7 +804,11 @@ impl Host {
             progress: render.progress(),
         };
         self.core.shader_guard.tick(seen, now);
-        if self.core.shader_guard.take_osd(self.shell.is_some()) {
+        if self
+            .core
+            .shader_guard
+            .take_osd(self.core.ui_facts.shell.is_some())
+        {
             self.show_osd(&i18n::tr(
                 "Plugin shaders are off: the player ended unexpectedly while they were on",
             ));

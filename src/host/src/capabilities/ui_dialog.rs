@@ -75,13 +75,16 @@ fn ask(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<()
             "native dialogs require a running native window",
         ));
     }
+    // The interface's facts from the core's copy (plan step S2f(1)).
+    #[cfg(debug_assertions)]
+    host.check_ui_facts();
     // Refused while another waits; that one comes into view, so the wait
     // is never somewhere the user cannot see.
     if host.core.dialog_busy {
         host.ui_command(crate::host::messages::UiCommand::ShowWaiting);
         return Err(RpcError::new("busy", "a native dialog is already open"));
     }
-    if host.sheet_waiting() {
+    if host.core.sheet_waiting() {
         host.ui_command(crate::host::messages::UiCommand::ShowWaiting);
         return Err(RpcError::new(
             "busy",
@@ -113,8 +116,10 @@ fn ask(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<()
     // `platform::confirm` gives its dialog).
     // Systems without system alerts draw every one on the sheet.
     let route = match host.confirm_route(reply.owner) {
-        _ if !platform::SYSTEM_ALERTS && host.shell.is_some() => Route::Sheet,
-        Route::Focus if host.shell.is_some() && !platform::tool_window_focused() => Route::Sheet,
+        _ if !platform::SYSTEM_ALERTS && host.core.ui_facts.shell.is_some() => Route::Sheet,
+        Route::Focus if host.core.ui_facts.shell.is_some() && !platform::tool_window_focused() => {
+            Route::Sheet
+        }
         route => route,
     };
     let place = match route {
