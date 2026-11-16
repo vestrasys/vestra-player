@@ -294,12 +294,15 @@ fn a_skipped_tick_report_changes_nothing_in_the_core() {
     );
 }
 
-/// Plan step S3a(2), the S3a brief's risk 3: a change the core cancelled
-/// is not brought back by a report of it the interface sent before the
-/// cancel reached it; a closed window ends the wait, and a new change is
-/// recorded as before.
+/// Plan step S3a(2) keeps today's record of the batching window on one
+/// thread (zero difference): a cancel takes the record and tells the
+/// interface; a report of the window holding a change records it as
+/// reported, a cancelled one too (a cancel drained while the interface
+/// prepares a hand-over, `prepare_mount_tick`), until the window closes.
+/// Dropping such a late report (the S3a brief's risk 3) is plan step
+/// S3a(3)'s, with the core's thread; this test changes with it.
 #[test]
-fn a_cancelled_changes_late_report_does_not_bring_it_back() {
+fn the_batching_record_follows_the_interfaces_reports_on_one_thread() {
     use messages::MountCancel;
     let root = tempfile::tempdir().unwrap();
     let (mut core, _events, _commands) = core(root.path());
@@ -318,13 +321,12 @@ fn a_cancelled_changes_late_report_does_not_bring_it_back() {
         core.outbox.front(),
         Some(super::outbox::Out::Ui(messages::UiCommand::CancelMount(_)))
     ));
-    // The interface's report of the window holding it, sent before the
-    // cancel reached it: stale.
-    core.batching(Some(held.clone()));
-    assert!(core.handed.is_none());
-    // The window closed: the cancel is done, and the same change taken
-    // again (a new hand-over) is recorded.
-    core.batching(None);
+    // The window's report of the change after the cancel: recorded, as
+    // before plan step S3a (the slot stays taken until the window closes).
     core.batching(Some(held));
     assert!(core.handed.is_some());
+    assert!(core.mount_pending(key));
+    // The window closed.
+    core.batching(None);
+    assert!(core.handed.is_none());
 }

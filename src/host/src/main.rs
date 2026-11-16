@@ -693,7 +693,7 @@ fn player() -> Result<()> {
         view: Default::default(),
         plugins: Default::default(),
         tick_facts: Default::default(),
-        displays: Value::Null,
+        displays: Default::default(),
         displays_read: None,
         views: BTreeMap::new(),
         shell: None,

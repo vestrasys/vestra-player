@@ -447,22 +447,33 @@ impl Host {
                 .unwrap_or_default(),
             views: self.views.keys().map(|(owner, _)| *owner).collect(),
             pip: self.pip_fact(),
-            displays: self.displays.clone(),
+            // An `Arc`: the facts are copied at every hand-over.
+            displays: Arc::clone(&self.displays),
         }
     }
     /// The displays as the platform reports them, read at start and once a
     /// second after (plan step S3a(2), brief item 6): the interface's fact
     /// `UiFacts::displays`, for where the core cannot read them itself.
+    /// That is macOS only (`NSScreen` is main-thread only; on Windows and
+    /// Linux the core reads them on any thread), and only from plan step
+    /// S3a(3), when the core leaves the main thread; elsewhere nothing is
+    /// read, so no platform call is added to the interface's tick.
     pub(crate) fn displays_tick(&mut self) {
-        if self
-            .displays_read
-            .is_some_and(|at| at.elapsed() < Duration::from_secs(1))
+        if !cfg!(target_os = "macos")
+            || self
+                .displays_read
+                .is_some_and(|at| at.elapsed() < Duration::from_secs(1))
         {
             return;
         }
         self.displays_read = Some(Instant::now());
         if let Some(displays) = crate::system::displays_here() {
-            self.displays = crate::system::displays_json(&displays);
+            let displays = crate::system::displays_json(&displays);
+            // A new `Arc` only when the list changed, so the facts compare
+            // equal by pointer otherwise.
+            if *self.displays != displays {
+                self.displays = Arc::new(displays);
+            }
         }
     }
     /// The interface hands the turn to the core (an event of the core, a

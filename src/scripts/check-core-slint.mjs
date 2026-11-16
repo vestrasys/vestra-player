@@ -330,16 +330,21 @@ fn interface(host: &mut Host) {
 // `slint::invoke_from_event_loop` (and what runs inside its closure, on the
 // interface's thread); compile Slint through `composition::build` or
 // `composition::shell_in`; or use `clipboard.rs` (`crate::clipboard::`).
-// The named exceptions below are each a finding the gate prints apart.
+// The named exceptions below are each a finding the gate prints apart,
+// with the number of findings each covers pinned (`count`): a second use
+// under the same exception (a new call in that file) fails the gate, and
+// so does one gone (the exception is then stale and is removed).
 const EXCEPTIONS = [
   {
     file: "ui/settings_window.rs",
     rule: "slint-compile",
+    count: 1,
     why: "settings.register compiles its page in place only when the settings-check thread cannot take it (S3a brief item 8, the named exception: the check thread runs the same compile off the interface's thread; refusing would change a reply)",
   },
   {
     file: "capabilities/clipboard.rs",
     rule: "clipboard",
+    count: 1,
     why: "clipboard.* runs where it is answered until the serial clipboard thread of plan step S3a(3) (S3a brief item 7)",
   },
 ];
@@ -538,6 +543,21 @@ for (const f of excepted)
   console.log(
     `  exception: ${f.rel}:${f.line}: ${f.what} (${EXCEPTIONS.find((e) => e.file === f.rel && e.rule === f.rule).why})`,
   );
+// Each exception covers exactly its pinned number of findings.
+const miscounted = EXCEPTIONS.map((e) => [
+  e,
+  excepted.filter((f) => f.rel === e.file && f.rule === e.rule).length,
+])
+  .filter(([e, found]) => found !== e.count)
+  .map(
+    ([e, found]) =>
+      `exception ${e.file} (${e.rule}): expected ${e.count} finding(s) under it, found ${found}`,
+  );
 for (const finding of [...findings, ...driver.findings]) console.log(finding);
 for (const f of gated) console.log(`${f.rel}:${f.line}: ${f.rule}: ${f.what}`);
-process.exit(findings.length || driver.findings.length || gated.length ? 1 : 0);
+for (const line of miscounted) console.log(line);
+process.exit(
+  findings.length || driver.findings.length || gated.length || miscounted.length
+    ? 1
+    : 0,
+);

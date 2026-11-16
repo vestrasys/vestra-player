@@ -875,7 +875,11 @@ function sideReader(options) {
   return { read, unknown, streams };
 }
 
-/** `diff`: returns `{ text, failed }`. */
+/**
+ * `diff`: returns `{ text, failed, reorders, moved }` (`reorders`: the
+ * allowed reorders listed; `moved`: per class 2 and 3, the lines moved
+ * against the core lines; both 0 outside --allow-reorders).
+ */
 export function diffPaths(a, b, options = {}) {
   const pairs = pairsOf(a, b);
   const { read, unknown } = sideReader(options);
@@ -928,7 +932,7 @@ export function diffPaths(a, b, options = {}) {
   if (allReorders.length)
     lines.push(
       "",
-      `ALLOWED REORDERS (rule R4; the S3a row's classes 2 and 3), not counted as differences: ; lines moved against the core lines: class 2 (UI-bound replies) , class 3 (interface-report lines) `,
+      `ALLOWED REORDERS (rule R4; the S3a row's classes 2 and 3), not counted as differences: ${allReorders.length}; lines moved against the core lines: class 2 (UI-bound replies) ${moved[2]}, class 3 (interface-report lines) ${moved[3]}`,
       ...allReorders,
     );
   if (unknown.size)
@@ -936,7 +940,12 @@ export function diffPaths(a, b, options = {}) {
       "",
       `Methods not in the stream map (counted UI-independent): ${[...unknown].join(", ")}`,
     );
-  return { text: lines.join("\n"), failed: failed > 0 };
+  return {
+    text: lines.join("\n"),
+    failed: failed > 0,
+    reorders: allReorders.length,
+    moved: { ...moved },
+  };
 }
 
 /** `noise`: the noise set of two base runs; returns `{ text, noise }`. */

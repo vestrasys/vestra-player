@@ -255,7 +255,7 @@ impl Core {
                 } else {
                     match displays_here() {
                         Some(displays) => displays_json(&displays),
-                        None => match &self.ui_facts.displays {
+                        None => match &*self.ui_facts.displays {
                             Value::Null => Value::Array(Vec::new()),
                             reported => reported.clone(),
                         },

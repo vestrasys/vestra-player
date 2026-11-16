@@ -711,10 +711,12 @@ pub(crate) struct UiFacts {
     pub(crate) pip: PipFact,
     /// The displays as `app.system` lists them (`system::displays_json`;
     /// plan step S3a(2)): read by the interface at start and once a second
-    /// after, where the platform answers (`NSScreen` is main-thread only).
-    /// The core answers from it where it cannot read them itself. Null
-    /// before the first read.
-    pub(crate) displays: Value,
+    /// after, on macOS only (`NSScreen` is main-thread only; elsewhere the
+    /// core reads them itself). The core answers from it where it cannot
+    /// read them itself. Null before the first read (always, but on
+    /// macOS). Shared, so copying the facts at every hand-over copies no
+    /// list; a new read is a new `Arc` only when the list changed.
+    pub(crate) displays: Arc<Value>,
 }
 
 /// See [`UiFacts::pip`].

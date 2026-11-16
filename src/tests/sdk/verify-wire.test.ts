@@ -294,6 +294,55 @@ test("allowed reorders, class 3: interface-report lines keep their order and the
   assert.match(coreMoved.differences[0], /UI-independent stream, line 1:/);
 });
 
+test("allowed reorders: the summary totals the reorders and the moves per class", () => {
+  // The class-3 case above (one reorder: one class-2 and five class-3
+  // moves), written as two V2 run directories.
+  const steps: Step[] = [
+    ["z.three", "in", { id: 1, method: "ui.mount", params: { slot: "sidebar" } }],
+    ["z.three", "in", { id: 2, method: "source.state", params: {} }],
+    ["z.three", "out", { id: 2, result: { phase: "idle" } }],
+    ["z.three", "out", { event: "source.state", data: { phase: "idle" } }],
+    ["z.three", "out", { event: "ui.preparing", data: { phase: "preparing" } }],
+    ["z.three", "out", { event: "ui.preparing", data: { phase: "ready" } }],
+    ["z.three", "out", { id: 1, result: { ok: true } }],
+    ["z.three", "out", { event: "window.state", data: { fullscreen: false } }],
+    ["z.three", "out", { event: "ui.error", data: { code: "ui", message: "m" } }],
+    ["z.three", "out", { event: "host.error", data: { code: "menu-bridge", message: "b" } }],
+    ["z.three", "out", { event: "host.error", data: { code: "decode", message: "c" } }],
+  ];
+  const moved: Step[] = [...steps.slice(0, 2), ...steps.slice(4, 10), ...steps.slice(2, 4), steps[10]];
+  const root = mkdtempSync(join(tmpdir(), "verify-wire-"));
+  for (const [side, run, list] of [
+    ["a", A, steps],
+    ["b", B, moved],
+  ] as const) {
+    const directory = join(root, side, "raw", "idle");
+    mkdirSync(directory, { recursive: true });
+    writeFileSync(
+      join(root, side, "run.json"),
+      JSON.stringify({ profiles: { idle: run.profile }, stage: null }),
+    );
+    writeFileSync(join(directory, "first.wire.jsonl"), trace(list, run));
+    writeFileSync(join(directory, "second.wire.jsonl"), trace(list, run));
+  }
+  const result = diffPaths(join(root, "a"), join(root, "b"), {
+    allowReorders: true,
+  });
+  assert.equal(result.failed, false, result.text);
+  // Two steps, one reorder each: the totals add up over the steps.
+  assert.equal(result.reorders, 2);
+  assert.deepEqual(result.moved, { 2: 2, 3: 10 });
+  assert.match(
+    result.text,
+    /not counted as differences: 2; lines moved against the core lines: class 2 \(UI-bound replies\) 2, class 3 \(interface-report lines\) 10$/m,
+  );
+  // Strict mode: no totals (nothing allowed), the differences counted.
+  const strict = diffPaths(join(root, "a"), join(root, "b"));
+  assert.equal(strict.failed, true);
+  assert.equal(strict.reorders, 0);
+  assert.deepEqual(strict.moved, { 2: 0, 3: 0 });
+});
+
 test("the command line compares V2 run directories step by step", () => {
   const root = mkdtempSync(join(tmpdir(), "verify-wire-"));
   for (const [side, run, swap] of [

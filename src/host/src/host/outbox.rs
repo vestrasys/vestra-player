@@ -35,10 +35,6 @@ pub(crate) struct Outbox {
     /// The core's own changes of `Core::mounts`, in order, since the last
     /// drain.
     pub(crate) mount_ops: Vec<MountOp>,
-    /// The batching window's changes the core cancelled whose cancel the
-    /// interface has not confirmed by a closed window yet
-    /// (`Core::cancel_handed`, `Core::batching`; plan step S3a(2)).
-    pub(crate) cancelled: Vec<super::mounts::HandedMount>,
     /// What the interface was last given (`Core::copies`).
     pub(crate) sent: Sent,
 }
@@ -98,7 +94,8 @@ pub(crate) struct CoreFacts {
 /// is the state the core's handler of that report returns early on, as of
 /// the last drain (the core's state changes only in a core call, and every
 /// core call is drained). The interface skips such a report
-/// (`Host::tick_report_needed`); the reports it sends still reach the core
+/// (`Host::prepare_mount_tick`, `window_tick`, `bar_tick`, the tab-work
+/// report); the reports it sends still reach the core
 /// at today's points, so the core's answers are today's.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct TickFacts {

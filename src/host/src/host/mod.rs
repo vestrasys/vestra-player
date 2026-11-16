@@ -669,7 +669,7 @@ pub(crate) struct Host {
     /// (`outbox::TickFacts`; plan step S3a(2)): they are sent only otherwise.
     pub(crate) tick_facts: outbox::TickFacts,
     /// The displays last read (`Host::displays_tick`) and when.
-    pub(crate) displays: Value,
+    pub(crate) displays: Arc<Value>,
     pub(crate) displays_read: Option<Instant>,
     pub(crate) views: BTreeMap<(u64, String), view::View>,
     pub(crate) shell: Option<slint_interpreter::ComponentInstance>,
