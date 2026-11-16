@@ -787,7 +787,7 @@ mod tests {
     /// exactly what the policy refuses before any step took effect, and
     /// leaves a later refusal (after a step took effect) to the interface.
     #[test]
-    fn the_cores_judgement_from_the_tabs_is_the_policys() {
+    fn the_cores_judgement_from_the_tabs_matches_the_policy() {
         use composition::Slot as C;
         let slots = [C::Bottom, C::Sidebar, C::Adjust];
         let layouts: Vec<Vec<(C, u64)>> = vec![
