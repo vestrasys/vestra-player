@@ -298,11 +298,7 @@ impl Host {
     /// has it (`Host::restart_lines`).
     pub(crate) fn restart_waiting(&self, key: u64) -> bool {
         #[cfg(debug_assertions)]
-        debug_assert_eq!(
-            self.restart_lines,
-            self.core.restarts.lines(),
-            "the interface's restart lines are behind the core's record"
-        );
+        self.check_restart_lines();
         self.restart_lines.contains_key(&key)
     }
     /// The places (a window, its generation, a slot) whose container shows
@@ -357,22 +353,6 @@ impl Host {
                 let _ = window.set_property(&focused, false.into());
             }
         }
-    }
-}
-impl Host {
-    /// The core's panel-restart step at its point of the windowed tick
-    /// (between the two halves of the core's turn): a hand-over to the core
-    /// (plan step S2f(1)), then what it asked of the interface (plan step
-    /// S2f(3)).
-    pub(crate) fn panel_restart_tick(&mut self) {
-        if self.core.restarts.plugins.is_empty() {
-            return;
-        }
-        self.report_ui_facts();
-        #[cfg(debug_assertions)]
-        self.check_copies();
-        self.core.panel_restart_tick();
-        self.drain_outbox();
     }
 }
 impl Core {
@@ -493,7 +473,7 @@ impl Core {
             super::messages::PanelsOp::Gone(panels),
         ));
         for key in keys {
-            if self.mounts.remove(&key).is_none() {
+            if self.mount_remove(key).is_none() {
                 continue;
             }
             self.mount_queue.retain(|c| c.key != key);

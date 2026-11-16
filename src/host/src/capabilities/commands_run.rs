@@ -250,7 +250,9 @@ impl CommandRuns {
         }
     }
     /// The shown names of the plugins the waiting run answering `reply`
-    /// would trust ("Don't ask again"), if it still waits.
+    /// would trust ("Don't ask again"), if it still waits (the interface
+    /// reads its copy, `RunsView::offered`).
+    #[cfg(test)]
     pub fn offered(&self, reply: &Reply) -> Option<&[String]> {
         self.confirming
             .iter()
@@ -331,16 +333,76 @@ impl CommandRuns {
             .find(|(_, t)| t.owner == owner && now.saturating_sub(t.last) <= TICKET_IDLE_MS)
             .map(|(id, t)| (id.clone(), t.query.clone()))
     }
+    #[cfg(test)]
+    fn live(&self) -> usize {
+        self.tickets.len()
+    }
+    /// What the interface reads of the tickets and the waiting runs (plan
+    /// step S3a(1), its copy `RunsView`).
+    pub fn view(&self) -> RunsView {
+        RunsView {
+            tickets: self
+                .tickets
+                .iter()
+                .map(|(id, ticket)| (id.clone(), ticket.last))
+                .collect(),
+            confirming: self
+                .confirming
+                .iter()
+                .map(|run| ((run.reply.owner, run.reply.id), run.names.clone()))
+                .collect(),
+        }
+    }
+}
+
+/// The interface's copy of what it reads of [`CommandRuns`] (plan step
+/// S3a(1); design §5.3 group D): each ticket's last use, and the runs
+/// waiting for the sheet with the names they offer. Its reads answer as
+/// the core's do.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct RunsView {
+    tickets: BTreeMap<String, u64>,
+    confirming: Vec<((u64, u64), Vec<String>)>,
+}
+
+impl RunsView {
+    /// Whether this copy is still `runs`' (`CommandRuns::view` would give
+    /// an equal one), compared without copying.
+    pub fn matches(&self, runs: &CommandRuns) -> bool {
+        self.tickets.len() == runs.tickets.len()
+            && self
+                .tickets
+                .iter()
+                .zip(&runs.tickets)
+                .all(|((id, last), (other, ticket))| id == other && *last == ticket.last)
+            && self.confirming.len() == runs.confirming.len()
+            && self
+                .confirming
+                .iter()
+                .zip(&runs.confirming)
+                .all(|(((owner, id), names), run)| {
+                    *owner == run.reply.owner && *id == run.reply.id && *names == run.names
+                })
+    }
     /// Whether `ticket` is live at `now`, whoever holds it (the status
     /// strip shows a ticket's steps while it is; the sheet asks while it is).
     pub fn is_live(&self, ticket: &str, now: u64) -> bool {
         self.tickets
             .get(ticket)
-            .is_some_and(|t| now.saturating_sub(t.last) <= TICKET_IDLE_MS)
+            .is_some_and(|last| now.saturating_sub(*last) <= TICKET_IDLE_MS)
     }
-    #[cfg(test)]
-    fn live(&self) -> usize {
-        self.tickets.len()
+    /// [`CommandRuns::waiting`].
+    pub fn waiting(&self, reply: &Reply) -> bool {
+        self.confirming
+            .iter()
+            .any(|((owner, id), _)| *owner == reply.owner && *id == reply.id)
+    }
+    /// [`CommandRuns::offered`].
+    pub fn offered(&self, reply: &Reply) -> Option<&[String]> {
+        self.confirming
+            .iter()
+            .find(|((owner, id), _)| *owner == reply.owner && *id == reply.id)
+            .map(|(_, names)| names.as_slice())
     }
 }
 

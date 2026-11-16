@@ -220,14 +220,14 @@ impl Host {
         else {
             return;
         };
-        let now = self.core.now_ms();
+        let now = self.now_ms();
         let show = !preferred;
         if self
             .policy
             .switch(window_state::Slot::Sidebar, owner, show, now)
             .is_ok()
         {
-            if let Some(mount) = self.core.mounts.get_mut(&owner) {
+            if let Some(mount) = self.mounts.get_mut(&owner) {
                 mount.visible = show;
             }
             self.remember_sidebar(false);
@@ -250,7 +250,7 @@ impl Host {
         let Some(owner) = self.policy.active(window_state::Slot::Adjust) else {
             return;
         };
-        let now = self.core.now_ms();
+        let now = self.now_ms();
         if self
             .policy
             .switch(window_state::Slot::Adjust, owner, visible, now)
@@ -350,7 +350,7 @@ impl Host {
             .label(bindings::HOST, palette::PALETTE);
         // While a plugin holds the palette's first row (`palette.lead`):
         // the speech bubble with the AI sparkle, and the row named in the tip.
-        let icon = match &self.core.lead {
+        let icon = match &self.view.lead {
             Some(lead) => {
                 label = i18n::tr_args(
                     "{palette} and {lead}",
@@ -517,7 +517,7 @@ impl Host {
                     .bar_instance(self.shell_generation)
                     .map(|(serial, _)| serial),
             ),
-            lead: self.core.lead.as_ref().map(|lead| lead.row.title.clone()),
+            lead: self.view.lead.as_ref().map(|lead| lead.row.title.clone()),
         }
     }
 
@@ -527,7 +527,7 @@ impl Host {
         window: &slint_interpreter::ComponentInstance,
         generation: u64,
     ) -> Result<()> {
-        let events = self.core.events.clone();
+        let events = self.events.clone();
         window.set_global_callback(GLOBAL, "clicked", move |args| {
             if let Some(SValue::String(token)) = args.first() {
                 let _ = events.send(Event::BarButton(generation, token.to_string()));
@@ -544,7 +544,7 @@ impl Host {
                     } else {
                         (*max_side).min(64)
                     };
-                    let roots = self.core.image_roots(item.owner);
+                    let roots = self.plugins.image_roots(item.owner);
                     match self.images.load_within(item.owner, &roots, path, side) {
                         Ok((key, image)) => {
                             self.images.assign(item.owner, "$bar", &item.id, Some(key));
@@ -596,7 +596,6 @@ impl Host {
             self.bar.placed = Some(self.shell_generation);
             if debug_bar() {
                 let bar = self
-                    .core
                     .mounts
                     .values()
                     .find(|mount| mount.spec.slot == composition::Slot::Bottom)
@@ -630,7 +629,7 @@ impl Host {
             return;
         }
         input_trace::mark("host loop: bar button »");
-        self.policy.activity(self.core.now_ms());
+        self.policy.activity(self.now_ms());
         let _ = window.set_property("menu-origin-x", x.into());
         let _ = window.set_property("menu-origin-y", y.into());
         self.open_menu(generation, MenuMode::Bar(items));
@@ -645,7 +644,7 @@ impl Host {
             return;
         };
         input_trace::mark(&format!("host loop: bar button → {owner}/{id}"));
-        self.policy.activity(self.core.now_ms());
+        self.policy.activity(self.now_ms());
         let origin = self.origin_of(generation);
         self.ui_report(UiReport::Input(UiInput::Command {
             from: CommandFrom::Bar,

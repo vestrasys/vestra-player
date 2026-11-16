@@ -253,7 +253,7 @@ impl Core {
             self.ui_command(UiCommand::CancelMount(MountCancel::Owner(owner)));
         }
         for key in gone {
-            if self.mounts.remove(&key).is_none() {
+            if self.mount_remove(key).is_none() {
                 continue;
             }
             self.mount_queue.push_front(MountChange {

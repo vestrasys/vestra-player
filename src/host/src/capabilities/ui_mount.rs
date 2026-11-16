@@ -191,12 +191,10 @@ pub(crate) fn rekey_panels(core: &mut Core, from: u64, to: u64) {
     let mut moved = Vec::new();
     for (old, slot) in keys {
         let new = panel_key(to, slot);
-        let Some(mut mount) = core.mounts.remove(&old) else {
+        // The interface's copy follows (`MountOp::Move`, plan step S3a(1)).
+        if !core.mount_move(old, new, to) {
             continue;
-        };
-        mount.spec.owner = new;
-        mount.plugin = to;
-        core.mounts.insert(new, mount);
+        }
         moved.push((old, new));
     }
     // The interface's part (plan step S2d(3)): its panels follow, in the
@@ -313,16 +311,17 @@ fn forget_queued(queue: &mut std::collections::VecDeque<MountChange>, owner: u64
 
 /// [`UiMount::revoke`] for one panel.
 fn revoke_panel(core: &mut Core, key: u64, keep_recorded: bool) {
-    let Some(mount) = core.mounts.get_mut(&key) else {
+    let Some(mount) = core.mounts.get(&key) else {
         return;
     };
     if keep_recorded {
         if mount.spec.slot.tabbed() {
-            mount.recorded = true;
+            // The interface's copy follows (`MountOp`, plan step S3a(1)).
+            core.mount_recorded(key);
         }
     } else if mount.recorded {
         let owner = mount.plugin;
-        core.mounts.remove(&key);
+        core.mount_remove(key);
         core.ui_command(UiCommand::Panels(PanelsOp::PlaceholderGone(key)));
         core.mount_queue.retain(|c| c.key != key);
         core.mount_queue.push_front(MountChange {
@@ -659,7 +658,6 @@ pub(crate) fn write_mount(
     mut prepared: Option<Box<crate::ui::ui_values::Prepared>>,
 ) -> std::result::Result<Value, RpcError> {
     let slot = host
-        .core
         .mounts
         .get(&key)
         .filter(|mount| !mount.recorded && !host.restart_waiting(key))
@@ -722,7 +720,7 @@ pub(crate) fn write_mount(
     if let Some(panel) = &panel {
         panel.write(property, converted)?;
     }
-    if let Some(mount) = host.core.mounts.get_mut(&key) {
+    if let Some(mount) = host.mounts.get_mut(&key) {
         mount.properties.insert(property.into(), value);
     }
     host.images.set_seq(reply.owner, view, property, seq);
@@ -737,7 +735,6 @@ fn patched_mount(
     ops: &Value,
 ) -> std::result::Result<Value, RpcError> {
     let Some(Value::Array(stored)) = host
-        .core
         .mounts
         .get(&key)
         .and_then(|mount| mount.properties.get(property))
@@ -761,7 +758,7 @@ fn patch_mount(
     ops: &Value,
     prepared: Option<Box<crate::ui::ui_values::Prepared>>,
 ) -> std::result::Result<bool, RpcError> {
-    let Some(mount) = host.core.mounts.get(&key) else {
+    let Some(mount) = host.mounts.get(&key) else {
         return Err(ui_patch::stale());
     };
     let view = mount_view(mount.spec.slot);
@@ -804,7 +801,6 @@ fn patch_mount(
     };
     let shapes = ops.shapes;
     if let Some(Value::Array(stored)) = host
-        .core
         .mounts
         .get_mut(&key)
         .and_then(|mount| mount.properties.get_mut(property))
@@ -1023,7 +1019,7 @@ impl Host {
     pub(crate) fn layout_command(&mut self, op: LayoutOp) {
         match op {
             LayoutOp::Locks { key, locks } => {
-                self.policy.activity(self.core.now_ms());
+                self.policy.activity(self.now_ms());
                 // The backdrop never auto-hides: nothing to lock. A refusal
                 // is the core's to report (`interaction`), from the same
                 // tabs (`check_panel_tabs`).
@@ -1095,14 +1091,14 @@ impl Host {
                 .map_err(anyhow::Error::from)?;
         }
         if let Some(visible) = visible {
-            let now = self.core.now_ms();
+            let now = self.now_ms();
             if reveal {
                 self.policy.set_preferred(policy_slot, owner, visible, now)
             } else {
                 self.policy.switch(policy_slot, owner, visible, now)
             }
             .map_err(anyhow::Error::from)?;
-            if let Some(mount) = self.core.mounts.get_mut(&owner) {
+            if let Some(mount) = self.mounts.get_mut(&owner) {
                 mount.visible = visible;
             }
         }

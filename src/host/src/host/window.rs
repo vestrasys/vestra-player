@@ -25,7 +25,7 @@ impl Host {
         let Some(shell) = self.shell.as_ref().map(ComponentHandle::clone_strong) else {
             return;
         };
-        let now = self.core.now_ms();
+        let now = self.now_ms();
         let fullscreen = shell.window().is_fullscreen();
         // `WindowState.maximized`: never while fullscreen (a window maximized
         // before fullscreen reads maximized again after it). A main window
@@ -60,11 +60,10 @@ impl Host {
         }
         self.policy.set_fullscreen(fullscreen, now);
         self.policy
-            .set_obstructions(self.menu_open, self.core.dialog_busy);
+            .set_obstructions(self.menu_open, self.view.dialog_busy);
         #[cfg(feature = "producer-audio")]
         let captured = self
-            .core
-            .backend
+            .playback
             .input
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -74,12 +73,12 @@ impl Host {
         let captured = false;
         {
             let mut input = self.input.borrow_mut();
-            input.blocked = self.menu_open || self.core.dialog_busy || captured;
-            input.dialog = self.core.dialog_busy;
+            input.blocked = self.menu_open || self.view.dialog_busy || captured;
+            input.dialog = self.view.dialog_busy;
         }
         if let Err(error) = shell.set_property(
             "input-blocked",
-            (self.menu_open || self.core.dialog_busy).into(),
+            (self.menu_open || self.view.dialog_busy).into(),
         ) {
             diag!("host.error physical-input bridge: {error}");
         }
@@ -130,12 +129,12 @@ impl Host {
         };
         let video = (number("video-width"), number("video-height"));
         let scale = f64::from(shell.window().scale_factor());
-        let presentation = &self.core.backend.render.presentation;
+        let presentation = &self.playback.render.presentation;
         presentation.sample(Instant::now());
         if let Some(log) = self.frame_log.as_mut() {
             let ((mut produced, mut shown), mut size) =
-                (self.core.backend.frame.counts(), self.shown_size);
-            if let Some(gpu) = self.core.backend.render.gpu() {
+                (self.playback.frame.counts(), self.shown_size);
+            if let Some(gpu) = self.playback.render.gpu() {
                 (produced, shown) = (produced + gpu.frames(), shown + gpu.shown());
                 size = gpu.size().or(size);
             }
@@ -150,10 +149,9 @@ impl Host {
             if let Some(line) = log.line(counts, presentation, refresh, size, Instant::now()) {
                 diag!(
                     "{line}{}{}{}{}",
-                    self.core.backend.frame.stages.text(),
+                    self.playback.frame.stages.text(),
                     frame_pacing::log_text(),
-                    self.core
-                        .backend
+                    self.playback
                         .render
                         .gpu()
                         .map_or_else(String::new, |gpu| gpu.log_text()),
@@ -174,7 +172,7 @@ impl Host {
         }
         // IA-CORE-03: the normal frame and whether the window is maximized;
         // fullscreen keeps what was under it.
-        if !self.core.headless && !placing {
+        if !self.headless && !placing {
             let minimized = shell.window().is_minimized();
             match record(fullscreen, maximized, minimized) {
                 Record::Normal => {
@@ -307,7 +305,7 @@ impl Host {
                 (playing && ((fullscreen && idle) || windowed)).into(),
             )?;
             Ok(
-                json!({"shellGeneration":self.shell_generation,"fullscreen":fullscreen,"maximized":maximized,"logicalWidth":viewport.width,"logicalHeight":viewport.height,"videoArea":{"width":video.0,"height":video.1},"menuOpen":self.menu_open,"dialogOpen":self.core.dialog_busy,"nativeActive":native.map(|facts|facts.active),"nativeUnavailable":self.native_unavailable,"slots":snapshot,"backdrop":self.backdrop_state(),"pictureInPicture":self.pip_shown()}),
+                json!({"shellGeneration":self.shell_generation,"fullscreen":fullscreen,"maximized":maximized,"logicalWidth":viewport.width,"logicalHeight":viewport.height,"videoArea":{"width":video.0,"height":video.1},"menuOpen":self.menu_open,"dialogOpen":self.view.dialog_busy,"nativeActive":native.map(|facts|facts.active),"nativeUnavailable":self.native_unavailable,"slots":snapshot,"backdrop":self.backdrop_state(),"pictureInPicture":self.pip_shown()}),
             )
         })();
         // The slots' containers show their panels (a column opened, a tab
@@ -449,59 +447,6 @@ impl Host {
             self.ui_report(UiReport::UiFacts(Box::new(facts)));
         }
     }
-    /// Debug builds: where the driver hands a turn to the core (an event of
-    /// the core, the core's steps, the panel-restart step), the core's
-    /// copies of the interface's state are the interface's: its facts, its
-    /// tabs and its record of the batching window (plan step S2f(3)). Core
-    /// code takes no `Host`, so the checks run here, not at the reads: the
-    /// interface does not run inside a core turn, and a read inside it
-    /// checks that no command that would change what it reads waits in the
-    /// outbox (`Core::check_settled`).
-    #[cfg(debug_assertions)]
-    pub(crate) fn check_copies(&self) {
-        self.check_ui_facts();
-        self.check_panel_tabs();
-        self.check_handed();
-    }
-    /// Debug builds: the core's copy of the interface's facts is the
-    /// interface's (plan step S2f(1)), and the current tabs the core derives
-    /// from it are the interface's (`check_copies`). Removed with the
-    /// in-place delivery (plan S3a).
-    #[cfg(debug_assertions)]
-    pub(crate) fn check_ui_facts(&self) {
-        let mut now = self.ui_facts_now();
-        // A stopped plugin's confirmation that a waiting `DropConfirm`
-        // drops: the core's copy is ahead (plan step S2f(3),
-        // `UiDialog::revoke`).
-        if now
-            .sheet
-            .is_some_and(|sheet| sheet.confirm && self.core.drop_pending(sheet.owner))
-        {
-            now.sheet = None;
-        }
-        debug_assert_eq!(
-            self.core.ui_facts, now,
-            "the core's interface facts are behind the interface"
-        );
-        for column in Column::ALL {
-            debug_assert_eq!(
-                self.core.current_tab(column),
-                self.current_tab(column),
-                "the core's current tab of {column:?} differs"
-            );
-        }
-    }
-    /// Debug builds: the core's copy of the tabs is the policy's wherever
-    /// the core reads it (plan step S2c(5): `report_tabs` after every
-    /// change). Removed with the in-place delivery (plan S3a).
-    #[cfg(debug_assertions)]
-    pub(crate) fn check_panel_tabs(&self) {
-        debug_assert_eq!(
-            self.core.panel_tabs,
-            self.policy_tabs(),
-            "the core's panel tabs are behind the policy"
-        );
-    }
     /// A report of the UI reaches the core (rule R3), delivered in place on
     /// this thread until plan step S3a: the interface's facts first, then
     /// the core's side (`Core::report`), then what the core issued for it
@@ -510,13 +455,16 @@ impl Host {
         // Plan step S2f(1): the interface's facts reach the core before
         // anything the core does for this report reads them.
         // (Not for a shown frame: its handling reads none of them.)
-        if !matches!(report, UiReport::UiFacts(_) | UiReport::FrameShown(_)) {
+        // (Nor for what the interface did in place of the core before plan
+        // step S3a(1): `UiInput::reads_no_facts`.)
+        let quiet = matches!(&report, UiReport::Input(input) if input.reads_no_facts());
+        if !quiet && !matches!(report, UiReport::UiFacts(_) | UiReport::FrameShown(_)) {
             self.report_ui_facts();
         }
-        self.core.report(report);
         // Plan step S2f(3): what the core issued for this report is carried
-        // out now, before the interface goes on.
-        self.drain_outbox();
+        // out now, before the interface goes on (the driver, plan step
+        // S3a(1)).
+        self.deliver_report(report);
     }
 }
 impl Core {
@@ -649,7 +597,7 @@ impl Host {
     /// A title strip button: Minimize, Exit Fullscreen (the
     /// `exit-fullscreen` command) and Close (the window close button: Quit).
     pub(crate) fn title_strip_action(&mut self, action: &str) {
-        self.policy.activity(self.core.now_ms());
+        self.policy.activity(self.now_ms());
         match action {
             "minimize" => {
                 if let Some(shell) = &self.shell {
@@ -682,7 +630,7 @@ impl Host {
         };
         if self.remembered.window != Some(frame) {
             self.remembered.window = Some(frame);
-            self.remember(self.core.now_ms());
+            self.remember(self.now_ms());
         }
     }
     /// Record whether the main window is maximized and, where the system
@@ -694,7 +642,7 @@ impl Host {
         if state.window_maximized != maximized || state.window_physical != physical {
             state.window_maximized = maximized;
             state.window_physical = physical;
-            self.remember(self.core.now_ms());
+            self.remember(self.now_ms());
         }
     }
     /// The interface's part of the state file changed at `now`: the core,
@@ -760,7 +708,7 @@ impl Host {
             .policy
             .panels(slot_of)
             .iter()
-            .filter_map(|owner| self.core.mounts.get(owner).map(|m| m.manifest.clone()))
+            .filter_map(|owner| self.mounts.get(owner).map(|m| m.manifest.clone()))
             .collect::<Vec<_>>();
         let waiting = memory
             .active
@@ -770,11 +718,11 @@ impl Host {
             memory.active = self
                 .policy
                 .active(slot_of)
-                .and_then(|owner| self.core.mounts.get(&owner))
+                .and_then(|owner| self.mounts.get(&owner))
                 .map(|m| m.manifest.clone());
         }
         let current = manifests.iter().map(String::as_str).collect::<Vec<_>>();
-        let now = self.core.now_ms();
+        let now = self.now_ms();
         match column {
             Column::Sidebar => {
                 let mut slot = self.sidebar_slot();
@@ -806,7 +754,7 @@ impl Host {
     /// Hide the whole sidebar (the floating window closed).
     pub(crate) fn close_sidebar(&mut self) {
         if let Some(owner) = self.policy.sidebar_active() {
-            let now = self.core.now_ms();
+            let now = self.now_ms();
             let _ = self
                 .policy
                 .set_preferred(window_state::Slot::Sidebar, owner, false, now);
@@ -838,7 +786,7 @@ impl Host {
             self.columns[index].woken = None;
             return;
         };
-        let Some(mount) = self.core.mounts.get(&owner) else {
+        let Some(mount) = self.mounts.get(&owner) else {
             return;
         };
         if mount.spec.slot != column.slot() {
@@ -904,7 +852,7 @@ impl Host {
             && let Some(floating) = &self.floating
         {
             set_index(&floating.instance, &floating.owners);
-            if let Some(mount) = active.and_then(|owner| self.core.mounts.get(&owner)) {
+            if let Some(mount) = active.and_then(|owner| self.mounts.get(&owner)) {
                 let title = SValue::String(mount.title.as_str().into());
                 if floating.instance.get_property("panel-title").ok().as_ref() != Some(&title) {
                     let _ = floating.instance.set_property("panel-title", title);
@@ -976,7 +924,7 @@ impl Host {
     pub(crate) fn tab_titles(&self, owners: &[u64]) -> Result<SValue> {
         let titles = owners
             .iter()
-            .filter_map(|owner| self.core.mounts.get(owner).map(|m| m.title.clone()))
+            .filter_map(|owner| self.mounts.get(owner).map(|m| m.title.clone()))
             .collect::<Vec<_>>();
         ui_values::from_json(&json!(titles))
     }
@@ -996,7 +944,7 @@ impl Host {
                 continue;
             }
             let p = column.prefix();
-            let events = self.core.events.clone();
+            let events = self.events.clone();
             window.set_callback(&format!("{p}-tab"), move |args| {
                 if let Some(SValue::Number(index)) = args.first()
                     && *index >= 0.
@@ -1005,7 +953,7 @@ impl Host {
                 }
                 SValue::Void
             })?;
-            let events = self.core.events.clone();
+            let events = self.events.clone();
             window.set_callback(&format!("{p}-overflow"), move |args| {
                 if let [SValue::Number(x), SValue::Number(y)] = args {
                     let _ = events.send(Event::TabOverflow(generation, column, *x, *y));
@@ -1013,13 +961,13 @@ impl Host {
                 SValue::Void
             })?;
         }
-        let events = self.core.events.clone();
+        let events = self.events.clone();
         window.set_callback("sidebar-detach", move |_| {
             let _ = events.send(Event::SidebarDetach(generation));
             SValue::Void
         })?;
         if has_adjust {
-            let events = self.core.events.clone();
+            let events = self.events.clone();
             window.set_callback("adjust-dismiss", move |_| {
                 let _ = events.send(Event::AdjustDismiss(generation));
                 SValue::Void
@@ -1060,8 +1008,7 @@ impl Host {
         let tabs = owners
             .iter()
             .map(|owner| {
-                self.core
-                    .mounts
+                self.mounts
                     .get(owner)
                     .cloned()
                     .ok_or_else(|| anyhow::anyhow!("no sidebar mount"))
@@ -1091,7 +1038,7 @@ impl Host {
         self.bind_keys(&instance, generation)?;
         view::bind_focus(&instance)?;
         self.bind_tabs(&instance, generation)?;
-        let events = self.core.events.clone();
+        let events = self.events.clone();
         instance.window().on_close_requested(move || {
             let _ = events.send(Event::FloatingClosed(generation));
             slint::CloseRequestResponse::KeepWindowShown
@@ -1147,7 +1094,7 @@ impl Host {
         if slot.floating != Some(frame) {
             slot.floating = Some(frame);
             self.remembered.sidebar_slot = Some(slot);
-            self.remember(self.core.now_ms());
+            self.remember(self.now_ms());
         }
     }
     pub(crate) fn close_floating(&mut self) {

@@ -109,9 +109,13 @@ impl Host {
         if self.menu_open {
             self.close_menu();
         }
+        // The core revokes the physical input (plan step S3a(1)). As a
+        // report it drains the outbox where the in-place call did not; the
+        // revoke only sends to the playback worker, so nothing is queued.
         #[cfg(feature = "producer-audio")]
-        self.core
-            .physical_revoke(producer_input::RevokeReason::Menu);
+        self.ui_report(messages::UiReport::Input(messages::UiInput::Revoke(
+            producer_input::RevokeReason::Menu,
+        )));
         self.menu_open = true;
         self.menu_generation = self.shell_generation;
         self.menu_mode = MenuMode::Palette;
@@ -139,8 +143,9 @@ impl Host {
     /// The commands the open palette lists: from the interface's copies
     /// of the tables (rule R8; `refresh_menu` took the newest).
     pub(crate) fn palette_items(&self) -> Vec<Item> {
-        self.core
-            .items_of(&self.registry.shown_entries(), &self.labels())
+        // A plugin's name from the interface's copy (`Core::items_of`).
+        let name = |id: &str| self.plugins.name_of(id);
+        command_palette::items(&self.registry.shown_entries(), &name, &self.labels())
     }
 }
 impl Core {
@@ -194,7 +199,7 @@ impl Host {
             command_palette::search(&items, &self.palette.query, &self.remembered.palette_recent);
         let (_, size) = super::menus::menu_frame(window);
         let lead = self
-            .core
+            .view
             .lead
             .as_ref()
             .map(|lead| (lead.owner, lead.row.clone()));
@@ -301,7 +306,7 @@ impl Host {
         } else {
             (*max_side).min(64)
         };
-        let roots = self.core.image_roots(owner);
+        let roots = self.plugins.image_roots(owner);
         match self.images.load_within(owner, &roots, path, side) {
             Ok((key, image)) => {
                 self.images.assign(owner, "$palette", "lead", Some(key));
@@ -319,7 +324,7 @@ impl Host {
     fn run_lead(&mut self, keep: bool) {
         let query = self.palette.query.clone();
         let has_status = self
-            .core
+            .view
             .lead
             .as_ref()
             .is_some_and(|lead| lead.row.status.is_some());
@@ -346,7 +351,7 @@ impl Host {
     /// S2f(1)): the core sends it (`UiInput::Lead`, `lead_event`); a menu
     /// that is not kept closes after it.
     pub(crate) fn lead_request(&mut self, query: String, keep: bool, status: bool) {
-        if self.core.lead.is_none() {
+        if self.view.lead.is_none() {
             return;
         }
         self.ui_report(messages::UiReport::Input(messages::UiInput::Lead {
@@ -484,7 +489,7 @@ impl Host {
                     return;
                 }
                 command_palette::remember(&mut self.remembered.palette_recent, &item.global);
-                let now = self.core.now_ms();
+                let now = self.now_ms();
                 self.remember(now);
                 // Kept open: the cursor stays on this command wherever it
                 // now sorts (the recent list reorders an empty query).
@@ -517,14 +522,14 @@ impl Host {
         let send = move |events: &mpsc::Sender<Event>, action: PaletteAction| {
             let _ = events.send(Event::MenuAction(generation, MenuAction::Palette(action)));
         };
-        let events = self.core.events.clone();
+        let events = self.events.clone();
         window.set_callback("palette-edited", move |args| {
             if let Some(SValue::String(text)) = args.first() {
                 send(&events, PaletteAction::Query(text.to_string()));
             }
             SValue::Void
         })?;
-        let events = self.core.events.clone();
+        let events = self.events.clone();
         window.set_callback("palette-moved", move |args| {
             if let Some(SValue::Number(by)) = args.first()
                 && by.is_finite()
@@ -533,7 +538,7 @@ impl Host {
             }
             SValue::Void
         })?;
-        let events = self.core.events.clone();
+        let events = self.events.clone();
         window.set_callback("palette-scrolled", move |args| {
             if let Some(SValue::Number(by)) = args.first()
                 && by.is_finite()
@@ -542,7 +547,7 @@ impl Host {
             }
             SValue::Void
         })?;
-        let events = self.core.events.clone();
+        let events = self.events.clone();
         window.set_callback("palette-run", move |args| {
             let slot = match args.first() {
                 Some(SValue::Number(slot)) if *slot >= 0. => Some(*slot as usize),

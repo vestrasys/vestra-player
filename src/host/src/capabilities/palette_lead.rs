@@ -136,7 +136,7 @@ impl StatusState {
 }
 
 /// The palette's lead: its holder and what it sent (recorded as sent).
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Lead {
     pub owner: u64,
     /// What it sent, less an end-state status (never replayed).

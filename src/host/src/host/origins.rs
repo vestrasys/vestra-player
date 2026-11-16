@@ -52,7 +52,7 @@ pub(crate) enum Origin {
 }
 
 /// Each plugin's (owner generation's) newest origin.
-#[derive(Default)]
+#[derive(Clone, Default, PartialEq)]
 pub(crate) struct Origins(BTreeMap<u64, Origin>);
 
 impl Origins {
@@ -231,7 +231,7 @@ impl super::Host {
             .map(|(_, id)| id.clone())
             .collect();
         route(
-            self.core.origins.get(owner),
+            self.view.origins.get(owner),
             self.shell.is_some(),
             &own,
             |place| {
@@ -258,7 +258,7 @@ impl super::Host {
             if let Some(shell) = &self.shell {
                 crate::ui::view::show_again(shell, foreground);
             }
-        } else if self.core.dialog_busy {
+        } else if self.view.dialog_busy {
             crate::platform::show_open_dialog(foreground);
         }
     }

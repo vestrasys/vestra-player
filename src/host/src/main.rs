@@ -598,8 +598,22 @@ fn player() -> Result<()> {
     // S2c(7)): its own part, and the palette.
     let remembered = core.ui_state.state.interface();
     let shown_theme = core.theme().to_owned();
+    // What the interface takes of the core once, at start (plan step
+    // S3a(1)): its own event sender, the clock's epoch, the playback
+    // handles. Its copies of the core's data come with the first drain.
+    let ui_events = host::driver::UiEvents::new(core.events.clone());
+    let clock = core.clock;
+    let playback = host::driver::Playback::of(&core.backend);
     let mut host = Host {
-        core,
+        link: host::driver::CoreLink::new(core),
+        events: ui_events,
+        clock,
+        headless,
+        playback,
+        mounts: BTreeMap::new(),
+        pages: Vec::new(),
+        view: Default::default(),
+        plugins: Default::default(),
         views: BTreeMap::new(),
         shell: None,
         preparing: None,
@@ -685,14 +699,16 @@ fn player() -> Result<()> {
     // `Default` until the first hand-over (plan step S2f(1)).
     host.report_ui_facts();
     // Kept trigger conditions: one file per installed instance.
-    host.core.triggers = triggers::Triggers::new(Some(host.core.triggers_dir()));
+    // The core's start-up calls (plan S3a brief, item 9) run on the core
+    // before the interface's loop starts (`Host::starting`).
+    host.starting(|core| core.triggers = triggers::Triggers::new(Some(core.triggers_dir())));
     // The interface language of this run (doc/architecture/i18n.md §2):
     // `VESTRA_LANGUAGE` (development and tests), else the saved choice, else
     // the system's languages. Headless runs ignore the system: English
     // unless asked, so diagnostics read the same on every machine.
     let preference = std::env::var("VESTRA_LANGUAGE")
         .ok()
-        .or_else(|| host.core.language_preference());
+        .or_else(|| host.starting(|core| core.language_preference()));
     let system = if headless {
         Vec::new()
     } else {
@@ -705,41 +721,48 @@ fn player() -> Result<()> {
         // first in `ja`, Korean in `ko`, Simplified Chinese otherwise).
         ui_fonts::install(i18n::locale());
     }
-    host.core.register_host_commands()?;
+    host.starting(|core| core.register_host_commands())?;
     // What the core asked of the interface is carried out after each of
     // the start's core calls (plan step S2f(3), `host/outbox.rs`).
     host.drain_outbox();
     {
         // Commands whose full id changed (`command_renames`): keys and
         // recent palette entries saved under the old id follow, once.
-        let renamed = {
-            let state = &mut host.core.ui_state.state;
+        let renamed = host.starting(|core| {
+            let state = &mut core.ui_state.state;
             let keys = command_renames::migrate_overlay(&mut state.bindings);
             command_renames::migrate_recent(&mut state.palette_recent) || keys
-        };
+        });
         // Host 0.6.0: an override of Toggle Fullscreen gets its new
         // default Escape, once (`migrate_fullscreen_escape`).
         let holders = bindings::parse("Escape")
-            .map(|escape| host.core.bindings().default_holders(&escape))
+            .map(|escape| host.starting(|core| core.bindings().default_holders(&escape)))
             .unwrap_or_default();
-        let state = &mut host.core.ui_state.state;
-        let escape = host::migrate_fullscreen_escape(
-            &mut state.bindings,
-            &mut state.bindings_migrated,
-            &holders,
-        );
+        let escape = host.starting(|core| {
+            let state = &mut core.ui_state.state;
+            host::migrate_fullscreen_escape(
+                &mut state.bindings,
+                &mut state.bindings_migrated,
+                &holders,
+            )
+        });
         if renamed || escape {
             // Saved ids now name the commands' current ids, and the
             // migrations are recorded; saved once.
-            let now = host.core.now_ms();
-            host.core.ui_state.touch(now);
-            host.core.ui_state.flush();
+            let now = host.now_ms();
+            host.starting(|core| {
+                core.ui_state.touch(now);
+                core.ui_state.flush();
+            });
         }
         // The palette's recents may have been renamed: the interface takes
         // its part again (plan step S2c(7)).
-        host.remembered = host.core.ui_state.state.interface();
-        let overlay = host.core.ui_state.state.bindings.clone();
-        host.core.bindings_mut().set_overlay(overlay);
+        host.remembered = host.starting(|core| {
+            let overlay = core.ui_state.state.bindings.clone();
+            let remembered = core.ui_state.state.interface();
+            core.bindings_mut().set_overlay(overlay);
+            remembered
+        });
         if let Some(sidebar) = &host.remembered.sidebar {
             host.policy.set_sidebar_width(sidebar.width);
         }
@@ -748,21 +771,23 @@ fn player() -> Result<()> {
         }
     }
     for directory in &directories {
-        host.core.load(directory, 120_000)?;
+        host.starting(|core| core.load(directory, 120_000))?;
         host.drain_outbox();
     }
     // A restart continues its first file where the replaced player was.
     if let (Some(resume), Some(file)) = (resume, files.first()) {
-        let _ = host.core.backend.commands.send(playback::backend::Command {
-            reply: host::Reply { owner: 0, id: 0 },
-            method: "host.resume".into(),
-            params: json!({"source":file.to_string_lossy(),"seconds":resume.seconds,"paused":resume.paused}),
+        host.starting(|core| {
+            let _ = core.backend.commands.send(playback::backend::Command {
+                reply: host::Reply { owner: 0, id: 0 },
+                method: "host.resume".into(),
+                params: json!({"source":file.to_string_lossy(),"seconds":resume.seconds,"paused":resume.paused}),
+            });
         });
     }
     // A start with a file: CPU mode's Direct3D 12 windows count as started
     // only once its first picture was shown (the crash guard, below).
     let opened_at_start = !files.is_empty();
-    host.core.open_files(files, false);
+    host.starting(|core| core.open_files(files, false));
     host.drain_outbox();
     let start = Instant::now();
     if headless {
@@ -794,8 +819,8 @@ fn player() -> Result<()> {
             host.core_steps(None);
             if let Some(log) = host.frame_log.as_mut() {
                 log.tick_took(began.elapsed());
-                let presentation = &host.core.backend.render.presentation;
-                let (produced, shown) = host.core.backend.frame.counts();
+                let presentation = &host.playback.render.presentation;
+                let (produced, shown) = host.playback.frame.counts();
                 let (draws, presented) = presentation.counts();
                 let counts = render_target::LogCounts {
                     produced,
@@ -804,11 +829,11 @@ fn player() -> Result<()> {
                     presented,
                 };
                 if let Some(line) = log.line(counts, presentation, || None, None, Instant::now()) {
-                    diag!("{line}{}", host.core.backend.frame.stages.text());
+                    diag!("{line}{}", host.playback.frame.stages.text());
                 }
             }
             if let Some(evidence) = evidence.as_mut() {
-                evidence.sample(&host.core.backend, &observed_source, start)?;
+                evidence.sample(host.backend(), &observed_source, start)?;
             }
         }
         // Every plugin process stops within one deadline (supervisor.md
@@ -816,10 +841,10 @@ fn player() -> Result<()> {
         // What the last tick changed of the interface's facts first (plan
         // step S2f(1)).
         host.report_ui_facts();
-        host.core.shutdown_plugins(host::QUIT_BUDGET);
+        host.quitting(|core| core.shutdown_plugins(host::QUIT_BUDGET));
         host.drain_outbox();
         stop_handoffs();
-        host.core.shader_guard.quit();
+        host.quitting(|core| core.shader_guard.quit());
         logged!("exit: normal");
     } else {
         // Windows: no window opens white (cloaked until its first draw).
@@ -875,8 +900,7 @@ fn player() -> Result<()> {
         // Interpolation (`video.render()`) resamples to the main display's rate.
         let displays = platform::displays();
         let main_display = displays.iter().find(|d| d.primary).or(displays.first());
-        host.core
-            .backend
+        host.playback
             .render
             .set_refresh(main_display.and_then(|d| d.refresh_rate));
         host.native_before = native_before.clone();
@@ -898,7 +922,7 @@ fn player() -> Result<()> {
         drop(window);
         // Render cadence: each new frame wakes the event loop (coalesced)
         // instead of waiting for the 16 ms tick.
-        let frames = host.borrow().core.backend.frame.clone();
+        let frames = host.borrow().playback.frame.clone();
         let frame_host = host.clone();
         let busy = frames.clone();
         FRAME_SINK.with(|sink| {
@@ -985,7 +1009,7 @@ fn player() -> Result<()> {
                         turn.step("test UI stall");
                     }
                     if first_draws.is_some() {
-                        let (draws, pictures) = host.core.backend.render.presentation.counts();
+                        let (draws, pictures) = host.playback.render.presentation.counts();
                         let opening = opened_at_start || host.source["phase"] == "loading";
                         if playback::render_state::windows_started(draws, pictures, opening)
                             && let Some(guard) = first_draws.take()
@@ -1042,7 +1066,7 @@ fn player() -> Result<()> {
                     turn.step("bindings and menu");
                     // The renderer's wake-up delivers frames; this only catches
                     // one whose wake-up found the host busy.
-                    if host.core.backend.frame.missed() {
+                    if host.playback.frame.missed() {
                         host.show_frame();
                     }
                     frame_pacing::tick();
@@ -1053,7 +1077,7 @@ fn player() -> Result<()> {
                     if let Some(log) = host.frame_log.as_mut() {
                         log.tick_took(began.elapsed());
                     }
-                    host::stall::tick_ended(&turn, |owner| host.core.plugin_id(owner));
+                    host::stall::tick_ended(&turn, |owner| host.plugins.plugin_id(owner));
                     if seconds.is_some_and(|seconds| start.elapsed().as_secs_f64() >= seconds) {
                         if let Some(path) = snapshot.as_ref()
                             && let Some(window) = host.shell.as_ref()
@@ -1120,7 +1144,8 @@ fn player() -> Result<()> {
         // What the last tick (drops, the options window) changed of the
         // interface's facts reaches the core first (plan step S2f(1)).
         host.borrow_mut().report_ui_facts();
-        host.borrow_mut().core.shutdown_plugins(budget);
+        host.borrow_mut()
+            .quitting(|core| core.shutdown_plugins(budget));
         host.borrow_mut().drain_outbox();
         stop_handoffs();
         // Read now: only a loss that ended the loop restarts the player.
@@ -1129,15 +1154,17 @@ fn player() -> Result<()> {
             // windows one, so the player starts again where it was (already
             // started from the device's callback; this is the fallback).
             teardown_step("saving the UI state");
-            host.borrow_mut().core.ui_state.flush();
-            let source = host.borrow().core.last_source.clone();
+            let source = host.borrow_mut().quitting(|core| {
+                core.ui_state.flush();
+                core.last_source.clone()
+            });
             // Plugin shaders stay `applying` if they were: a device lost
             // while they were on keeps them off in the restarted player.
             logged!("exit: restarting, the windows' GPU device was lost");
             restart_player(&lost_device, &source);
         } else {
             guard.settle();
-            host.borrow_mut().core.shader_guard.quit();
+            host.borrow_mut().quitting(|core| core.shader_guard.quit());
             if let Err(error) = &ran {
                 logged!("exit: the event loop failed ({error})");
             }
@@ -1151,7 +1178,7 @@ fn player() -> Result<()> {
         FRAME_SINK.with(|sink| sink.borrow_mut().take());
         PIP_GPU_SINK.with(|sink| sink.borrow_mut().take());
         RESIZE_SINK.with(|sink| sink.borrow_mut().take());
-        host.borrow_mut().core.ui_state.flush();
+        host.borrow_mut().quitting(|core| core.ui_state.flush());
         // Native windows/resources must be released before process teardown.
         teardown_step("closing the secondary windows");
         host.borrow_mut().close_secondary_windows();

@@ -305,7 +305,7 @@ impl Host {
         ops: &Json,
         prepared: Option<&ui_values::PlainRows>,
     ) -> std::result::Result<InWindow, RpcError> {
-        let roots = self.core.image_roots(owner);
+        let roots = self.plugins.image_roots(owner);
         self.images
             .patch_window(owner, &roots, view, property, current, ops, prepared)
     }
@@ -318,7 +318,7 @@ impl Host {
         ops: &Ops<'_>,
         prepared: Option<&ui_values::PlainRows>,
     ) -> std::result::Result<Option<Rows>, RpcError> {
-        let roots = self.core.image_roots(owner);
+        let roots = self.plugins.image_roots(owner);
         self.images
             .patch_rows(owner, &roots, view, property, ops, prepared)
     }

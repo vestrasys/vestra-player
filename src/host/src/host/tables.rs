@@ -46,7 +46,7 @@
 //! and 37 reached the interface as copies (several changes between two
 //! reads collapse), 23 ms in all, every one at start-up or when plugins
 //! parked; none while the clip played.
-use super::messages::UiSnapshot;
+use super::messages::{UiCommand, UiSnapshot};
 use super::*;
 
 /// The core's binding table and what the interface was last given.
@@ -96,11 +96,14 @@ impl Host {
     /// The interface takes the core's newer table snapshots, in place
     /// (module docs): what it reads from here on is what the core has.
     pub(crate) fn sync_tables(&mut self) {
-        for snapshot in self.core.table_snapshots() {
-            match snapshot {
-                UiSnapshot::Registry(view) => self.registry = view,
-                UiSnapshot::Bindings(table) => self.input.borrow_mut().table = table.into(),
-                _ => unreachable!("the core sends only its tables before plan step S2d"),
+        // Asked of the core (plan step S3a(1), `Take::Tables`).
+        for command in self.take(super::messages::Take::Tables) {
+            match command {
+                UiCommand::Snapshot(UiSnapshot::Registry(view)) => self.registry = view,
+                UiCommand::Snapshot(UiSnapshot::Bindings(table)) => {
+                    self.input.borrow_mut().table = table.into()
+                }
+                _ => unreachable!("the core answers with its tables only"),
             }
         }
     }

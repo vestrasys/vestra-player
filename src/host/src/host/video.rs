@@ -74,11 +74,11 @@ impl Host {
         &self,
         shell: &slint_interpreter::ComponentInstance,
     ) -> Option<vestra_video_texture::Feed> {
-        let Some(gpu) = self.core.backend.render.gpu() else {
+        let Some(gpu) = self.playback.render.gpu() else {
             return self.count_draws(shell);
         };
         self.winit_draws.set(false);
-        let render = self.core.backend.render.clone();
+        let render = self.playback.render.clone();
         let drawn = move |draw: platform::GpuDraw| match draw {
             platform::GpuDraw::Begin => {
                 let now = Instant::now();
@@ -90,8 +90,8 @@ impl Host {
                 render.presentation.draw_end(Instant::now(), copied);
             }
         };
-        self.core.backend.render.presentation.start_counting();
-        let render = self.core.backend.render.clone();
+        self.playback.render.presentation.start_counting();
+        let render = self.playback.render.clone();
         let target = self.video_target.clone();
         let notifier = platform::window_notifiers();
         // Without a notifier the window sets each frame's image between
@@ -121,11 +121,10 @@ impl Host {
         platform::gate_gpu_frames(
             paced.then(|| Box::new(frame_pacing::accept_picture) as Box<dyn Fn() -> bool>),
         );
-        let render = self.core.backend.render.clone();
+        let render = self.playback.render.clone();
         let failed = move |reason: String| render.fall_back(Reason::WindowFallback(reason));
         if let Err(error) = gpu.attach(shell, show, failed, drawn) {
-            self.core
-                .backend
+            self.playback
                 .render
                 .fall_back(Reason::WindowFallback(format!(
                     "the window cannot show GPU frames ({error})"
@@ -152,7 +151,7 @@ impl Host {
             return platform::direct_video_feed();
         }
         if platform::VIDEO_TEXTURE {
-            let render = self.core.backend.render.clone();
+            let render = self.playback.render.clone();
             let drawn = move |draw| match draw {
                 vestra_video_texture::Draw::Begin => {
                     let now = Instant::now();
@@ -171,11 +170,11 @@ impl Host {
                 }
             };
             if let Ok(feed) = vestra_video_texture::attach(shell, show, drawn) {
-                self.core.backend.render.presentation.start_counting();
+                self.playback.render.presentation.start_counting();
                 return Some(feed);
             }
         }
-        let render = self.core.backend.render.clone();
+        let render = self.playback.render.clone();
         let notifier = move |state, _: &slint::GraphicsAPI| match state {
             slint::RenderingState::BeforeRendering => {
                 let now = Instant::now();
@@ -195,18 +194,18 @@ impl Host {
             frame_pacing::on_draw(None);
             self.winit_draws.set(true);
         }
-        self.core.backend.render.presentation.start_counting();
+        self.playback.render.presentation.start_counting();
         None
     }
     /// Count the main window's draws through the pacing hook, where the
     /// window has no rendering notifier (`platform::window_notifiers`): no
     /// draw times then, only the counts (`stats().presentedFps`).
     fn count_draws_without_notifier(&self) {
-        let render = self.core.backend.render.clone();
+        let render = self.playback.render.clone();
         frame_pacing::on_draw(Some(Box::new(move || {
             render.presentation.draw_end(Instant::now(), false);
         })));
-        self.core.backend.render.presentation.start_counting();
+        self.playback.render.presentation.start_counting();
     }
     /// Set the newest rendered frame on the video area (no copy: the renderer
     /// drew into this buffer).
@@ -214,10 +213,10 @@ impl Host {
         // Paced (Windows): one new picture per draw; a second one within the
         // same refresh comes again right after the draw.
         if !frame_pacing::accept_picture() {
-            self.core.backend.frame.miss();
+            self.playback.frame.miss();
             return;
         }
-        let Some(frame) = self.core.backend.frame.take() else {
+        let Some(frame) = self.playback.frame.take() else {
             return;
         };
         let Some(window) = self.shell.as_ref().map(ComponentHandle::clone_strong) else {
@@ -268,23 +267,19 @@ impl Host {
                 }
             }
         }
-        self.core
-            .backend
-            .render
-            .presentation
-            .picture_set(set.elapsed());
+        self.playback.render.presentation.picture_set(set.elapsed());
         frame_pacing::picture_set();
         // With GPU rendering these are a generated stream's frames (or its
         // cleared canvas): the next GPU frame sets its texture again.
-        if let Some(gpu) = self.core.backend.render.gpu() {
+        if let Some(gpu) = self.playback.render.gpu() {
             gpu.reshow();
         }
     }
     /// What `window.setPictureInPicture` and the PiP window depend on.
     pub(crate) fn pip_facts(&self) -> pip::Facts {
         pip::Facts {
-            window: !self.core.headless && self.native_window.is_some(),
-            supported: !self.core.headless && platform::pip_supported(),
+            window: !self.headless && self.native_window.is_some(),
+            supported: !self.headless && platform::pip_supported(),
             fullscreen: self
                 .shell
                 .as_ref()
@@ -322,7 +317,7 @@ impl Host {
     /// has opened or closed.
     pub(crate) fn pip_command(&mut self, reply: Reply, on: bool) {
         let facts = self.pip_facts();
-        let now = self.core.now_ms();
+        let now = self.now_ms();
         let answer = self
             .pip
             .request(reply.clone(), on, &facts, now, platform::PipWindow::new);
@@ -396,7 +391,7 @@ impl Host {
             rate: seconds("rate").unwrap_or(1.),
         };
         let facts = self.pip_facts();
-        let now = self.core.now_ms();
+        let now = self.now_ms();
         if std::env::var_os("VESTRA_PIP_LOG").is_some()
             && let Some((id, area)) = place
             && let Some(line) = self.pip.describe(id)
@@ -413,8 +408,7 @@ impl Host {
                 area.height,
                 self.render_area,
                 self.render_sent,
-                self.core
-                    .backend
+                self.playback
                     .target
                     .picture()
                     .map(|(w, h)| (w.round(), h.round())),
@@ -427,13 +421,12 @@ impl Host {
         for effect in self.pip.tick(&facts, place, &playback, now) {
             match effect {
                 pip::Effect::Respond(reply, result) => self.pip_answered(reply, result),
+                // The core runs the action (group E's leftover, plan step
+                // S3a(1)), then what it asked of the interface.
                 pip::Effect::Action(action, step) => {
-                    if let Err(error) = self.core.run_core_action_with(action, None, step) {
-                        diag!("pip: {action}: {}", error.message);
-                    }
-                    // What the core's action asked of the interface (plan
-                    // step S2f(3)).
-                    self.drain_outbox();
+                    self.ui_report(super::messages::UiReport::Input(
+                        super::messages::UiInput::PipAction { action, step },
+                    ))
                 }
             }
         }
@@ -461,7 +454,7 @@ impl Host {
         }
         // No GPU renderer (any more, after a fallback): a later one is hooked
         // again.
-        let Some(gpu) = self.core.backend.render.gpu() else {
+        let Some(gpu) = self.playback.render.gpu() else {
             self.gpu_paced = false;
             return;
         };
@@ -470,7 +463,7 @@ impl Host {
         }
         self.gpu_paced = true;
         let (render, queued) = (
-            self.core.backend.render.clone(),
+            self.playback.render.clone(),
             Arc::new(AtomicBool::new(false)),
         );
         gpu.on_frame(move || {
@@ -492,7 +485,7 @@ impl Host {
     pub(crate) fn pip_gpu_hook(&mut self) {
         let (wanted, hooked) = &mut self.pip_gpu;
         wanted.store(self.pip.feeding(), Ordering::Release);
-        let Some(gpu) = self.core.backend.render.gpu().filter(|_| !*hooked) else {
+        let Some(gpu) = self.playback.render.gpu().filter(|_| !*hooked) else {
             return;
         };
         *hooked = true;
@@ -516,7 +509,7 @@ impl Host {
     /// PiP shows the GPU renderer's frames: GPU rendering, and no generated
     /// stream (whose pixel frames go through `show_frame` like software ones).
     pub(crate) fn pip_gpu_frames(&self) -> bool {
-        self.core.backend.render.gpu().is_some() && !self.core.backend.render.producer()
+        self.playback.render.gpu().is_some() && !self.playback.render.producer()
     }
     /// The GPU renderer's newest frame to PiP, without a copy (each frame
     /// once). The renderer does not draw into a surface the system still
@@ -525,7 +518,7 @@ impl Host {
         if !self.pip.feeding() || !self.pip_gpu_frames() {
             return;
         }
-        let Some(gpu) = self.core.backend.render.gpu() else {
+        let Some(gpu) = self.playback.render.gpu() else {
             return;
         };
         if let Some((sequence, surface)) = gpu.latest()
@@ -541,17 +534,17 @@ impl Host {
         let Some(area) = self.render_area else {
             return;
         };
-        let picture = self.core.backend.target.picture();
+        let picture = self.playback.target.picture();
         let size = match picture {
-            Some(picture) if self.pip.feeding() && !self.core.backend.render.producer() => {
+            Some(picture) if self.pip.feeding() && !self.playback.render.producer() => {
                 render_target::fit(area, picture)
             }
             _ => area,
         };
         if self.render_sent != Some(size) {
             self.render_sent = Some(size);
-            self.core.backend.target.set_area(size);
-            if let Some(gpu) = self.core.backend.render.gpu() {
+            self.playback.target.set_area(size);
+            if let Some(gpu) = self.playback.render.gpu() {
                 // `VESTRA_RENDER_TARGET` (diagnostics) applies to GPU frames too.
                 let size = render_target::forced().unwrap_or(size);
                 // A single step (fullscreen, maximize, a toggled column, PiP's
@@ -592,8 +585,8 @@ impl Host {
         }
         self.apply_render_size();
         // A generated stream's pictures are not mpv's frames.
-        let aspect = (!self.core.backend.render.producer())
-            .then(|| self.core.backend.target.layout())
+        let aspect = (!self.playback.render.producer())
+            .then(|| self.playback.target.layout())
             .flatten()
             .and_then(|layout| layout.letterbox_aspect())
             .unwrap_or(0.);
@@ -615,7 +608,7 @@ impl Host {
     /// shape would size the PiP window wrongly). Generated streams' frames
     /// always may.
     pub(crate) fn pip_shape(&self, size: (u32, u32)) -> bool {
-        self.core.backend.render.producer()
+        self.playback.render.producer()
             || self
                 .render_sent
                 .is_none_or(|sent| render_target::same_shape(size, sent))

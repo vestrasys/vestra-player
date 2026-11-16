@@ -806,6 +806,85 @@ pub(crate) enum UiInput {
     /// plugin's restart (`prepare_mount_tick`, plan step S2f(2)): the core
     /// ends the wait (`Host::panel_back`).
     PanelBack(u64),
+    /// Plan step S3a(1), design §5.3 group D: what the interface wrote in
+    /// the core's data in place before. The mount registry as a batch left
+    /// it (`apply_mounts`): the core's registry takes it, the panels'
+    /// values left out ([`Mount::record`]).
+    Mounts(BTreeMap<u64, Mount>),
+    /// The batch's registry is in place: the plugins that mounted a panel
+    /// are noted (`Core::note_panel_plugins`).
+    PanelPlugins,
+    /// A mount of `owner` joins a batch: its earlier `slot-occupied`
+    /// refusal no longer applies (`Core::clear_warning`).
+    Mounted(u64),
+    /// The options window stored a value as property `property` of page
+    /// `id` of `owner` (`settings.set`, whole or a row patch): the core's
+    /// page keeps it (its recording and a registration again read it).
+    Stored {
+        owner: u64,
+        id: String,
+        property: String,
+        write: StoredWrite,
+    },
+    /// Picture-in-picture's play/pause or step (`pip::Effect::Action`,
+    /// group E's leftover): the core runs the action.
+    PipAction {
+        action: &'static str,
+        step: Option<f64>,
+    },
+    /// The palette or the sheet opened (`producer-audio`): the core
+    /// revokes the physical input.
+    #[cfg(feature = "producer-audio")]
+    Revoke(crate::playback::producer_input::RevokeReason),
+}
+
+/// What [`UiInput::Stored`] writes into the core's page: a whole value, or
+/// a row patch the core applies to its copy of the stored array as the
+/// interface did to its own (`ui_patch::apply_vec`), so a patch costs the
+/// rows it carries, not the whole array.
+pub(crate) enum StoredWrite {
+    Whole(Value),
+    Rows {
+        shapes: Vec<crate::ui::ui_patch::Shape>,
+        rows: Vec<Value>,
+    },
+}
+
+impl UiInput {
+    /// The core's handling reads none of the interface's facts, so they are
+    /// not reported first (`Host::ui_report`): what plan step S3a(1) moved
+    /// from in-place calls, which reported none either.
+    pub(crate) fn reads_no_facts(&self) -> bool {
+        match self {
+            Self::Mounts(_)
+            | Self::PanelPlugins
+            | Self::Mounted(_)
+            | Self::Stored { .. }
+            | Self::PipAction { .. } => true,
+            #[cfg(feature = "producer-audio")]
+            Self::Revoke(_) => true,
+            _ => false,
+        }
+    }
+}
+
+/// What the interface asks the core for (plan step S3a(1)): its pulls of
+/// core data before, answered in place on one thread
+/// (`Host::take`, `Core::take`), each as the commands the pull returned.
+pub(crate) enum Take {
+    /// The oldest accepted mount change (`UiCommand::Mount`), for the
+    /// batching window.
+    Mount,
+    /// Every accepted mount change, for the closing batch.
+    Mounts,
+    /// The changes of a batch whose plugin still runs or is held.
+    Live(Vec<MountChange>),
+    /// The table snapshots that changed (`UiSnapshot::Registry`,
+    /// `UiSnapshot::Bindings`).
+    Tables,
+    /// The window settings in effect that changed (`WindowOp::OnTop`,
+    /// `UiSnapshot::CursorAutoHide`).
+    WindowSettings,
 }
 
 /// See [`UiInput::Line`]: what the interface tells, and to whom.

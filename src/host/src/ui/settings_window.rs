@@ -3,7 +3,7 @@
 //! the right, Close at the bottom. The player owns the window; each page is a
 //! plugin Slint component with its own bridge global, composed like panels.
 #![forbid(unsafe_code)]
-use crate::host::messages::{SettingsOp, UiCommand, UiReport};
+use crate::host::messages::{SettingsOp, StoredWrite, UiCommand, UiReport};
 use crate::host::*;
 use crate::process;
 use crate::ui::{composition, ui_image, ui_patch, ui_values};
@@ -44,7 +44,7 @@ fn category_label(name: &str) -> String {
 }
 pub const MAX_PAGES: usize = 8;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Page {
     pub owner: u64,
     pub manifest: String,
@@ -109,6 +109,11 @@ pub struct Settings {
     /// Each page's `settings.register` as its plugin sent it, without the
     /// properties (the page keeps the current ones): its recording.
     sent: BTreeMap<u64, Value>,
+    /// Moves whenever a page is added, replaced, removed or changed (plan
+    /// step S3a(1)): the interface's copy of the pages is given again only
+    /// then (`Core::copies`), not for the registrations, the recorded marks
+    /// or the checker.
+    changes: u64,
 }
 
 /// The options window as the interface holds it (K7; plan step S2c(4)):
@@ -366,6 +371,24 @@ fn wire_page(
     Ok(())
 }
 
+/// A row patch of a page's stored array in the options window, and what
+/// the core's page takes of it (plan step S3a(1)): the same patch, its
+/// shapes and the rows it carries, not the whole array, so a patch costs
+/// its rows on both sides ([`Settings::store`] applies it to the core's
+/// copy).
+fn patch_stored(
+    stored: &mut Vec<Value>,
+    shapes: &[ui_patch::Shape],
+    rows: Vec<Value>,
+) -> StoredWrite {
+    let write = StoredWrite::Rows {
+        shapes: shapes.to_vec(),
+        rows: rows.clone(),
+    };
+    ui_patch::apply_vec(stored, shapes, rows);
+    write
+}
+
 /// The properties `after` sets to other values than `before` had: what a
 /// page registered again writes into an open window (one it no longer sets
 /// builds the window again: `Settings::in_place`).
@@ -384,21 +407,54 @@ fn moved(before: &Page, after: &Page) -> bool {
 }
 
 impl Settings {
+    /// Every page, in registration order (the interface's copy, plan step
+    /// S3a(1)).
+    pub fn pages(&self) -> &[Page] {
+        &self.pages
+    }
+    /// How often the pages changed ([`Settings::changes`]).
+    pub fn pages_revision(&self) -> u64 {
+        self.changes
+    }
+    /// The pages, for a change: their revision moves.
+    fn pages_mut(&mut self) -> &mut Vec<Page> {
+        self.changes += 1;
+        &mut self.pages
+    }
     pub fn page(&self, owner: u64, id: &str) -> Option<&Page> {
         self.pages.iter().find(|p| p.owner == owner && p.id == id)
     }
     fn page_mut(&mut self, owner: u64, id: &str) -> Option<&mut Page> {
-        self.pages
+        self.pages_mut()
             .iter_mut()
             .find(|p| p.owner == owner && p.id == id)
+    }
+    /// A value the options window stored (`UiInput::Stored`; plan step
+    /// S3a(1)): a whole value, or the row patch the interface applied to
+    /// its copy, applied here to the same array ([`patch_stored`]).
+    pub(crate) fn store(&mut self, owner: u64, id: &str, property: String, write: StoredWrite) {
+        let Some(page) = self.page_mut(owner, id) else {
+            return;
+        };
+        match write {
+            StoredWrite::Whole(value) => {
+                page.properties.insert(property, value);
+            }
+            StoredWrite::Rows { shapes, rows } => {
+                if let Some(Value::Array(stored)) = page.properties.get_mut(&property) {
+                    ui_patch::apply_vec(stored, &shapes, rows);
+                }
+            }
+        }
     }
     /// `owner`'s pages and registrations go; whether a page went (an open
     /// window is then rebuilt: `Options::changed`).
     pub fn remove_owner(&mut self, owner: u64) -> bool {
         self.checking.retain(|(reply, ..)| reply.owner != owner);
-        let before = self.pages.len();
-        self.pages.retain(|p| p.owner != owner);
-        let changed = self.pages.len() != before;
+        let changed = self.pages.iter().any(|p| p.owner == owner);
+        if changed {
+            self.pages_mut().retain(|p| p.owner != owner);
+        }
         self.forget_gone();
         changed
     }
@@ -430,13 +486,16 @@ impl Settings {
     /// register again go; whether one went (an open window is then
     /// rebuilt: `Options::changed`).
     pub fn remove_recorded(&mut self, owner: u64) -> bool {
-        let before = self.pages.len();
-        let recorded = std::mem::take(&mut self.recorded);
-        self.pages
-            .retain(|p| !(p.owner == owner && recorded.contains(&p.serial)));
-        self.recorded = recorded;
+        let gone = |p: &Page| p.owner == owner && self.recorded.contains(&p.serial);
+        let changed = self.pages.iter().any(gone);
+        if changed {
+            let recorded = std::mem::take(&mut self.recorded);
+            self.pages_mut()
+                .retain(|p| !(p.owner == owner && recorded.contains(&p.serial)));
+            self.recorded = recorded;
+        }
         self.forget_gone();
-        self.pages.len() != before
+        changed
     }
     /// A woken plugin's registration of a recorded page with the same files
     /// (the recording is of this package, so the same source): the page
@@ -444,7 +503,7 @@ impl Settings {
     /// be updated in place; the page as it was. `None`: not such a
     /// re-registration (nothing changed).
     fn reregister(&mut self, page: &Page, sent: Value) -> Option<Page> {
-        let slot = self.pages.iter_mut().find(|p| {
+        let index = self.pages.iter().position(|p| {
             p.owner == page.owner
                 && p.id == page.id
                 && self.recorded.contains(&p.serial)
@@ -452,6 +511,7 @@ impl Settings {
                 && p.component == page.component
                 && p.global == page.global
         })?;
+        let slot = &mut self.pages_mut()[index];
         let serial = slot.serial;
         let before = std::mem::replace(
             slot,
@@ -468,7 +528,10 @@ impl Settings {
     /// open window's callbacks follow: `Options::rekey`).
     pub fn rekey(&mut self, from: u64, to: u64) -> Vec<u64> {
         let mut moved = Vec::new();
-        for page in self.pages.iter_mut().filter(|p| p.owner == from) {
+        if !self.pages.iter().any(|p| p.owner == from) {
+            return moved;
+        }
+        for page in self.pages_mut().iter_mut().filter(|p| p.owner == from) {
             page.owner = to;
             moved.push(page.serial);
         }
@@ -604,8 +667,8 @@ impl Core {
             .iter()
             .position(|p| p.owner == owner && p.id == page.id && recorded.contains(&p.serial))
         {
-            Some(index) => self.settings.pages[index] = page,
-            None => self.settings.pages.push(page),
+            Some(index) => self.settings.pages_mut()[index] = page,
+            None => self.settings.pages_mut().push(page),
         }
         self.settings.forget_gone();
     }
@@ -621,12 +684,18 @@ impl Core {
     }
     /// `settings.unregister`: the page goes; whether there was one.
     fn settings_unregister(&mut self, owner: u64, id: &str) -> bool {
-        let before = self.settings.pages.len();
-        self.settings
+        let changed = self
+            .settings
             .pages
-            .retain(|p| !(p.owner == owner && p.id == id));
+            .iter()
+            .any(|p| p.owner == owner && p.id == id);
+        if changed {
+            self.settings
+                .pages_mut()
+                .retain(|p| !(p.owner == owner && p.id == id));
+        }
         self.settings.forget_gone();
-        self.settings.pages.len() != before
+        changed
     }
 }
 
@@ -810,8 +879,6 @@ impl Host {
         let id = params_page(params)?.to_owned();
         let property = string(params, "property")?.to_owned();
         let page = self
-            .core
-            .settings
             .page(owner, &id)
             .ok_or_else(|| RpcError::new("missing", "page not registered"))?;
         let (view, serial) = (page.view(), page.serial);
@@ -873,9 +940,7 @@ impl Host {
             // Prepared rows were checked on the reader thread.
             RpcError::check_property(&property, &value)?;
         }
-        if let Some(page) = self.core.settings.page_mut(owner, &id) {
-            page.properties.insert(property.clone(), value);
-        }
+        self.page_stored(owner, &id, &property, value);
         self.images.set_seq(owner, &view, &property, seq);
         Ok(Value::Null)
     }
@@ -889,8 +954,6 @@ impl Host {
         if !params["id"].is_null() {
             let id = params_page(params)?;
             let page = self
-                .core
-                .settings
                 .page(owner, id)
                 .ok_or_else(|| RpcError::invalid("not a settings page of this plugin"))?;
             self.settings.current = Some(page.key());
@@ -917,8 +980,6 @@ impl Host {
         prepared: Option<Box<ui_values::Prepared>>,
     ) -> std::result::Result<Option<Value>, RpcError> {
         let page = self
-            .core
-            .settings
             .page(owner, id)
             .ok_or_else(|| RpcError::new("missing", "page not registered"))?;
         let view = page.view();
@@ -941,8 +1002,6 @@ impl Host {
                 .filter(|rows| ui_patch::applicable(&current, ops.before, &ops.shapes, rows));
             let Some(rows) = rows else {
                 return match self
-                    .core
-                    .settings
                     .page(owner, id)
                     .and_then(|page| page.properties.get(property))
                 {
@@ -956,8 +1015,6 @@ impl Host {
         } else {
             // The rows it keeps count toward the totals too.
             let Some(Value::Array(stored)) = self
-                .core
-                .settings
                 .page(owner, id)
                 .and_then(|page| page.properties.get(property))
             else {
@@ -965,9 +1022,7 @@ impl Host {
             };
             let whole = ui_patch::patched(stored, &ops);
             RpcError::check_property(property, &whole)?;
-            if let Some(page) = self.core.settings.page_mut(owner, id) {
-                page.properties.insert(property.to_owned(), whole);
-            }
+            self.page_stored(owner, id, property, whole);
             return Ok(None);
         }
         // The stored rows: copied on the reader thread when large.
@@ -976,14 +1031,61 @@ impl Host {
             _ => ops.rows.iter().map(|row| (*row).clone()).collect(),
         };
         if let Some(Value::Array(stored)) = self
-            .core
-            .settings
             .page_mut(owner, id)
             .and_then(|page| page.properties.get_mut(property))
         {
-            ui_patch::apply_vec(stored, &ops.shapes, rows);
+            let write = patch_stored(stored, &ops.shapes, rows);
+            self.report_stored(owner, id, property, write);
         }
         Ok(None)
+    }
+}
+
+impl Host {
+    /// The interface's copy of page `id` of `owner` (plan step S3a(1)).
+    pub(crate) fn page(&self, owner: u64, id: &str) -> Option<&Page> {
+        self.pages.iter().find(|p| p.owner == owner && p.id == id)
+    }
+    fn page_mut(&mut self, owner: u64, id: &str) -> Option<&mut Page> {
+        self.pages
+            .iter_mut()
+            .find(|p| p.owner == owner && p.id == id)
+    }
+    /// The open window stored `value` as `property` of page `id` of
+    /// `owner`: in the interface's copy of the page, and in the core's
+    /// (`UiInput::Stored`, in place, where the interface wrote the core's
+    /// page before; plan step S3a(1)).
+    fn page_stored(&mut self, owner: u64, id: &str, property: &str, value: Value) {
+        let Some(page) = self.page_mut(owner, id) else {
+            return;
+        };
+        page.properties.insert(property.to_owned(), value.clone());
+        self.report_stored(owner, id, property, StoredWrite::Whole(value));
+    }
+    fn report_stored(&mut self, owner: u64, id: &str, property: &str, write: StoredWrite) {
+        self.ui_report(UiReport::Input(crate::host::messages::UiInput::Stored {
+            owner,
+            id: id.to_owned(),
+            property: property.to_owned(),
+            write,
+        }));
+    }
+}
+impl Core {
+    /// The interface's report of a value the open window stored
+    /// (`UiInput::Stored`): the core's page keeps it. The interface's copy
+    /// has it already, so the pages are not given again for it alone
+    /// (`Core::pages_echoed`).
+    pub(crate) fn settings_stored(
+        &mut self,
+        owner: u64,
+        id: &str,
+        property: String,
+        write: StoredWrite,
+    ) {
+        let before = self.settings.pages_revision();
+        self.settings.store(owner, id, property, write);
+        self.pages_echoed(before);
     }
 }
 
@@ -1074,7 +1176,7 @@ impl Core {
         }
         self.settings.sent.insert(page.serial, sent_page(params));
         self.settings.recorded.insert(page.serial);
-        self.settings.pages.push(page.clone());
+        self.settings.pages_mut().push(page.clone());
         self.ui_command(UiCommand::Settings(SettingsOp::Added(Box::new(page))));
         Ok(())
     }
@@ -1094,20 +1196,10 @@ impl Host {
         Ok(())
     }
     fn settings_build(&mut self) -> Result<()> {
-        let order: Vec<u64> = sorted(&self.core.settings.pages)
-            .iter()
-            .map(|p| p.serial)
-            .collect();
+        let order: Vec<u64> = sorted(&self.pages).iter().map(|p| p.serial).collect();
         let pages: Vec<Page> = order
             .iter()
-            .filter_map(|serial| {
-                self.core
-                    .settings
-                    .pages
-                    .iter()
-                    .find(|p| p.serial == *serial)
-                    .cloned()
-            })
+            .filter_map(|serial| self.pages.iter().find(|p| p.serial == *serial).cloned())
             .collect();
         let refs: Vec<&Page> = pages.iter().collect();
         let definition = composition::build(source(&refs)?, "OptionsWindow")?;
@@ -1180,10 +1272,10 @@ impl Host {
                 &alias,
                 owner,
                 page.view(),
-                self.core.events.clone(),
+                self.events.sender(),
             )?;
         }
-        let events = self.core.events.clone();
+        let events = self.events.clone();
         instance.set_callback("select", move |args| {
             if let Some(SValue::Number(index)) = args.first()
                 && *index >= 0.
@@ -1192,7 +1284,7 @@ impl Host {
             }
             SValue::Void
         })?;
-        let events = self.core.events.clone();
+        let events = self.events.clone();
         instance.set_callback("close-window", move |_| {
             let _ = events.send(Event::Settings(generation, None));
             SValue::Void
@@ -1208,7 +1300,7 @@ impl Host {
         instance: &slint_interpreter::ComponentInstance,
         generation: u64,
     ) {
-        let events = self.core.events.clone();
+        let events = self.events.clone();
         instance.window().on_close_requested(move || {
             let _ = events.send(Event::Settings(generation, None));
             slint::CloseRequestResponse::KeepWindowShown
@@ -1270,7 +1362,7 @@ impl Host {
         let Some(open) = &self.settings.open else {
             return Ok(());
         };
-        let pages = sorted(&self.core.settings.pages);
+        let pages = sorted(&self.pages);
         let current = self
             .settings
             .current
@@ -1284,7 +1376,7 @@ impl Host {
     }
     /// Show `serial`, or the current / last page with the fallbacks of `pick`.
     fn settings_select(&mut self, serial: Option<u64>) -> Result<()> {
-        let pages = sorted(&self.core.settings.pages);
+        let pages = sorted(&self.pages);
         let wanted = match serial {
             Some(serial) => pages.iter().find(|p| p.serial == serial).map(|p| p.key()),
             None => self.settings.current.clone().or_else(|| {
@@ -1319,7 +1411,7 @@ impl Host {
                 .get_or_insert_with(Default::default);
             if last.last_page != key {
                 last.last_page = key;
-                let now = self.core.now_ms();
+                let now = self.now_ms();
                 self.remember(now);
             }
         }
@@ -2093,5 +2185,54 @@ mod tests {
         });
         assert!(failed.is_err());
         assert_eq!(focused(), Some(before));
+    }
+    /// Plan step S3a(1), review item B1: a row patch to an open page's
+    /// stored array crosses as the patch itself (`StoredWrite::Rows`), and
+    /// the core's copy (`Settings::store`) ends equal to the interface's,
+    /// for each shape and for a patch of several.
+    #[test]
+    fn a_row_patch_leaves_the_cores_stored_array_equal_to_the_interfaces() {
+        let initial = json!([{"n":0},{"n":1},{"n":2},{"n":3},{"n":4}]);
+        let patches = [
+            json!([{"op":"insert","at":2,"rows":[{"n":10},{"n":11}]}]),
+            json!([{"op":"set","at":1,"row":{"n":21}}]),
+            json!([{"op":"remove","at":3,"count":2}]),
+            json!([{"op":"move","from":0,"count":2,"to":2}]),
+            json!([
+                {"op":"insert","at":5,"rows":[{"n":30}]},
+                {"op":"set","at":0,"row":{"n":31}},
+                {"op":"remove","at":1,"count":1},
+                {"op":"move","from":3,"count":1,"to":0}
+            ]),
+        ];
+        let mut core = Settings::default();
+        let mut stored_page = page("a.plugin", "list", 0, 0, 1);
+        stored_page
+            .properties
+            .insert("rows".into(), initial.clone());
+        core.pages.push(stored_page);
+        let mut interface = initial.as_array().unwrap().clone();
+        for patch in &patches {
+            let ops = ui_patch::parse(patch, interface.len()).unwrap();
+            let rows = ops.rows.iter().map(|row| (*row).clone()).collect();
+            let write = patch_stored(&mut interface, &ops.shapes, rows);
+            assert!(
+                matches!(&write, StoredWrite::Rows { rows, .. } if rows.len() == ops.rows.len())
+            );
+            let before = core.pages_revision();
+            core.store(1, "list", "rows".into(), write);
+            assert!(
+                core.pages_revision() > before,
+                "a stored write is a page change"
+            );
+            assert_eq!(
+                core.page(1, "list").unwrap().properties["rows"],
+                Value::Array(interface.clone()),
+                "after {patch}"
+            );
+        }
+        // A whole value replaces it, the same on both sides.
+        core.store(1, "list", "rows".into(), StoredWrite::Whole(json!([])));
+        assert_eq!(core.page(1, "list").unwrap().properties["rows"], json!([]));
     }
 }

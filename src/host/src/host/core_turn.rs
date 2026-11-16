@@ -167,3 +167,62 @@ fn a_core_turn_runs_on_a_core_without_a_host() {
     // No playback command left the core for an event it ignored.
     assert!(commands.try_recv().is_err());
 }
+
+/// Plan step S3a(1): what the interface's copies need comes from the core
+/// alone. The first call gives every copied value; a call with nothing
+/// changed gives nothing; the core's own changes of its mount registry come
+/// once each, in order; a changed value comes again.
+#[test]
+fn the_interfaces_copies_follow_the_core() {
+    let root = tempfile::tempdir().unwrap();
+    let (mut core, _events, _commands) = core(root.path());
+    let first = core.copies();
+    assert!(first.facts.is_some() && first.plugins.is_some() && first.pages.is_some());
+    assert!(first.mount_ops.is_empty());
+    let none = core.copies();
+    assert!(none.facts.is_none() && none.plugins.is_none() && none.pages.is_none());
+    // A panel, recorded, moved to the plugin's next run, then gone.
+    let key = panel_key(7, composition::Slot::Sidebar);
+    let moved = panel_key(8, composition::Slot::Sidebar);
+    core.mounts.insert(
+        key,
+        Mount {
+            spec: composition::CompileSpec {
+                owner: key,
+                file: PathBuf::from("tab.slint"),
+                component: "Tab".into(),
+                global: Some("Bridge".into()),
+                slot: composition::Slot::Sidebar,
+            },
+            plugin: 7,
+            properties: BTreeMap::new(),
+            visible: true,
+            title: "Tab".into(),
+            manifest: "test.tab".into(),
+            builtin: false,
+            recorded: false,
+            call: Value::Null,
+        },
+    );
+    core.mount_recorded(key);
+    assert!(core.mount_move(key, moved, 8));
+    assert!(core.mount_remove(moved).is_some());
+    assert!(core.mount_remove(moved).is_none());
+    use super::outbox::MountOp;
+    assert_eq!(
+        core.copies().mount_ops,
+        [
+            MountOp::Recorded(key),
+            MountOp::Move {
+                from: key,
+                to: moved,
+                plugin: 8
+            },
+            MountOp::Remove(moved),
+        ]
+    );
+    assert!(core.copies().mount_ops.is_empty());
+    core.dialog_busy = true;
+    assert!(core.copies().facts.is_some_and(|facts| facts.dialog_busy));
+    assert!(core.copies().facts.is_none());
+}
