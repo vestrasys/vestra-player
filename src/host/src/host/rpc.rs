@@ -99,7 +99,13 @@ pub(crate) struct Request {
 /// the player could not show when it rebuilt a view, a callback whose
 /// arguments it could not convert). The SDK reports it to `onError`.
 pub(crate) fn ui_error(error: &RpcError) -> Value {
-    json!({"event":"ui.error","data":{"code":error.code,"message":error.message}})
+    json!({"event":"ui.error","data":ui_error_data(error)})
+}
+
+/// The `data` of [`ui_error`]: what the interface reports for the core to
+/// write (plan step S2f(1), `PluginLine::UiError`).
+pub(crate) fn ui_error_data(error: &RpcError) -> Value {
+    json!({"code":error.code,"message":error.message})
 }
 
 pub(crate) fn string<'a>(params: &'a Value, key: &str) -> std::result::Result<&'a str, RpcError> {

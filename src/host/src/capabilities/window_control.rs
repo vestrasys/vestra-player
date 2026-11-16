@@ -65,7 +65,9 @@ impl Capability for WindowControl {
                     return Err(RpcError::new("unavailable", "no native window"));
                 }
                 host.core.on_top.set(reply.owner, on);
-                host.apply_on_top();
+                host.ui_command(crate::host::messages::UiCommand::Window(
+                    crate::host::messages::WindowOp::ApplyOnTop,
+                ));
                 Ok(Some(Value::Null))
             }
             "window.setPictureInPicture" => host.set_picture_in_picture(reply, params),

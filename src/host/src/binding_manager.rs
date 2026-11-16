@@ -134,10 +134,8 @@ impl Host {
         self.core.bindings_mut().set_overlay(overlay);
         let now = self.core.now_ms();
         self.core.ui_state.touch(now);
-        if self.menu_open {
-            let result = self.refresh_menu();
-            self.report_menu(result);
-        }
+        // An open menu is the interface's (plan step S2f(1)).
+        self.ui_command(crate::host::messages::UiCommand::RefreshMenu);
     }
     fn bindings_list(&self) -> Value {
         let table = self.core.bindings();

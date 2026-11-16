@@ -755,7 +755,7 @@ fn run(host: &mut Host, reply: &Reply, params: &Value) -> Handled {
             .is_some()
     {
         // The confirmation to answer first comes into view.
-        host.show_waiting_confirmation();
+        host.ui_command(crate::host::messages::UiCommand::ShowWaiting);
         return Err(RpcError::new(
             "busy",
             "another confirmation is waiting for the user's answer",

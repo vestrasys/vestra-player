@@ -1,8 +1,22 @@
-//! `Host::handle`: one event of the UI thread's loop.
+//! `Host::handle`: one event of the loop, routed (plan step S2f(1)). The
+//! 26 UI-originated events go to the interface's part (`ui_event`), which
+//! reads and writes the interface's state and reports what the core has to
+//! do (`UiReport::Event`, `UiReport::Input`), delivered in place at the
+//! point where the core's work ran before; every other event is the
+//! core's (`core_event`).
+use super::messages::{CommandFrom, PluginLine, UiEvent, UiInput, UiReport};
 use super::*;
 
 impl Host {
     pub(crate) fn handle(&mut self, event: Event) {
+        match UiEvent::new(event) {
+            Ok(event) => self.ui_event(event.into_event()),
+            Err(event) => self.core_event(event),
+        }
+    }
+    /// An event of the core: a plugin, the playback worker, the reaper, the
+    /// spawner, the recorder, the settings check, a dialog's thread.
+    fn core_event(&mut self, event: Event) {
         // What a process said before the Host has it (its spawn on the
         // spawn thread is not answered yet) waits for it (`worker.rs`).
         let from_process = super::supervisor::worker::from_process(&event);
@@ -102,113 +116,6 @@ impl Host {
                     }
                 }
             }
-            #[cfg(feature = "producer-audio")]
-            Event::PhysicalInput(generation, params) => {
-                if generation == self.shell_generation {
-                    self.core.physical_input(params);
-                }
-            }
-            Event::WindowInput(generation, kind) => {
-                if generation != self.shell_generation {
-                    return;
-                }
-                let _ = kind;
-                // Activity keeps the pointer and the popped-out sidebar; it
-                // never reveals the fullscreen bar (FS-BAR-1).
-                self.policy.activity(self.core.now_ms());
-            }
-            Event::MenuAction(generation, action) => {
-                if !self.window_generation_live(generation)
-                    || (!matches!(action, MenuAction::Reset) && generation != self.menu_generation)
-                {
-                    return;
-                }
-                self.policy.activity(self.core.now_ms());
-                if debug_menu()
-                    && let MenuAction::Invoke(token) = &action
-                {
-                    diag!("menu: invoke {token} open={:?}", self.menu_path);
-                }
-                match action {
-                    MenuAction::Reset => {
-                        #[cfg(feature = "producer-audio")]
-                        self.core
-                            .physical_revoke(producer_input::RevokeReason::Menu);
-                        self.open_menu(generation, MenuMode::Main);
-                    }
-                    MenuAction::Back => {
-                        let mut path = self.menu_path.clone();
-                        path.pop();
-                        self.set_menu_path(path);
-                    }
-                    // A press outside the approval sheet answers Don't Run.
-                    MenuAction::Dismiss if self.menu_mode == MenuMode::Review => {
-                        self.review_action("decline");
-                    }
-                    MenuAction::Dismiss => self.close_menu(),
-                    MenuAction::Palette(action) => self.palette_action(action),
-                    MenuAction::Hover(level, token, now) => {
-                        if debug_menu() {
-                            diag!(
-                                "menu: hover level={level} token={token} now={now} open={:?} t={}",
-                                self.menu_path,
-                                self.core.now_ms()
-                            );
-                        }
-                        let Some(path) = menu::hover_target(&self.menu_path, level, &token) else {
-                            return;
-                        };
-                        if now {
-                            self.set_menu_path(path);
-                        } else {
-                            // The open submenu beside the hovered level.
-                            let submenu = (self.menu_path.len() > level)
-                                .then(|| self.menu_panels.get(level + 1).copied())
-                                .flatten();
-                            let pointer = self.menu_pointer();
-                            let now = self.core.now_ms();
-                            if let Some(path) =
-                                self.menu_aim
-                                    .hover(&self.menu_path, path, pointer, submenu, now)
-                            {
-                                self.set_menu_path(path);
-                            }
-                        }
-                    }
-                    MenuAction::Scroll(level, offset) => {
-                        if level <= self.menu_path.len() && offset.is_finite() {
-                            self.menu_scroll.resize(level + 1, 0.);
-                            self.menu_scroll[level] = offset;
-                            let result = self.refresh_menu();
-                            self.report_menu(result);
-                        }
-                    }
-                    MenuAction::Invoke(token) => match menu::parse_token(&token) {
-                        Some(menu::Token::Group(path)) => self.set_menu_path(path),
-                        Some(menu::Token::Command { owner, id }) => {
-                            self.acted_in(owner, self.menu_generation);
-                            self.close_menu();
-                            if let Err(error) = self.execute_command(owner, &id) {
-                                diag!("menu execute: {:?}", error);
-                            }
-                        }
-                        Some(menu::Token::Tab(owner)) => {
-                            self.close_menu();
-                            if self.policy.set_active(owner).is_ok() {
-                                let column = self
-                                    .core
-                                    .mounts
-                                    .get(&owner)
-                                    .and_then(|m| sidebar_tabs::Column::of(m.spec.slot))
-                                    .unwrap_or(sidebar_tabs::Column::Sidebar);
-                                self.remember_column(column, true);
-                                self.window_tick();
-                            }
-                        }
-                        None => (),
-                    },
-                }
-            }
             Event::ActionDone(reply, action, result) => {
                 input_trace::mark(&format!("host loop: {action} done"));
                 self.action_done(reply, &action, result)
@@ -279,24 +186,242 @@ impl Host {
                 }
                 self.broadcast(&event, data)
             }
+            Event::OwnerResources(owner, answer) => self.resources_answer(owner, &answer),
+            Event::Position(report) => self.triggers_position(report),
+            Event::SubtitleTrack(track) => self.triggers_subtitle(track),
+            Event::PluginMessage(owner, event, data) => {
+                self.send(owner, json!({"event":event,"data":data}))
+            }
+            Event::OpenFiles(files, front) => self.open_files(files, front),
+            Event::SettingsChecked(serial, result) => self.settings_checked(serial, result),
+            Event::ConfirmDone(reply, confirmed, checked) => {
+                self.ui_command(messages::UiCommand::Activity);
+                self.core.dialog_busy = false;
+                self.core.confirm_open = false;
+                self.respond(reply, Ok(json!({"confirmed":confirmed,"checked":checked})));
+            }
+            Event::SourceLocate(reply, fields) => {
+                if let Err(error) = crate::capabilities::locate_dialog(self, &reply, fields) {
+                    self.respond(reply, Err(error));
+                }
+            }
+            Event::SourceLocated(reply, mut fields, path) => {
+                self.ui_command(messages::UiCommand::Activity);
+                self.core.dialog_busy = false;
+                match path.as_deref().map(|path| path.to_str()) {
+                    None => self.respond(reply, Ok(Value::Null)),
+                    Some(None) => self.respond(
+                        reply,
+                        Err(RpcError::new(
+                            "unsupported",
+                            "the file's path is not Unicode",
+                        )),
+                    ),
+                    Some(Some(path)) => {
+                        fields["path"] = json!(path);
+                        let sent =
+                            self.core
+                                .backend
+                                .commands
+                                .send(crate::playback::backend::Command {
+                                    reply: reply.clone(),
+                                    method: "owner.sourceLocated".into(),
+                                    params: fields,
+                                });
+                        if sent.is_err() {
+                            self.respond(
+                                reply,
+                                Err(RpcError::new("backend", "playback worker stopped")),
+                            );
+                        }
+                    }
+                }
+            }
+            Event::DialogDone(reply, paths) => {
+                self.ui_command(messages::UiCommand::Activity);
+                self.core.dialog_busy = false;
+                self.respond(
+                    reply,
+                    Ok(json!({"cancelled":paths.is_none(),"paths":paths.unwrap_or_default()})),
+                );
+            }
+            Event::Exited(owner) => {
+                // Its stdout closed: its process is gone, so its stop sends
+                // no `runtime.stop`.
+                if let Some(plugin) = self.core.plugins.get_mut(&owner) {
+                    plugin.set_exited();
+                }
+                // Still running: the process ended without being stopped.
+                self.core.record_failure(owner, "plugin process exited");
+                self.process_ended(owner, crate::supervisor::ExitCause::Exited, None)
+            }
+            Event::Runner(runner, message) => self.runner_event(runner, &message),
+            Event::RunnerExited(runner) => {
+                if self
+                    .core
+                    .shared
+                    .as_ref()
+                    .is_some_and(|s| s.link.id == runner)
+                {
+                    self.restart_shared("the shared runner exited");
+                }
+            }
+            Event::Reaped(owner, code) => self.unit_reaped(owner, code),
+            Event::Spawned(owner, result) => self.spawned(owner, result),
+            Event::Recorded(owner, serial, result) => self.recorded(owner, serial, result),
+            Event::OutOfMemory(owner) => {
+                diag!("plugin {owner}: its JavaScript heap ran out of memory");
+                self.core.supervisor.process_out_of_memory(Pid(owner));
+            }
+            Event::BackendCleaned(owner) => self.unit_cleaned(owner),
+            Event::RuntimeFault(owner, error) => {
+                diag!("plugin {owner}: {error}");
+                let now = self.core.now_ms();
+                let _ = self.core.supervisor.activation_failed(
+                    Pid(owner),
+                    error.chars().take(512).collect(),
+                    now,
+                );
+                self.core.record_failure(owner, &error);
+                self.process_ended(
+                    owner,
+                    crate::supervisor::ExitCause::Fault,
+                    Some(error.chars().take(512).collect()),
+                );
+            }
+            ui => unreachable!("{:?} is the interface's (`ui_event`)", ui.label()),
+        }
+    }
+    /// The interface's part of one of the 26 UI-originated events (plan
+    /// step S2f(1)). Where the core has work, it is reported at the point
+    /// where it ran before: the event itself (`UiReport::Event`) or what
+    /// the interface derived from it (`UiReport::Input`).
+    fn ui_event(&mut self, event: Event) {
+        match event {
+            #[cfg(feature = "producer-audio")]
+            Event::PhysicalInput(generation, params) => {
+                if generation == self.shell_generation {
+                    self.report_event(Event::PhysicalInput(generation, params));
+                }
+            }
+            Event::WindowInput(generation, kind) => {
+                if generation != self.shell_generation {
+                    return;
+                }
+                let _ = kind;
+                // Activity keeps the pointer and the popped-out sidebar; it
+                // never reveals the fullscreen bar (FS-BAR-1).
+                self.policy.activity(self.core.now_ms());
+            }
+            Event::MenuAction(generation, action) => {
+                if !self.window_generation_live(generation)
+                    || (!matches!(action, MenuAction::Reset) && generation != self.menu_generation)
+                {
+                    return;
+                }
+                self.policy.activity(self.core.now_ms());
+                if debug_menu()
+                    && let MenuAction::Invoke(token) = &action
+                {
+                    diag!("menu: invoke {token} open={:?}", self.menu_path);
+                }
+                match action {
+                    MenuAction::Reset => {
+                        #[cfg(feature = "producer-audio")]
+                        self.ui_report(UiReport::Input(UiInput::MenuReset));
+                        self.open_menu(generation, MenuMode::Main);
+                    }
+                    MenuAction::Back => {
+                        let mut path = self.menu_path.clone();
+                        path.pop();
+                        self.set_menu_path(path);
+                    }
+                    // A press outside the approval sheet answers Don't Run.
+                    MenuAction::Dismiss if self.menu_mode == MenuMode::Review => {
+                        self.review_action("decline");
+                    }
+                    MenuAction::Dismiss => self.close_menu(),
+                    MenuAction::Palette(action) => self.palette_action(action),
+                    MenuAction::Hover(level, token, now) => {
+                        if debug_menu() {
+                            diag!(
+                                "menu: hover level={level} token={token} now={now} open={:?} t={}",
+                                self.menu_path,
+                                self.core.now_ms()
+                            );
+                        }
+                        let Some(path) = menu::hover_target(&self.menu_path, level, &token) else {
+                            return;
+                        };
+                        if now {
+                            self.set_menu_path(path);
+                        } else {
+                            // The open submenu beside the hovered level.
+                            let submenu = (self.menu_path.len() > level)
+                                .then(|| self.menu_panels.get(level + 1).copied())
+                                .flatten();
+                            let pointer = self.menu_pointer();
+                            let now = self.core.now_ms();
+                            if let Some(path) =
+                                self.menu_aim
+                                    .hover(&self.menu_path, path, pointer, submenu, now)
+                            {
+                                self.set_menu_path(path);
+                            }
+                        }
+                    }
+                    MenuAction::Scroll(level, offset) => {
+                        if level <= self.menu_path.len() && offset.is_finite() {
+                            self.menu_scroll.resize(level + 1, 0.);
+                            self.menu_scroll[level] = offset;
+                            let result = self.refresh_menu();
+                            self.report_menu(result);
+                        }
+                    }
+                    MenuAction::Invoke(token) => match menu::parse_token(&token) {
+                        Some(menu::Token::Group(path)) => self.set_menu_path(path),
+                        Some(menu::Token::Command { owner, id }) => {
+                            // The window it came from, as the interface knows
+                            // its windows; the core records it (`origins`).
+                            let origin = self.origin_of(self.menu_generation);
+                            self.close_menu();
+                            self.ui_report(UiReport::Input(UiInput::Command {
+                                from: CommandFrom::Menu,
+                                owner,
+                                id,
+                                origin,
+                            }));
+                        }
+                        Some(menu::Token::Tab(owner)) => {
+                            self.close_menu();
+                            if self.policy.set_active(owner).is_ok() {
+                                let column = self
+                                    .core
+                                    .mounts
+                                    .get(&owner)
+                                    .and_then(|m| sidebar_tabs::Column::of(m.spec.slot))
+                                    .unwrap_or(sidebar_tabs::Column::Sidebar);
+                                self.remember_column(column, true);
+                                self.window_tick();
+                            }
+                        }
+                        None => (),
+                    },
+                }
+            }
             Event::Binding(generation, owner, id) => {
                 if !self.window_generation_live(generation) {
                     return;
                 }
                 input_trace::mark(&format!("host loop: binding → {owner}/{id}"));
                 self.policy.activity(self.core.now_ms());
-                match self.core.commands.resolve_execution(owner, &id) {
-                    // A key never fails silently: the command's reason shows.
-                    Err(commands::CommandError::Disabled {
-                        reason: Some(reason),
-                    }) => self.show_osd(&reason),
-                    _ => {
-                        self.acted_in(owner, generation);
-                        if let Err(error) = self.execute_command(owner, &id) {
-                            diag!("binding execute: {error:?}");
-                        }
-                    }
-                }
+                let origin = self.origin_of(generation);
+                self.ui_report(UiReport::Input(UiInput::Command {
+                    from: CommandFrom::Key,
+                    owner,
+                    id,
+                    origin,
+                }));
             }
             Event::SidebarResized(generation, width) => {
                 if generation != self.shell_generation {
@@ -308,9 +433,6 @@ impl Host {
             }
             Event::BarButton(generation, token) => self.bar_click(generation, &token),
             Event::BarMore(generation, x, y) => self.bar_more(generation, x, y),
-            Event::OwnerResources(owner, answer) => self.resources_answer(owner, &answer),
-            Event::Position(report) => self.triggers_position(report),
-            Event::SubtitleTrack(track) => self.triggers_subtitle(track),
             Event::PipReturn(generation) => {
                 if generation == self.shell_generation {
                     self.pip.restore();
@@ -388,10 +510,7 @@ impl Host {
                     self.window_tick();
                 }
             }
-            Event::PluginMessage(owner, event, data) => {
-                self.send(owner, json!({"event":event,"data":data}))
-            }
-            Event::MainClosed => self.host_command("quit"),
+            Event::MainClosed => self.report_event(Event::MainClosed),
             Event::TitleStrip(generation, action) => {
                 if generation == self.shell_generation {
                     self.title_strip_action(&action);
@@ -417,7 +536,8 @@ impl Host {
                 if let Some(view) = self.views.remove(&(owner, id.clone())) {
                     let _ = view.instance.hide();
                     self.images.release_view(owner, &format!("w:{id}"));
-                    self.send(owner, json!({"event":"ui.closed","data":{"view":id}}));
+                    // The core tells the plugin (`ui.closed`).
+                    self.report_event(Event::ViewClosed(owner, id));
                 }
             }
             Event::UiCallback(owner, data) => {
@@ -425,7 +545,8 @@ impl Host {
                 if let Some(view) = data["view"].as_str() {
                     self.acted_in_view(owner, view);
                 }
-                self.send(owner, json!({"event":"ui.callback","data":data}))
+                // The core writes the plugin's line (`ui.callback`, R6).
+                self.report_event(Event::UiCallback(owner, data))
             }
             Event::InjectKey(generation, key, kind, physical) => {
                 if debug_keys() {
@@ -467,109 +588,142 @@ impl Host {
                 }
             }
             Event::Dropped(generation, path) => self.drops.arrived(generation, path),
-            Event::OpenFiles(files, front) => self.open_files(files, front),
             Event::Settings(generation, index) => self.settings_event(generation, index),
-            Event::SettingsChecked(serial, result) => self.settings_checked(serial, result),
             Event::CommandRunAnswered(reply, yes, remember) => {
                 self.policy.activity(self.core.now_ms());
+                self.report_event(Event::CommandRunAnswered(reply, yes, remember));
+            }
+            core => unreachable!("{:?} is the core's (`core_event`)", core.label()),
+        }
+    }
+    /// Report a UI event whose core part needs only the event
+    /// (`UiReport::Event`).
+    fn report_event(&mut self, event: Event) {
+        if let Ok(event) = UiEvent::new(event) {
+            self.ui_report(UiReport::Event(event));
+        }
+    }
+    /// The window of `generation` as the origin of what the user did there
+    /// (`origins::of_generation`; `None`: no live window of it).
+    pub(crate) fn origin_of(&self, generation: u64) -> Option<origins::Origin> {
+        let floating = self.floating.as_ref().map(|floating| floating.generation);
+        origins::of_generation(generation, self.shell_generation, floating)
+    }
+    /// The core's part of a UI event the interface reported whole
+    /// (`UiReport::Event`, plan step S2f(1)).
+    pub(crate) fn core_ui_event(&mut self, event: UiEvent) {
+        match event.into_event() {
+            #[cfg(feature = "producer-audio")]
+            Event::PhysicalInput(_, params) => self.core.physical_input(params),
+            Event::MainClosed => self.host_command("quit"),
+            Event::ViewClosed(owner, view) => {
+                self.send(owner, json!({"event":"ui.closed","data":{"view":view}}));
+            }
+            Event::UiCallback(owner, callback) => {
+                self.send(owner, json!({"event":"ui.callback","data":callback}))
+            }
+            Event::CommandRunAnswered(reply, yes, remember) => {
                 crate::capabilities::command_run_answered(self, reply, yes, remember);
             }
-            Event::ConfirmDone(reply, confirmed, checked) => {
-                self.policy.activity(self.core.now_ms());
-                self.core.dialog_busy = false;
-                self.core.confirm_open = false;
-                self.respond(reply, Ok(json!({"confirmed":confirmed,"checked":checked})));
-            }
-            Event::SourceLocate(reply, fields) => {
-                if let Err(error) = crate::capabilities::locate_dialog(self, &reply, fields) {
-                    self.respond(reply, Err(error));
+            other => unreachable!("{:?} has no core part", other.label()),
+        }
+    }
+    /// The core's part of what the interface derived from a UI event
+    /// (`UiReport::Input`, plan step S2f(1)).
+    pub(crate) fn core_input(&mut self, input: UiInput) {
+        match input {
+            UiInput::Command {
+                from: CommandFrom::Menu,
+                owner,
+                id,
+                origin,
+            } => {
+                if let Some(origin) = origin {
+                    self.core.act(owner, origin);
+                }
+                if let Err(error) = self.execute_command(owner, &id) {
+                    diag!("menu execute: {:?}", error);
                 }
             }
-            Event::SourceLocated(reply, mut fields, path) => {
-                self.policy.activity(self.core.now_ms());
-                self.core.dialog_busy = false;
-                match path.as_deref().map(|path| path.to_str()) {
-                    None => self.respond(reply, Ok(Value::Null)),
-                    Some(None) => self.respond(
-                        reply,
-                        Err(RpcError::new(
-                            "unsupported",
-                            "the file's path is not Unicode",
-                        )),
-                    ),
-                    Some(Some(path)) => {
-                        fields["path"] = json!(path);
-                        let sent =
-                            self.core
-                                .backend
-                                .commands
-                                .send(crate::playback::backend::Command {
-                                    reply: reply.clone(),
-                                    method: "owner.sourceLocated".into(),
-                                    params: fields,
-                                });
-                        if sent.is_err() {
-                            self.respond(
-                                reply,
-                                Err(RpcError::new("backend", "playback worker stopped")),
-                            );
-                        }
+            UiInput::Command {
+                from: CommandFrom::Key,
+                owner,
+                id,
+                origin,
+            } => match self.core.commands.resolve_execution(owner, &id) {
+                // A key never fails silently: the command's reason shows.
+                Err(commands::CommandError::Disabled {
+                    reason: Some(reason),
+                }) => self.show_osd(&reason),
+                _ => {
+                    if let Some(origin) = origin {
+                        self.core.act(owner, origin);
+                    }
+                    if let Err(error) = self.execute_command(owner, &id) {
+                        diag!("binding execute: {error:?}");
                     }
                 }
+            },
+            UiInput::Command {
+                from: CommandFrom::Bar,
+                owner,
+                id,
+                origin,
+            } => self.bar_command(owner, &id, origin),
+            UiInput::Command {
+                from: CommandFrom::Osd,
+                owner,
+                id,
+                origin,
+            } => self.osd_command_run(owner, &id, origin),
+            UiInput::Command {
+                from: CommandFrom::Palette,
+                owner,
+                id,
+                origin,
+            } => self.palette_command(owner, &id, origin),
+            UiInput::HostCommand(id) => self.host_command(id),
+            UiInput::Lead {
+                query,
+                keep,
+                status,
+            } => self.lead_event(query, keep, status),
+            UiInput::MenuReset => {
+                #[cfg(feature = "producer-audio")]
+                self.core
+                    .physical_revoke(producer_input::RevokeReason::Menu);
             }
-            Event::DialogDone(reply, paths) => {
-                self.policy.activity(self.core.now_ms());
-                self.core.dialog_busy = false;
-                self.respond(
-                    reply,
-                    Ok(json!({"cancelled":paths.is_none(),"paths":paths.unwrap_or_default()})),
-                );
+            UiInput::PageShown(owner) => self.page_shown(owner),
+            UiInput::TabShown(owner) => self.panel_shown(owner),
+            UiInput::TabWork(owner) => self.tab_work(owner),
+            UiInput::Line(PluginLine::UiError { owner, data }) => {
+                self.send(owner, json!({"event":"ui.error","data":data}));
             }
-            Event::Exited(owner) => {
-                // Its stdout closed: its process is gone, so its stop sends
-                // no `runtime.stop`.
-                if let Some(plugin) = self.core.plugins.get_mut(&owner) {
-                    plugin.set_exited();
-                }
-                // Still running: the process ended without being stopped.
-                self.core.record_failure(owner, "plugin process exited");
-                self.process_ended(owner, crate::supervisor::ExitCause::Exited, None)
+            UiInput::Line(PluginLine::UiCallback { owner, data }) => {
+                self.send(owner, json!({"event":"ui.callback","data":data}));
             }
-            Event::Runner(runner, message) => self.runner_event(runner, &message),
-            Event::RunnerExited(runner) => {
-                if self
-                    .core
-                    .shared
-                    .as_ref()
-                    .is_some_and(|s| s.link.id == runner)
-                {
-                    self.restart_shared("the shared runner exited");
-                }
+            UiInput::Line(PluginLine::HostError(data)) => self.broadcast("host.error", data),
+            UiInput::WindowTick { fullscreen } => {
+                self.core.host_command_states(fullscreen);
+                self.core.backdrop_cover_art();
             }
-            Event::Reaped(owner, code) => self.unit_reaped(owner, code),
-            Event::Spawned(owner, result) => self.spawned(owner, result),
-            Event::Recorded(owner, serial, result) => self.recorded(owner, serial, result),
-            Event::OutOfMemory(owner) => {
-                diag!("plugin {owner}: its JavaScript heap ran out of memory");
-                self.core.supervisor.process_out_of_memory(Pid(owner));
-            }
-            Event::BackendCleaned(owner) => self.unit_cleaned(owner),
-            Event::RuntimeFault(owner, error) => {
-                diag!("plugin {owner}: {error}");
-                let now = self.core.now_ms();
-                let _ = self.core.supervisor.activation_failed(
-                    Pid(owner),
-                    error.chars().take(512).collect(),
-                    now,
-                );
-                self.core.record_failure(owner, &error);
-                self.process_ended(
-                    owner,
-                    crate::supervisor::ExitCause::Fault,
-                    Some(error.chars().take(512).collect()),
-                );
-            }
+            UiInput::ColumnCommands(states) => self.core.column_command_states(states),
+            UiInput::MountTick => self.release_held_mounts(),
         }
+    }
+    /// A plugin line the interface's work produced (design §5.3, group E):
+    /// reported at the point where the interface wrote it before, so the
+    /// core writes it at the same place on the wire (R6, plan step
+    /// S2f(1)).
+    pub(crate) fn report_line(&mut self, line: PluginLine) {
+        self.ui_report(UiReport::Input(UiInput::Line(line)));
+    }
+    /// `ui.error` of `error` for `owner`, reported (`report_line`).
+    pub(crate) fn report_ui_error(&mut self, owner: u64, error: &RpcError) {
+        self.report_line(PluginLine::UiError {
+            owner,
+            data: rpc::ui_error_data(error),
+        });
     }
 }
 impl Core {

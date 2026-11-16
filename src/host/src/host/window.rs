@@ -109,7 +109,15 @@ impl Host {
         );
         self.lead_strip_tick(now, hover);
         self.review_tick(now);
-        self.core.host_command_states(fullscreen);
+        // The core's per-tick part (plan step S2f(1)): the fullscreen
+        // commands' states, then the backdrop's cover art. The latter ran
+        // a few lines further down before, after the layout settled and
+        // the shell's sizes were read; neither reads or writes anything of
+        // the core, and the cover-art command is still the tick's first
+        // command to the playback worker.
+        self.ui_report(UiReport::Input(super::messages::UiInput::WindowTick {
+            fullscreen,
+        }));
         // The sidebar and plugin panels show and hide `if` elements.
         view::settle_layout(shell.window());
         let number = |name: &str| match shell.get_property(name) {
@@ -121,7 +129,6 @@ impl Host {
             height: number("logical-height"),
         };
         let video = (number("video-width"), number("video-height"));
-        self.core.backdrop_cover_art();
         let scale = f64::from(shell.window().scale_factor());
         let presentation = &self.core.backend.render.presentation;
         presentation.sample(Instant::now());
@@ -335,10 +342,10 @@ impl Host {
                     self.ui_report(UiReport::WindowFacts(Box::new(report)));
                 }
             }
-            Err(error) => self.broadcast(
-                "host.error",
+            // The core writes the line (plan step S2f(1)).
+            Err(error) => self.report_line(super::messages::PluginLine::HostError(
                 json!({"code":"window-policy","message":error.to_string()}),
-            ),
+            )),
         }
     }
     /// The UI's facts value `facts` as the core receives it (rule R9),
@@ -417,8 +424,9 @@ impl Host {
     /// where the user acted (`Acted`); S2c(7): the interface's part of the
     /// state file (`Remembered`) and a complete file drop (`Drop`); S2d(1):
     /// the view requests' and picture-in-picture's results (`Answered`),
-    /// and the video area (`AreaFitted`, `VideoArea`). The other reports
-    /// follow in later steps.
+    /// and the video area (`AreaFitted`, `VideoArea`); S2f(1): the core's
+    /// part of the UI's events (`Event`, `Input`). The other reports follow
+    /// in later steps.
     pub(crate) fn ui_report(&mut self, report: UiReport) {
         match report {
             UiReport::WindowFacts(facts) => {
@@ -467,7 +475,10 @@ impl Host {
             UiReport::VideoArea { size, now } => self.answer_video_area(size, now),
             // Plan step S2d(2): the change the batching window holds.
             UiReport::Batching(held) => self.core.handed = held,
-            _ => unreachable!("not reported until plan step S2d(3), S2d(4) or S3a"),
+            // Plan step S2f(1): the core's part of the UI's events.
+            UiReport::Event(event) => self.core_ui_event(event),
+            UiReport::Input(input) => self.core_input(input),
+            _ => unreachable!("not reported until plan step S2f or S3a"),
         }
     }
     /// The fullscreen title strip (`title-strip.slint`): it applies to the
@@ -536,8 +547,13 @@ impl Host {
                     platform::minimize_window(shell.window());
                 }
             }
-            "exit-fullscreen" => self.host_command("exit-fullscreen"),
-            "close" => self.host_command("quit"),
+            // The host's commands are the core's (plan step S2f(1)).
+            "exit-fullscreen" => self.ui_report(UiReport::Input(
+                super::messages::UiInput::HostCommand("exit-fullscreen"),
+            )),
+            "close" => self.ui_report(UiReport::Input(super::messages::UiInput::HostCommand(
+                "quit",
+            ))),
             _ => {}
         }
     }
@@ -722,9 +738,10 @@ impl Host {
         // Its running plugin is kept up while the tab is current (declared
         // work, `Busy::ShownTab`), also when it woke under a new owner after
         // the tab was shown: registered here, every tick, not only on a change.
+        // Both are the core's (plan step S2f(1)): reported.
         let plugin = mount.plugin;
         if !mount.recorded {
-            self.tab_work(plugin);
+            self.ui_report(UiReport::Input(super::messages::UiInput::TabWork(plugin)));
             self.columns[index].woken = None;
         } else if self.columns[index].woken != Some(owner) {
             self.columns[index].woken = Some(owner);
@@ -733,7 +750,7 @@ impl Host {
                 column.prefix(),
                 mount.manifest
             );
-            self.panel_shown(plugin);
+            self.ui_report(UiReport::Input(super::messages::UiInput::TabShown(plugin)));
         }
     }
     /// The current tabs everywhere they matter: the panel keys' owners, the
@@ -914,7 +931,10 @@ impl Host {
                     diag!("floating panel: {error:#}");
                     if let Some(&owner) = owners.first() {
                         for owner in &owners {
-                            self.send(panel_plugin(*owner), json!({"event":"ui.error","data":{"code":"ui-prepare","message":format!("ui-prepare: {error:#}")}}));
+                            self.report_line(super::messages::PluginLine::UiError {
+                                owner: panel_plugin(*owner),
+                                data: json!({"code":"ui-prepare","message":format!("ui-prepare: {error:#}")}),
+                            });
                         }
                         let _ = self.policy.set_detached(owner, false);
                         self.remember_sidebar(false);

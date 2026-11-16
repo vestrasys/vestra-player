@@ -378,11 +378,11 @@ fn write_levels(
 
 impl Host {
     pub(crate) fn report_menu(&mut self, result: Result<()>) {
+        // The core writes the line (plan step S2f(1)).
         if let Err(error) = result {
-            self.broadcast(
-                "host.error",
+            self.report_line(messages::PluginLine::HostError(
                 json!({"code":"menu-bridge","message":error.to_string()}),
-            );
+            ));
         }
     }
     /// Menu callbacks shared by the shell and the floating window.

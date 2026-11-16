@@ -321,7 +321,7 @@ impl Host {
         // Nothing typed after Shift+Enter: Enter stops that request, also
         // before its status arrived.
         let status = command_palette::lead_shows_status(has_status || self.palette.sent, &query);
-        self.lead_event(query, keep, status);
+        self.lead_request(query, keep, status);
         if status {
             self.palette.sent = false;
         }
@@ -345,7 +345,38 @@ impl Host {
             return;
         };
         let status = command_palette::lead_shows_status(lead.row.status.is_some(), &query);
-        self.lead_event(query, keep, status);
+        self.lead_request(query, keep, status);
+    }
+    /// The interface's part of a request to the lead's holder (plan step
+    /// S2f(1)): the core sends it (`UiInput::Lead`, `lead_event`); a menu
+    /// that is not kept closes after it.
+    pub(crate) fn lead_request(&mut self, query: String, keep: bool, status: bool) {
+        if self.core.lead.is_none() {
+            return;
+        }
+        self.ui_report(messages::UiReport::Input(messages::UiInput::Lead {
+            query,
+            keep,
+            status,
+        }));
+        if !keep && self.menu_open {
+            self.close_menu();
+        }
+    }
+    /// The core's part of a palette row (`UiInput::Command`, plan step
+    /// S2f(1)): the window it came from is recorded, the command runs.
+    pub(crate) fn palette_command(
+        &mut self,
+        owner: u64,
+        id: &str,
+        origin: Option<origins::Origin>,
+    ) {
+        if let Some(origin) = origin {
+            self.core.act(owner, origin);
+        }
+        if let Err(error) = self.execute_command(owner, id) {
+            diag!("palette execute: {:?}", error);
+        }
     }
     /// The `palette.lead` event to the holder, with a new ticket; `status`:
     /// the user activated the status (Enter on the status row, the strip's
@@ -368,9 +399,8 @@ impl Host {
             lead.ended = None;
         }
         input_trace::follow(&format!("palette lead to plugin {owner} (keep {keep})"));
-        if !keep && self.menu_open {
-            self.close_menu();
-        }
+        // A menu not kept closes after this line, on the interface's side
+        // (`lead_request`; before plan step S2f(1) it closed before it).
         self.send(
             owner,
             json!({"event": crate::capabilities::LEAD_EVENT,
@@ -465,10 +495,12 @@ impl Host {
                     self.close_menu();
                 }
                 // The palette is the main window's.
-                self.act(item.owner, origins::Origin::Main);
-                if let Err(error) = self.execute_command(item.owner, &item.id) {
-                    diag!("palette execute: {:?}", error);
-                }
+                self.ui_report(messages::UiReport::Input(messages::UiInput::Command {
+                    from: messages::CommandFrom::Palette,
+                    owner: item.owner,
+                    id: item.id,
+                    origin: Some(origins::Origin::Main),
+                }));
                 if !keep {
                     return;
                 }

@@ -324,7 +324,7 @@ fn create_window(
 /// What a new window component was set up with: each page's owner as its
 /// callbacks read it, and the values it could not take (reported to
 /// their plugins once the window shows).
-type Wired = (BTreeMap<u64, Rc<Cell<u64>>>, Vec<(u64, Value)>);
+type Wired = (BTreeMap<u64, Rc<Cell<u64>>>, Vec<(u64, RpcError)>);
 
 /// A page's bridge callbacks: each goes to the plugin that owns the page
 /// when it is called (`owner`, which a wake moves to the new generation).
@@ -1149,7 +1149,7 @@ impl Host {
         let (owners, reports) = wired.unwrap_or_default();
         self.settings_bind_window(&instance, generation);
         for (owner, report) in reports {
-            self.send(owner, report);
+            self.report_ui_error(owner, &report);
         }
         self.settings.open = Some(Open {
             instance,
@@ -1181,7 +1181,7 @@ impl Host {
                         // Checked when written (`check_property`): an image
                         // removed since. Logged and reported to the plugin.
                         diag!("settings property {}/{name}: {}", page.key(), error.message);
-                        reports.push((page.owner, crate::host::ui_error(&error)));
+                        reports.push((page.owner, error));
                     }
                 }
             }
@@ -1264,7 +1264,7 @@ impl Host {
             let written = self
                 .prop_value(page.owner, &page.view(), name, value)
                 .map_err(|error| {
-                    self.send(page.owner, crate::host::ui_error(&error));
+                    self.report_ui_error(page.owner, &error);
                     anyhow::anyhow!(error.message)
                 })
                 .and_then(|value| composition::set_alias_value(&instance, &alias, name, value));
@@ -1341,7 +1341,9 @@ impl Host {
         if let Some(owner) = shown
             && self.settings.open.is_some()
         {
-            self.page_shown(owner);
+            self.ui_report(UiReport::Input(crate::host::messages::UiInput::PageShown(
+                owner,
+            )));
         }
         Ok(())
     }

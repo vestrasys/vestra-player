@@ -177,7 +177,8 @@ impl Host {
     /// place, at the point today's code did its work, so order and timing
     /// are unchanged.
     pub(crate) fn prepare_mount_tick(&mut self) {
-        self.release_held_mounts();
+        // The core answers what it held first (plan step S2f(1)).
+        self.ui_report(UiReport::Input(messages::UiInput::MountTick));
         if self.preparing.is_none() {
             if let Some(change) = self.core.mount_command().map(mount_change) {
                 let preparing = unannounced([&change]);
@@ -521,6 +522,17 @@ impl Host {
             UiCommand::Snapshot(UiSnapshot::StartupSettled(settled)) => {
                 self.startup_panels = settled;
             }
+            // Plan step S2f(1) (design §5.3, group B): interface work the
+            // core called in place before.
+            UiCommand::RefreshMenu => {
+                if self.menu_open {
+                    let result = self.refresh_menu();
+                    self.report_menu(result);
+                }
+            }
+            UiCommand::ShowWaiting => self.show_waiting_confirmation(),
+            UiCommand::Activity => self.policy.activity(self.core.now_ms()),
+            UiCommand::Window(WindowOp::ApplyOnTop) => self.apply_on_top(),
             _ => unreachable!(
                 "not sent here: the tables go by `sync_tables`; `RekeyOwner` is not sent"
             ),
@@ -927,7 +939,7 @@ impl Host {
                 diag!("panel {key}: it does not compile: {error:#}");
                 self.tabs_failed.insert(key);
                 let refusal = RpcError::new("ui-prepare", format!("ui-prepare: {error:#}"));
-                self.send(panel_plugin(key), ui_error(&refusal));
+                self.report_ui_error(panel_plugin(key), &refusal);
                 matches!(
                     self.panels.show(window, generation, slot, None, &events),
                     Ok(Shown::Changed { .. })
@@ -962,7 +974,7 @@ impl Host {
                     diag!("panel {key}: it does not compile: {error:#}");
                     self.tabs_failed.insert(key);
                     let refusal = RpcError::new("ui-prepare", format!("ui-prepare: {error:#}"));
-                    self.send(panel_plugin(key), ui_error(&refusal));
+                    self.report_ui_error(panel_plugin(key), &refusal);
                 }
             }
         }
@@ -1069,7 +1081,7 @@ impl Host {
     pub(crate) fn report_value_failures(&mut self, failures: Vec<(u64, String)>) {
         for (owner, message) in failures {
             diag!("mount property {owner}/{message}");
-            self.send(panel_plugin(owner), ui_error(&RpcError::new("ui", message)));
+            self.report_ui_error(panel_plugin(owner), &RpcError::new("ui", message));
         }
     }
 
@@ -1095,7 +1107,7 @@ impl Host {
                 Ok(value) => values.push((name.clone(), value)),
                 Err(error) => {
                     diag!("mount property {owner}/{name}: {}", error.message);
-                    self.send(owner, ui_error(&error));
+                    self.report_ui_error(owner, &error);
                 }
             }
         }
@@ -1125,10 +1137,18 @@ impl Host {
             let (owner, slot) = (panel_plugin(event.owner), slot_of(event.owner));
             // The main window's panel, or the floating sidebar's.
             self.acted_in(owner, event.shell_generation);
-            match event.args {
-                Ok(args)=>self.send(owner,json!({"event":"ui.callback","data":{"view":"$mount","slot":slot,"callback":event.callback,"args":args}})),
-                Err(error)=>self.send(owner,json!({"event":"ui.error","data":{"code":"ui","slot":slot,"message":format!("callback {}: {error}",event.callback)}})),
-            }
+            // The core writes the plugin's line (plan step S2f(1)).
+            let line = match event.args {
+                Ok(args) => messages::PluginLine::UiCallback {
+                    owner,
+                    data: json!({"view":"$mount","slot":slot,"callback":event.callback,"args":args}),
+                },
+                Err(error) => messages::PluginLine::UiError {
+                    owner,
+                    data: json!({"code":"ui","slot":slot,"message":format!("callback {}: {error}",event.callback)}),
+                },
+            };
+            self.report_line(line);
         }
     }
 }

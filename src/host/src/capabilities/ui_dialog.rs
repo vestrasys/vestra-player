@@ -78,11 +78,11 @@ fn ask(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<()
     // Refused while another waits; that one comes into view, so the wait
     // is never somewhere the user cannot see.
     if host.core.dialog_busy {
-        host.show_waiting_confirmation();
+        host.ui_command(crate::host::messages::UiCommand::ShowWaiting);
         return Err(RpcError::new("busy", "a native dialog is already open"));
     }
     if host.sheet_waiting() {
-        host.show_waiting_confirmation();
+        host.ui_command(crate::host::messages::UiCommand::ShowWaiting);
         return Err(RpcError::new(
             "busy",
             "another confirmation is waiting for the user's answer",

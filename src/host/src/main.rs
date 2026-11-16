@@ -1007,10 +1007,10 @@ fn player() -> Result<()> {
                         if host.menu_open
                             && let Err(error) = host.refresh_menu()
                         {
-                            host.broadcast(
-                                "host.error",
+                            // The core writes the line (plan step S2f(1)).
+                            host.report_line(host::messages::PluginLine::HostError(
                                 json!({"code":"menu-projection","message":error.to_string()}),
-                            );
+                            ));
                         }
                     }
                 }
