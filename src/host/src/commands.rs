@@ -620,7 +620,7 @@ fn button_valid(button: &Button, path: &[String]) -> Result<()> {
     }
 }
 
-/// The bottom-bar buttons, as [`Registry::buttons`] lays them out.
+/// The bottom-bar buttons, as [`View::buttons`] lays them out.
 #[derive(Debug, Default)]
 pub struct Buttons<'a> {
     /// The strip's, left to right: ascending order, then manifest id, then
@@ -1292,7 +1292,7 @@ impl View {
         shown_entries(&self.commands, &self.held)
     }
 
-    /// See [`Registry::snapshot`]: built once for this copy.
+    /// See [`MenuSnapshot`]: built once for this copy.
     pub fn snapshot(&self) -> Arc<MenuSnapshot> {
         Arc::clone(
             self.menu
@@ -1300,7 +1300,7 @@ impl View {
         )
     }
 
-    /// See [`Registry::buttons`].
+    /// See [`Buttons`].
     pub fn buttons(&self) -> Buttons<'_> {
         buttons(&self.commands)
     }
@@ -1386,7 +1386,7 @@ fn shown_entries(commands: &Commands, held: &Held) -> Vec<CommandSnapshot> {
         .collect()
 }
 
-/// The menu tree of [`Registry::snapshot`].
+/// The menu tree of [`View::snapshot`].
 fn menu_snapshot(commands: &Commands, held: &Held, revision: u64) -> MenuSnapshot {
     // A held owner's entries show disabled with the reason
     // (`set_held`): copies, few (one plugin's).
@@ -1412,7 +1412,7 @@ fn menu_snapshot(commands: &Commands, held: &Held, revision: u64) -> MenuSnapsho
     }
 }
 
-/// See [`Registry::buttons`].
+/// See [`View::buttons`].
 fn buttons(commands: &Commands) -> Buttons<'_> {
     let mut per_owner: BTreeMap<OwnerGeneration, usize> = BTreeMap::new();
     let mut result = Buttons::default();

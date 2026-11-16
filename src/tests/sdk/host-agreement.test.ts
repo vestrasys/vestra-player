@@ -706,7 +706,7 @@ test("step seek parameters are the player's: setStepSeek keyframes, host.run sec
   );
   assert.match(
     host("src/host/actions.rs"),
-    /"keyframes":self\.step_keyframes\(\)/,
+    /"keyframes":\s*self(\.core)?\.step_keyframes\(\)/,
   );
 });
 
