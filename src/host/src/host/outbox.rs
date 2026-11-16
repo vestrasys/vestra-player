@@ -45,7 +45,10 @@ pub(crate) enum Then {
     /// `settings.register` of a recorded page again (`SettingsOp::Updated`):
     /// the open window's `ui.error` lines come first (design §5.1 note 11),
     /// then the refused initial values' `ui.error` lines and the reply.
-    Registered { reply: Reply, refused: Vec<RpcError> },
+    Registered {
+        reply: Reply,
+        refused: Vec<RpcError>,
+    },
     /// What a process said while its spawn was not answered yet
     /// (`spawned`): each event handled after the requests of the ones
     /// before it were carried out, as when each was handled alone.
@@ -81,13 +84,32 @@ impl Core {
     pub(crate) fn check_settled(&self, read: &[Fact]) {
         for &fact in read {
             debug_assert!(
-                !self
-                    .outbox
-                    .iter()
-                    .any(|out| matches!(out, Out::Ui(command) if changes(command, fact))),
+                !self.outbox.iter().any(|out| match out {
+                    // The core's copy dropped that confirmation already
+                    // (`UiDialog::revoke`): a drop that finds none changes
+                    // nothing.
+                    Out::Ui(UiCommand::DropConfirm { owner }) => {
+                        matches!(fact, Fact::Sheet)
+                            && self
+                                .ui_facts
+                                .sheet
+                                .is_some_and(|sheet| sheet.owner == *owner && sheet.confirm)
+                    }
+                    Out::Ui(command) => changes(command, fact),
+                    Out::Then(_) => false,
+                }),
                 "the core reads {fact:?} while a request that changes it waits"
             );
         }
+    }
+    /// Debug builds: a `DropConfirm` of `owner` waits in the outbox (the
+    /// core's copy of the sheet is ahead of the interface's until it is
+    /// carried out, `UiDialog::revoke`).
+    #[cfg(debug_assertions)]
+    pub(crate) fn drop_pending(&self, owner: u64) -> bool {
+        self.outbox
+            .iter()
+            .any(|out| matches!(out, Out::Ui(UiCommand::DropConfirm { owner: o }) if *o == owner))
     }
     /// Debug builds: a cancel of the batching window's change waits in the
     /// outbox (the core cleared its record already; the window drops it
@@ -154,7 +176,8 @@ pub(crate) enum Fact {
 #[cfg(debug_assertions)]
 fn changes(command: &UiCommand, fact: Fact) -> bool {
     use super::messages::{UiSnapshot, WindowOp};
-    let revokes = |plugin: u64| matches!(command, UiCommand::RevokeOwner { owner, .. } if *owner == plugin);
+    let revokes =
+        |plugin: u64| matches!(command, UiCommand::RevokeOwner { owner, .. } if *owner == plugin);
     match fact {
         Fact::Sheet => matches!(
             command,

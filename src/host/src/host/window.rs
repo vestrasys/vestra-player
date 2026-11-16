@@ -307,7 +307,7 @@ impl Host {
                 (playing && ((fullscreen && idle) || windowed)).into(),
             )?;
             Ok(
-                json!({"shellGeneration":self.shell_generation,"fullscreen":fullscreen,"maximized":maximized,"logicalWidth":viewport.width,"logicalHeight":viewport.height,"videoArea":{"width":video.0,"height":video.1},"menuOpen":self.menu_open,"dialogOpen":self.core.dialog_busy,"nativeActive":native.map(|facts|facts.active),"nativeUnavailable":self.native_unavailable,"slots":snapshot,"backdrop":self.backdrop_state(),"pictureInPicture":self.pip_state()}),
+                json!({"shellGeneration":self.shell_generation,"fullscreen":fullscreen,"maximized":maximized,"logicalWidth":viewport.width,"logicalHeight":viewport.height,"videoArea":{"width":video.0,"height":video.1},"menuOpen":self.menu_open,"dialogOpen":self.core.dialog_busy,"nativeActive":native.map(|facts|facts.active),"nativeUnavailable":self.native_unavailable,"slots":snapshot,"backdrop":self.backdrop_state(),"pictureInPicture":self.pip_shown()}),
             )
         })();
         // The slots' containers show their panels (a column opened, a tab
@@ -455,9 +455,18 @@ impl Host {
     /// with the in-place delivery (plan S3a).
     #[cfg(debug_assertions)]
     pub(crate) fn check_ui_facts(&self) {
+        let mut now = self.ui_facts_now();
+        // A stopped plugin's confirmation that a waiting `DropConfirm`
+        // drops: the core's copy is ahead (plan step S2f(3),
+        // `UiDialog::revoke`).
+        if now
+            .sheet
+            .is_some_and(|sheet| sheet.confirm && self.core.drop_pending(sheet.owner))
+        {
+            now.sheet = None;
+        }
         debug_assert_eq!(
-            self.core.ui_facts,
-            self.ui_facts_now(),
+            self.core.ui_facts, now,
             "the core's interface facts are behind the interface"
         );
         for column in Column::ALL {

@@ -342,6 +342,13 @@ impl Host {
         let pip = &self.core.ui_facts.pip;
         json!({"supported":pip.supported,"active":pip.active})
     }
+    /// `WindowState.pictureInPicture` as the interface has it now: what the
+    /// window tick measures into the window facts (the live state; the
+    /// core's `pip_state` reads its copy, plan step S2f(3)).
+    pub(crate) fn pip_shown(&self) -> Value {
+        let pip = self.pip_fact();
+        json!({"supported":pip.supported,"active":pip.active})
+    }
     /// What the interface reports of picture-in-picture (`UiFacts::pip`):
     /// offered here, the window showing, and whose request is in effect.
     pub(crate) fn pip_fact(&self) -> super::messages::PipFact {

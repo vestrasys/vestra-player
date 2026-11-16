@@ -49,6 +49,19 @@ impl Capability for UiDialog {
     /// S2d(3)).
     fn revoke(&self, host: &mut Host, owner: u64, keep_recorded: bool) {
         host.ui_command(UiCommand::DropConfirm { owner });
+        // The interface drops the plugin's confirmation where the command
+        // is carried out, after this turn's handler; the core's copy of
+        // its facts drops it now, so what the core judges later in this
+        // turn (`Busy::Dialog` of another plugin) reads it gone, as when the
+        // command was carried out in place (plan step S2f(3)).
+        if host
+            .core
+            .ui_facts
+            .sheet
+            .is_some_and(|sheet| sheet.owner == owner && sheet.confirm)
+        {
+            host.core.ui_facts.sheet = None;
+        }
         if !keep_recorded {
             host.core.origins.forget(owner);
         }
