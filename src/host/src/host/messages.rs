@@ -638,9 +638,6 @@ pub(crate) enum UiReport {
     /// ([`super::outbox::Then`]) runs now. Sent once per wake, after the
     /// reports those commands' parts sent.
     Applied(u64),
-    /// A request of the interface's for core data (plan step S3a(3): the
-    /// answer is pushed into the core→UI queue, not returned).
-    Take(Take),
     /// Mount changes left the batching queue: the core sends their
     /// `ui.preparing` (`phase: preparing`) lines, in this order. Only
     /// changes not announced before (a failed batch's changes are put back
@@ -894,23 +891,6 @@ impl UiInput {
     }
 }
 
-/// What the interface asks the core for (plan step S3a(1): its pulls of
-/// core data before). Plan step S3a(3): a report (`UiReport::Take`) whose
-/// answer the core pushes into the core→UI queue. The table snapshots and
-/// the window settings are no longer asked: the core pushes them at the
-/// end of its turn when they changed.
-pub(crate) enum Take {
-    /// The batching window closed on `change` (the one it held): the core
-    /// joins every change accepted meanwhile unless `singly` (after a
-    /// failed batch), announces the joined ones (`ui.preparing`), keeps
-    /// those whose plugin still runs or is held, and answers
-    /// `UiCommand::Batch`.
-    Close {
-        change: Box<MountChange>,
-        singly: bool,
-    },
-}
-
 /// See [`UiInput::Line`]: what the interface tells, and to whom.
 pub(crate) enum PluginLine {
     /// `ui.error` to `owner` with `data` (`{code, message}`, a slot).
@@ -1121,7 +1101,6 @@ impl UiReport {
             Self::VideoArea { .. } => "Report.VideoArea",
             Self::Batching(_) => "Report.Batching",
             Self::Applied(_) => "Report.Applied",
-            Self::Take(_) => "Report.Take",
             Self::MountPreparing(_) => "Report.MountPreparing",
             Self::MountApplied(_) => "Report.MountApplied",
             Self::Acted { .. } => "Report.Acted",
@@ -1625,7 +1604,6 @@ mod tests {
             UiReport::Input(_) => "Input",
             UiReport::UiFacts(..) => "UiFacts",
             UiReport::Applied(_) => "Applied",
-            UiReport::Take(_) => "Take",
         }
     }
 

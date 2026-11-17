@@ -472,7 +472,9 @@ fn mount(
             .mount_queue
             .iter()
             .map(|c| (c.reply.owner, c.contribution.as_ref().map(|m| m.spec.slot)))
-            .chain(core.handed.as_ref().map(|h| (h.reply.owner, h.slot)))
+            // The window's change and a batch in flight count (S3a(3) review
+            // B2).
+            .chain(core.handed_all().map(|h| (h.reply.owner, h.slot)))
             .collect::<Vec<_>>();
         let mounted = core.mounts.values().map(|m| (m.plugin, m.spec.slot));
         if let Some(holder) = slot_claims::occupant(slot, reply.owner, mounted, &pending) {
@@ -533,12 +535,11 @@ fn waiting_mounts(core: &Core, owner: u64) -> Vec<(u64, Option<composition::Slot
         .get(&owner)
         .and_then(|plugin| plugin.manifest.name.clone())
         .unwrap_or_default();
+    // The window's change and a batch in flight (S3a(3) review B2).
     let mut waiting = core
-        .handed
-        .as_ref()
+        .handed_all()
         .filter(|held| held.reply.owner == owner)
         .map(|held| (held.key, held.slot, held.call.clone()))
-        .into_iter()
         .chain(
             core.mount_queue
                 .iter()

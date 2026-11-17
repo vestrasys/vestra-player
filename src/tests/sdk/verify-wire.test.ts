@@ -294,6 +294,25 @@ test("allowed reorders, class 3: interface-report lines keep their order and the
   assert.match(coreMoved.differences[0], /UI-independent stream, line 1:/);
 });
 
+test("allowed reorders, worker replies: a clipboard reply may move against the core lines", () => {
+  // S3a(3) review item 7: `clipboard.*` is answered from its serial thread,
+  // a turn later than in place.
+  const steps: Step[] = [
+    ["w.one", "in", { id: 1, method: "clipboard.readText", params: {} }],
+    ["w.one", "in", { id: 2, method: "source.state", params: {} }],
+    ["w.one", "out", { id: 2, result: { phase: "idle" } }],
+    ["w.one", "out", { id: 1, result: "text" }],
+  ];
+  const moved: Step[] = [steps[0], steps[1], steps[3], steps[2]];
+  const a = normalise(trace(steps, A), A);
+  const b = normalise(trace(moved, B), B);
+  assert.equal(compareTraces(a, b).differences.length, 1, "strict: a difference");
+  const allowed = compareTraces(a, b, { allowReorders: true });
+  assert.deepEqual(allowed.differences, []);
+  assert.deepEqual(allowed.moves, { 2: 0, 3: 0 }, "not counted as a class 2 or 3 move");
+  assert.equal(lineClass(a.plugins["w.one"].out[1]), 4);
+});
+
 test("allowed reorders: the summary totals the reorders and the moves per class", () => {
   // The class-3 case above (one reorder: one class-2 and five class-3
   // moves), written as two V2 run directories.

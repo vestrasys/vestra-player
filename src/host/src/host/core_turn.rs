@@ -114,7 +114,10 @@ fn core(root: &Path) -> (Core, mpsc::Receiver<Event>, mpsc::Receiver<Command>) {
         ui_facts_seq: 0,
         handover_seq: 0,
         cancelled_handovers: Vec::new(),
-        window_open: false,
+        window: None,
+        batch_in_flight: Vec::new(),
+        mount_singly: 0,
+        retry_due: false,
         clipboard: Default::default(),
         on_demand: supervisor::OnDemand::from_env(),
     };
@@ -310,34 +313,156 @@ fn a_skipped_tick_report_changes_nothing_in_the_core() {
 /// over again is recorded.
 #[test]
 fn a_cancelled_changes_late_report_does_not_bring_it_back() {
-    use messages::MountCancel;
+    use messages::{MountCancel, UiCommand};
     let root = tempfile::tempdir().unwrap();
     let (mut core, _events, _commands) = core(root.path());
+    core.headless = false;
     let key = panel_key(7, composition::Slot::Bottom);
-    let held = |seq| super::mounts::HandedMount {
-        reply: Reply { owner: 7, id: 3 },
-        key,
-        slot: Some(composition::Slot::Bottom),
-        call: Value::Null,
+    core.mount_queue.push_back(unmount(7, 3, key));
+    core.turn_end();
+    let seq = core.handed.as_ref().map(|h| h.seq).expect("handed over");
+    let held = super::mounts::HandedMount {
         seq,
+        ..core.handed.clone().unwrap()
     };
-    core.batching(Some(held(1)));
-    assert!(core.handed.is_some());
+    core.outbox.clear();
     core.cancel_handed(MountCancel::Owner(7));
-    assert!(core.handed.is_none());
+    assert!(core.handed.is_none() && core.window.is_none());
     assert!(matches!(
         core.outbox.front(),
-        Some(super::outbox::Out::Ui(messages::UiCommand::CancelMount(_)))
+        Some(super::outbox::Out::Ui(UiCommand::CancelMount(_)))
     ));
     // The window's report of the cancelled hand-over: stale.
-    core.batching(Some(held(1)));
+    core.batching(Some(held));
     assert!(core.handed.is_none());
     assert!(!core.mount_pending(key));
-    // The window closed: the cancel is done, and a new hand-over of the
-    // same change is recorded.
+    // No hand-over while the cancel waits for the window to report empty.
+    core.mount_queue.push_back(unmount(7, 4, key));
+    core.outbox.clear();
+    core.turn_end();
+    assert!(!handed_over(&core));
+    // The window reported itself empty: the next change is handed over.
     core.batching(None);
-    core.batching(Some(held(2)));
-    assert!(core.handed.is_some());
+    core.turn_end();
+    assert!(handed_over(&core) && core.handed.is_some());
+}
+
+/// A queued unmount of panel `key` of plugin `owner` (request `id`).
+fn unmount(owner: u64, id: u64, key: u64) -> MountChange {
+    MountChange {
+        reply: Reply { owner, id },
+        key,
+        contribution: None,
+        announced: false,
+    }
+}
+
+/// The outbox holds a hand-over.
+fn handed_over(core: &Core) -> bool {
+    core.outbox.iter().any(|out| {
+        matches!(
+            out,
+            super::outbox::Out::Ui(messages::UiCommand::HandOver { .. })
+        )
+    })
+}
+
+/// The outbox's batches, by their number of changes.
+fn batches(core: &Core) -> Vec<usize> {
+    core.outbox
+        .iter()
+        .filter_map(|out| match out {
+            super::outbox::Out::Ui(messages::UiCommand::Batch(changes)) => Some(changes.len()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// S3a(3) review B1 and B2, and item 6: the core closes the batching window
+/// itself 32 ms after the hand-over, joining what was accepted meanwhile;
+/// the batch stays pending until its outcome, and no change is handed over
+/// while it is in flight. A failed batch's changes come back and are tried
+/// one at a time, the first at once.
+#[test]
+fn a_batch_in_flight_is_pending_and_blocks_the_next_hand_over() {
+    let root = tempfile::tempdir().unwrap();
+    let (mut core, _events, _commands) = core(root.path());
+    core.headless = false;
+    let (a, b, c) = (
+        panel_key(7, composition::Slot::Bottom),
+        panel_key(8, composition::Slot::Bottom),
+        panel_key(9, composition::Slot::Bottom),
+    );
+    core.mount_queue.push_back(unmount(7, 1, a));
+    core.turn_end();
+    assert!(handed_over(&core));
+    // Accepted while the window is open: joins at the close.
+    core.mount_queue.push_back(unmount(8, 2, b));
+    core.outbox.clear();
+    core.turn_end();
+    assert!(batches(&core).is_empty(), "not due yet");
+    // Due: the window closes on the core's clock.
+    core.window.as_mut().unwrap().1 = Instant::now() - Duration::from_millis(40);
+    core.outbox.clear();
+    core.turn_end();
+    assert_eq!(batches(&core), [2]);
+    assert!(
+        core.mount_pending(a) && core.mount_pending(b),
+        "B2: pending in flight"
+    );
+    assert!(!core.mounts_idle());
+    // B1: a change accepted now is not handed over while the batch flies.
+    core.mount_queue.push_back(unmount(9, 3, c));
+    core.outbox.clear();
+    core.turn_end();
+    assert!(!handed_over(&core));
+    // The batch failed: its changes come back, tried singly, first at once.
+    let back = vec![unmount(7, 1, a), unmount(8, 2, b)];
+    core.batch_retry(back);
+    assert!(core.batch_in_flight.is_empty());
+    core.outbox.clear();
+    core.turn_end();
+    assert!(handed_over(&core));
+    core.outbox.clear();
+    core.turn_end();
+    assert_eq!(batches(&core), [1], "the first alone, due at once");
+    // Its outcome: pending no longer, and the next is handed over.
+    core.batch_applied(&Reply { owner: 7, id: 1 }, a);
+    assert!(!core.mount_pending(a));
+    core.outbox.clear();
+    core.turn_end();
+    assert!(handed_over(&core));
+}
+
+/// S3a(3) review B3: a confirmation issued and not yet applied by the
+/// interface counts as waiting, so a second one is refused `busy`, as when
+/// the sheet's fact had already arrived; the interface's `Applied` ends it.
+#[test]
+fn an_ask_in_flight_keeps_the_next_one_waiting() {
+    use messages::{AskRequest, UiCommand, UiReport};
+    let root = tempfile::tempdir().unwrap();
+    let (mut core, _events, _commands) = core(root.path());
+    assert!(!core.sheet_waiting() && !core.confirm_waiting());
+    let options =
+        crate::ui::confirm::parse(&json!({"message":"Go?","confirm":"Go","cancel":"Stop"}))
+            .unwrap();
+    core.ui_command(UiCommand::Ask(AskRequest {
+        reply: Reply { owner: 7, id: 1 },
+        options,
+        request: None,
+    }));
+    assert!(
+        core.sheet_waiting() && core.confirm_waiting(),
+        "in the outbox"
+    );
+    core.flush();
+    assert!(core.sheet_waiting(), "in flight");
+    let seq = core.outbox.pushed;
+    core.report(UiReport::Applied(seq));
+    assert!(
+        !core.sheet_waiting(),
+        "applied: the interface's facts say it now"
+    );
 }
 
 /// Plan step S3a(3): the core→UI queue. A newer snapshot replaces a waiting

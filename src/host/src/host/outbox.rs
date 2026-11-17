@@ -1,4 +1,4 @@
-//! The core's outbox (plan step S2f(3); design 搂5.3, "After S2f"): what
+//! The core's outbox (plan step S2f(3); design §5.3, "After S2f"): what
 //! the core asks of the interface, in the core's order, and the core work
 //! that must follow the interface's part of those requests.
 //!
@@ -23,7 +23,7 @@ use super::*;
 
 /// The core's outbox: the requests to the interface in the core's order
 /// ([`Out`]), and what the interface's copies of core data need (plan step
-/// S3a(1), design 搂5.3 group D): the changes of the mount registry the
+/// S3a(1), design §5.3 group D): the changes of the mount registry the
 /// core made itself ([`MountOp`]), and what of the core's facts, plugins
 /// and settings pages the interface was last given ([`Copies`]). The driver
 /// gives the interface its copies at the start of every drain, before the
@@ -37,7 +37,7 @@ pub(crate) struct Outbox {
     pub(crate) mount_ops: Vec<MountOp>,
     /// What the interface was last given (`Core::copies`).
     pub(crate) sent: Sent,
-    /// The core鈫扷I queue (plan step S3a(3)): what [`Core::flush`] pushed,
+    /// The core→UI queue (plan step S3a(3)): what [`Core::flush`] pushed,
     /// shared with the interface, which applies it at its wake.
     pub(crate) to_ui: UiQueue,
     /// The number of the last command pushed, and of the last one the
@@ -59,6 +59,42 @@ pub(crate) struct Outbox {
     /// to apply the command numbered with them (the "done" report, S3a
     /// brief item 4).
     pub(crate) waiting: std::collections::VecDeque<(u64, Then)>,
+    /// The commands pushed and not yet applied whose effect an admission
+    /// or standby check of the core must see before the interface's facts
+    /// say it (S3a(3) review B3: those facts come a turn later), by number.
+    pub(crate) marks: std::collections::VecDeque<(u64, Mark)>,
+}
+
+/// What a command in flight already means for the core's checks (S3a(3)
+/// review B3; [`Core::in_flight`]).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum Mark {
+    /// A confirmation or the approval sheet will show (`Ask`, `Review`,
+    /// `Confirm`): another one is refused `busy`, and the plugins wait as
+    /// for an open dialog.
+    Ask,
+    /// This plugin's tool window opens (`View` with `Open`): a live
+    /// window for its standby record.
+    View(u64),
+    /// This plugin's picture-in-picture request goes into effect
+    /// (`WindowOp::Pip` on): a live window setting for its record.
+    Pip(u64),
+    /// The options window opens (`SettingsOp::Show`).
+    Options,
+}
+
+/// The mark of `command`, if it has one ([`Mark`]).
+fn mark_of(command: &UiCommand) -> Option<Mark> {
+    use super::messages::{ViewKind, WindowOp};
+    match command {
+        UiCommand::Ask(_) | UiCommand::Review(_) | UiCommand::Confirm(_) => Some(Mark::Ask),
+        UiCommand::View(op) if matches!(op.kind, ViewKind::Open { .. }) => {
+            Some(Mark::View(op.reply.owner))
+        }
+        UiCommand::Window(WindowOp::Pip { reply, on: true }) => Some(Mark::Pip(reply.owner)),
+        UiCommand::Settings(SettingsOp::Show { .. }) => Some(Mark::Options),
+        _ => None,
+    }
 }
 
 /// Debug builds: what a command in flight can change of the interface's
@@ -66,7 +102,7 @@ pub(crate) struct Outbox {
 #[cfg(debug_assertions)]
 pub(crate) struct InFlight(Vec<Fact>);
 
-/// One entry of the core鈫扷I queue (plan step S3a(3), the S3a brief's
+/// One entry of the core→UI queue (plan step S3a(3), the S3a brief's
 /// "Queues"): the interface's copies of core data that changed, then the
 /// commands, in the core's order, each numbered. A command is the common
 /// entry and stays unboxed (no allocation per command); the copies are
@@ -77,7 +113,7 @@ pub(crate) enum ToUi {
     Command(u64, UiCommand),
 }
 
-/// The core鈫扷I queue: one FIFO for everything, shared between the core
+/// The core→UI queue: one FIFO for everything, shared between the core
 /// (which pushes) and the interface (which takes all and applies them in
 /// order). A snapshot (last value wins) replaces a waiting one of its kind
 /// in place, keeping its number; nothing else is coalesced or passed.
@@ -179,7 +215,7 @@ pub(crate) struct Sent {
 }
 
 /// Small core values the interface reads for drawing and for its own
-/// checks (design 搂5.3 group D): the interface's copy is `Host::view`.
+/// checks (design §5.3 group D): the interface's copy is `Host::view`.
 #[derive(Clone, Default, PartialEq)]
 pub(crate) struct CoreFacts {
     /// A native dialog is open (`Core::dialog_busy`).
@@ -400,7 +436,7 @@ pub(crate) enum Then {
         result: std::result::Result<Value, RpcError>,
     },
     /// `settings.register` of a recorded page again (`SettingsOp::Updated`):
-    /// the open window's `ui.error` lines come first (design 搂5.1 note 11),
+    /// the open window's `ui.error` lines come first (design §5.1 note 11),
     /// then the refused initial values' `ui.error` lines and the reply.
     Registered {
         reply: Reply,
@@ -438,9 +474,9 @@ impl Core {
     /// The core's side of its outbox at the end of each handled event,
     /// report, step and [`Then`] (plan step S3a(3); before, the driver
     /// drained it there): the interface's copies that changed, then the
-    /// requests in order, pushed into the core鈫扷I queue (applied at the
+    /// requests in order, pushed into the core→UI queue (applied at the
     /// interface's wake). [`Then::Event`] and [`Then::SupervisorRun`] run
-    /// here, on the core, never waiting for the interface (design 搂5.3, the
+    /// here, on the core, never waiting for the interface (design §5.3, the
     /// nesting note); [`Then::Respond`] and [`Then::Registered`] wait until
     /// the interface reports the command before them applied
     /// (`UiReport::Applied`), so the lines its part writes through its
@@ -472,10 +508,22 @@ impl Core {
             }
         }
     }
-    /// One command into the core鈫扷I queue, numbered.
+    /// A command with `mark` waits in the outbox or is in flight, not yet
+    /// applied by the interface (S3a(3) review B3): the interface's facts do
+    /// not say it yet, so the core's admission and standby checks read it
+    /// here (as `dialogs.open` sets `dialog_busy` at issue).
+    pub(crate) fn in_flight(&self, mark: Mark) -> bool {
+        self.outbox.marks.iter().any(|(_, m)| *m == mark)
+            || self
+                .outbox
+                .iter()
+                .any(|out| matches!(out, Out::Ui(command) if mark_of(command) == Some(mark)))
+    }
+    /// One command into the core→UI queue, numbered.
     fn push_command(&mut self, command: UiCommand) {
         let seq = self.outbox.pushed + 1;
         let lines = writes_lines(&command);
+        let mark = mark_of(&command);
         #[cfg(debug_assertions)]
         let facts = facts_of(command_owner(&command))
             .into_iter()
@@ -485,6 +533,9 @@ impl Core {
             self.outbox.pushed = seq;
             if lines {
                 self.outbox.lines_in_flight.push_back(seq);
+            }
+            if let Some(mark) = mark {
+                self.outbox.marks.push_back((seq, mark));
             }
             #[cfg(debug_assertions)]
             if !facts.is_empty() {
@@ -504,6 +555,14 @@ impl Core {
             .is_some_and(|&n| n <= applied)
         {
             self.outbox.lines_in_flight.pop_front();
+        }
+        while self
+            .outbox
+            .marks
+            .front()
+            .is_some_and(|(n, _)| *n <= applied)
+        {
+            self.outbox.marks.pop_front();
         }
         #[cfg(debug_assertions)]
         while self

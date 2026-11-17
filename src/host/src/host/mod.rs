@@ -372,6 +372,7 @@ pub(crate) struct OsdActions {
     pub(crate) owner: u64,
     pub(crate) commands: Vec<String>,
 }
+#[derive(Clone)]
 pub(crate) struct MountChange {
     pub(crate) reply: Reply,
     /// The panel it changes (`panel_key`); `reply.owner` is the plugin.
@@ -629,11 +630,16 @@ pub(crate) struct Core {
     /// (`Core::batching`).
     pub(crate) handover_seq: u64,
     pub(crate) cancelled_handovers: Vec<u64>,
-    /// The interface's batching window holds a change (handed over, or a
-    /// failed batch's first taken again), as its reports say; the core
-    /// hands over the next change only when it does not (plan step
-    /// S3a(3), `Core::turn_end`).
-    pub(crate) window_open: bool,
+    /// The batching window as the core keeps it (plan step S3a(3); review
+    /// items 6, B1, B2): the change it holds and since when (the core closes
+    /// it 32 ms later, `Core::close_window`); the batch pushed and not yet
+    /// reported applied (pending, `Core::handed_all`); after a failed batch,
+    /// how many closes take one change each, and the next window is due at
+    /// once.
+    pub(crate) window: Option<(MountChange, Instant)>,
+    pub(crate) batch_in_flight: Vec<mounts::HandedMount>,
+    pub(crate) mount_singly: usize,
+    pub(crate) retry_due: bool,
     /// The serial clipboard thread (`clipboard.*`; plan step S3a(3), the
     /// S3a brief's item 7), started at its first call.
     pub(crate) clipboard: crate::clipboard::Serial,
@@ -707,17 +713,11 @@ pub(crate) struct Host {
     /// it and when. The changes the core hands over during the next 32 ms
     /// join it (`prepare_mount_tick`).
     pub(crate) preparing: Option<(Instant, MountChange)>,
-    /// Plan step S3a(3): the window closed and waits for its batch
-    /// (`Take::Close`), since when; the number of the hand-over the window
-    /// holds.
-    pub(crate) closing: Option<Instant>,
+    /// Plan step S3a(3): the number of the hand-over the window holds.
     pub(crate) handover_seq: u64,
     /// The interface fitted a video area and reported it (`AreaFitted`);
     /// the next window tick sends the size (plan step S3a(3)).
     pub(crate) area_fitted_sent: bool,
-    /// Shell preparations still to run one change each, after a batch of
-    /// changes failed to compile (`prepare_mount_tick`).
-    pub(crate) mount_singly: usize,
     pub(crate) mount_events: mpsc::SyncSender<composition::JsonCallback>,
     pub(crate) mount_input: mpsc::Receiver<composition::JsonCallback>,
     pub(crate) last_image: Option<slint::Image>,

@@ -39,7 +39,12 @@ impl Serial {
                 .name("clipboard".into())
                 .spawn(move || {
                     for (reply, method, params) in queue {
-                        let result = dispatch(&method, &params);
+                        // A panic in a call answers it with an error and
+                        // keeps the thread (S3a(3) review item 7).
+                        let result = std::panic::catch_unwind(|| dispatch(&method, &params))
+                            .unwrap_or_else(|_| {
+                                Err(RpcError::new("failed", "the clipboard call failed"))
+                            });
                         if events.send(Event::Reply(reply, result)).is_err() {
                             break;
                         }

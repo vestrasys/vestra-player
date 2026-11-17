@@ -83,10 +83,10 @@ impl Core {
             self.startup_panels = true;
         }
         if !self.startup_panels {
-            self.startup_panels = self.mount_queue.is_empty()
-                && self.handed.is_none()
-                && self.held_mounts.is_empty()
-                && self.startup_has_settled();
+            // The batching window and a batch in flight count (S3a(3) review
+            // B2).
+            self.startup_panels =
+                self.mounts_idle() && self.held_mounts.is_empty() && self.startup_has_settled();
         }
         if self.startup_panels != before {
             self.ui_command(UiCommand::Snapshot(UiSnapshot::StartupSettled(

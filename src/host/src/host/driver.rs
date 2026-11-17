@@ -228,6 +228,18 @@ impl Host {
         core.turn_end();
         core.flush();
     }
+    /// At quit, before the core's quit calls (S3a(3) review item 9): the
+    /// interface's reports waiting in the core's queue are handled (its
+    /// last facts, a final `Remembered` for the state file), as each was
+    /// handled in place before; the other events waiting are left, as they
+    /// were at quit before.
+    pub(crate) fn quit_reports(&mut self, receiver: &mpsc::Receiver<Event>) {
+        while let Ok(event) = receiver.try_recv() {
+            if matches!(event, Event::Report(_)) {
+                self.deliver_event(event);
+            }
+        }
+    }
     /// The core's start-up calls (plan S3a brief, item 9): they run on the
     /// main thread, on the core before the interface's loop starts, at
     /// today's points; nothing of them runs while the interface does. What

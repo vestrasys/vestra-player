@@ -731,11 +731,9 @@ impl Core {
                 #[cfg(feature = "producer-audio")]
                 self.physical_revoke(producer_input::RevokeReason::Dialog);
             }
-            UiInput::MountRetry(changes) => {
-                for change in changes.into_iter().rev() {
-                    self.mount_queue.push_front(change);
-                }
-            }
+            // The batch failed (S3a(3) review B1/B2: its outcome ends its
+            // wait; the core tries the changes one at a time).
+            UiInput::MountRetry(changes) => self.batch_retry(changes),
             // Plan step S3a(1): what the interface wrote in the core's data,
             // or called on the core, in place before.
             UiInput::Mounts(record) => self.mounts = record,

@@ -1188,7 +1188,11 @@ impl Core {
         if self.commands.busy(owner) {
             busy.insert(Busy::Command);
         }
-        if self.settings.busy(owner, self.ui_facts.options_open) {
+        // The options window opening (issued, not yet applied) counts as open
+        // (S3a(3) review B3).
+        let options_open =
+            self.ui_facts.options_open || self.in_flight(crate::host::outbox::Mark::Options);
+        if self.settings.busy(owner, options_open) {
             busy.insert(Busy::Settings);
         }
         if self.source_state_replies.iter().any(|(o, _)| *o == owner) {

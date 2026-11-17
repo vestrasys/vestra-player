@@ -537,7 +537,6 @@ impl Core {
             }
             // Plan step S3a(3): the interface applied the queue up to here.
             UiReport::Applied(seq) => self.applied(seq),
-            UiReport::Take(take) => self.take(take),
             // Plan step S2f(2): a video frame was shown (`power_tick`).
             UiReport::FrameShown(at) => self.last_frame = Some(at),
             UiReport::WindowFacts(facts) => {
@@ -1225,18 +1224,23 @@ impl Core {
     /// from the core's copy): a confirmation always, a plan while its run
     /// waits.
     pub(crate) fn sheet_waiting(&self) -> bool {
-        self.ui_facts.sheet.is_some_and(|sheet| {
-            sheet.confirm
-                || self.command_runs.waiting(&Reply {
-                    owner: sheet.owner,
-                    id: sheet.id,
-                })
-        })
+        // A confirmation or sheet issued and not yet shown counts (S3a(3)
+        // review B3: the interface's facts say it a turn later).
+        self.in_flight(super::outbox::Mark::Ask)
+            || self.ui_facts.sheet.is_some_and(|sheet| {
+                sheet.confirm
+                    || self.command_runs.waiting(&Reply {
+                        owner: sheet.owner,
+                        id: sheet.id,
+                    })
+            })
     }
     /// A confirmation waits on the sheet: as a native dialog open, its wait
-    /// keeps the plugins running (`Busy::Dialog`).
+    /// keeps the plugins running (`Busy::Dialog`). One issued and not yet
+    /// shown counts (S3a(3) review B3).
     pub(crate) fn confirm_waiting(&self) -> bool {
-        self.ui_facts.sheet.is_some_and(|sheet| sheet.confirm)
+        self.in_flight(super::outbox::Mark::Ask)
+            || self.ui_facts.sheet.is_some_and(|sheet| sheet.confirm)
     }
     /// Window facts (`UiReport::WindowFacts`, or the handoff of
     /// `UiReport::Answered` and `UiReport::MountApplied`) reach the core's

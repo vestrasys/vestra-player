@@ -680,7 +680,10 @@ fn player() -> Result<()> {
         ui_facts_seq: 0,
         handover_seq: 0,
         cancelled_handovers: Vec::new(),
-        window_open: false,
+        window: None,
+        batch_in_flight: Vec::new(),
+        mount_singly: 0,
+        retry_due: false,
         clipboard: Default::default(),
         // Made above, before the clock, as before plan step S2c moved it
         // from `Host`.
@@ -722,10 +725,8 @@ fn player() -> Result<()> {
         views: BTreeMap::new(),
         shell: None,
         preparing: None,
-        closing: None,
         handover_seq: 0,
         area_fitted_sent: false,
-        mount_singly: 0,
         mount_events,
         mount_input,
         last_image: None,
@@ -951,6 +952,7 @@ fn player() -> Result<()> {
         // What the last tick changed of the interface's facts first (plan
         // step S2f(1)).
         host.report_ui_facts();
+        host.quit_reports(&receiver);
         queue_peak_line(host.queue_peak);
         host.quitting(|core| core.shutdown_plugins(host::QUIT_BUDGET));
         host.sync();
@@ -1112,6 +1114,10 @@ fn player() -> Result<()> {
         let mut first_draws = (!render.is_gpu() && render.windows == render_mode::WindowKind::Wgpu)
             .then(|| guard.clone());
         let tick_host = host.clone();
+        // Shared with the quit (S3a(3) review item 9: the last reports are
+        // handled before the quit calls).
+        let receiver = Rc::new(receiver);
+        let tick_receiver = receiver.clone();
         let timer = slint::Timer::default();
         let mut menu_revision = u64::MAX;
         // Busy: a post from Windows' move/size loop runs no tick then
@@ -1141,7 +1147,7 @@ fn player() -> Result<()> {
                     // reports among them), the panel-restart step, the
                     // periodic steps, the end-of-turn pushes. What it issues
                     // waits in the core→UI queue.
-                    host.core_events(&receiver, began, None, Some(&mut core_turn), |_| ());
+                    host.core_events(&tick_receiver, began, None, Some(&mut core_turn), |_| ());
                     core_turn.step("events");
                     host.core_steps(Some(&mut core_turn));
                     host::stall::turn_ended(&core_turn, |owner| host.plugins.plugin_id(owner));
@@ -1305,6 +1311,7 @@ fn player() -> Result<()> {
         // What the last tick (drops, the options window) changed of the
         // interface's facts reaches the core first (plan step S2f(1)).
         host.borrow_mut().report_ui_facts();
+        host.borrow_mut().quit_reports(&receiver);
         host.borrow_mut()
             .quitting(|core| core.shutdown_plugins(budget));
         host.borrow_mut().sync();
