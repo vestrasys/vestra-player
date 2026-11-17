@@ -793,4 +793,62 @@ fn the_reports_of_one_turn_broadcast_one_window_state() {
     core.report(facts(4, json!({"size": [1280, 720]})));
     core.turn_end();
     assert_eq!(core.window_state_sent, json!({"size": [1280, 720]}));
+    // Re-review B1: a report that writes a line (a reply) first sends the
+    // facts the reports before it left (R13's `layout.set` exception: its
+    // facts report, then its reply); an `Applied` with no reply waiting
+    // does not.
+    core.report(facts(5, json!({"size": [960, 658]})));
+    core.report(UiReport::Applied(core.outbox.applied));
+    assert_eq!(core.window_state_sent, json!({"size": [1280, 720]}));
+    core.report(UiReport::Answered {
+        reply: Reply { owner: 7, id: 1 },
+        result: Ok(Value::Null),
+        handoff: None,
+        confirm_failed: false,
+    });
+    assert_eq!(core.window_state_sent, json!({"size": [960, 658]}));
+}
+
+/// S3a(3) re-review S1: a mount applied after its plugin was held (parked
+/// while its batch was in flight) gets what the park gives a panel in
+/// place: a tabbed panel stays as a placeholder (recorded), a bottom or
+/// backdrop panel goes with an id 0 unmount.
+#[test]
+fn a_mount_applied_after_its_plugin_was_held_goes_as_the_park_would_have_it() {
+    use super::supervisor::{Held, Origin};
+    let root = tempfile::tempdir().unwrap();
+    let (mut core, _events, _commands) = core(root.path());
+    let origin = Origin {
+        id: "test.bar".into(),
+        directory: root.path().to_path_buf(),
+        catalog: None,
+        data_directory: None,
+    };
+    core.hold(7, Held::new("test.bar".into(), origin, "Bar".into()));
+    // A bottom panel: removed, its slot freed.
+    let bottom = panel_key(7, composition::Slot::Bottom);
+    core.mounts.insert(bottom, bottom_mount(7, bottom));
+    core.stopped_owners_mount(7, bottom);
+    assert!(
+        !core.mounts.contains_key(&bottom),
+        "not kept as a placeholder"
+    );
+    assert!(
+        core.mount_queue
+            .front()
+            .is_some_and(|c| c.key == bottom && c.reply.id == 0 && c.contribution.is_none()),
+        "an id 0 unmount at the front"
+    );
+    // A sidebar panel (tabbed): a placeholder.
+    core.mount_queue.clear();
+    let sidebar = panel_key(7, composition::Slot::Sidebar);
+    let mut mount = bottom_mount(7, sidebar);
+    mount.spec.slot = composition::Slot::Sidebar;
+    core.mounts.insert(sidebar, mount);
+    core.stopped_owners_mount(7, sidebar);
+    assert!(
+        core.mounts.get(&sidebar).is_some_and(|m| m.recorded),
+        "recorded"
+    );
+    assert!(core.mount_queue.is_empty());
 }

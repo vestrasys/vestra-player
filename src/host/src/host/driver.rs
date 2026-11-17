@@ -187,37 +187,18 @@ impl Host {
                 turn.event(label, at.elapsed());
             }
         };
-        let mut handled = match first {
-            Some(event) => {
-                handle(self, event);
-                1
-            }
-            None => 0,
-        };
-        // The interface's reports first (S3a(3) verification): on one thread
-        // they come from its last wake, whose work main did in place, before
-        // the core read any line that came in meanwhile; the other events
-        // wait in `Core::held_events`, in their order. Then `window.state`
-        // from the facts the reports left, before the requests that came in
-        // meanwhile (a subscription answered now does not get it, as on
-        // main).
-        while let Ok(event) = receiver.try_recv() {
-            if matches!(event, Event::Report(_)) {
-                handle(self, event);
-                handled += 1;
-            } else {
-                self.link.core.held_events.push_back(event);
-            }
-        }
-        self.link.core.window_state_out();
-        self.link.core.flush();
+        // The interface's reports first, then `window.state` from the facts
+        // they left, then the other events in their order (S3a(3)
+        // verification, re-review B2: `events::turn_events`); a subscription
+        // that came in meanwhile is answered after that state, as on main.
         let mut held = std::mem::take(&mut self.link.core.held_events);
-        super::events::drain(
-            || held.pop_front(),
-            began,
-            handled,
-            |event| handle(self, event),
-        );
+        super::events::turn_events(receiver, &mut held, first, began, |step| match step {
+            super::events::TurnStep::Event(event) => handle(self, event),
+            super::events::TurnStep::ReportsDone => {
+                self.link.core.window_state_out();
+                self.link.core.flush();
+            }
+        });
         self.link.core.held_events = held;
     }
     /// Events the core's last turn left behind the reports

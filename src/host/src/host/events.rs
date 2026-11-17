@@ -229,6 +229,50 @@ pub(crate) fn drain(
     handled
 }
 
+/// A step of the core's turn's events ([`turn_events`]).
+pub(crate) enum TurnStep {
+    Event(Event),
+    /// Every report waiting was handled: `window.state` from the facts
+    /// they left goes now (`Core::window_state_out`).
+    ReportsDone,
+}
+
+/// The events of one core turn, in main's order (S3a(3) verification,
+/// re-review B2): first every interface report waiting, in order (on one
+/// thread they come from the interface's last wake, whose work main did in
+/// place before the core read any line that came in meanwhile), then
+/// [`TurnStep::ReportsDone`], then the other events: those `held` from
+/// earlier turns, then the new ones in their order (`first`, the headless
+/// driver's wait, is the oldest new one), within the turn's budget
+/// ([`drain`]); the rest stay in `held`.
+pub(crate) fn turn_events(
+    receiver: &mpsc::Receiver<Event>,
+    held: &mut std::collections::VecDeque<Event>,
+    first: Option<Event>,
+    began: Instant,
+    mut step: impl FnMut(TurnStep),
+) {
+    let mut handled = 0;
+    for event in first
+        .into_iter()
+        .chain(std::iter::from_fn(|| receiver.try_recv().ok()))
+    {
+        if matches!(event, Event::Report(_)) {
+            step(TurnStep::Event(event));
+            handled += 1;
+        } else {
+            held.push_back(event);
+        }
+    }
+    step(TurnStep::ReportsDone);
+    drain(
+        || held.pop_front(),
+        began,
+        handled,
+        |event| step(TurnStep::Event(event)),
+    );
+}
+
 // The core's turn (plan step S2e), the same for the windowed and the
 // headless driver, in two halves: `Host::core_events` (the events) and
 // `Host::core_steps` (the periodic steps), in the driver (`driver.rs`, plan
@@ -345,5 +389,78 @@ mod tests {
         assert_eq!(drain(next, Instant::now(), 0, |_| ()), rest);
         // Nothing queued: nothing to do.
         assert_eq!(drain(next, Instant::now(), 0, |_| ()), 0);
+    }
+
+    /// Re-review B2: the reports first, then the held events in their
+    /// order, then the new ones; the headless driver's `first` is the
+    /// oldest new one (a report among the reports); over the budget the
+    /// rest stay held.
+    #[test]
+    fn a_turn_takes_the_reports_first_then_the_other_events_in_order() {
+        use super::super::messages::UiReport;
+        let request = |n: u64| Event::Request(n, Value::Null);
+        let report = || Event::Report(Box::new(UiReport::FrameShown(Instant::now())));
+        let name = |step: TurnStep| match step {
+            TurnStep::Event(Event::Request(n, _)) => format!("request {n}"),
+            TurnStep::Event(Event::Report(_)) => "report".to_owned(),
+            TurnStep::Event(_) => "other".to_owned(),
+            TurnStep::ReportsDone => "reports done".to_owned(),
+        };
+        let (events, receiver) = mpsc::channel();
+        let mut held = std::collections::VecDeque::from([request(1)]);
+        events.send(report()).unwrap();
+        events.send(request(3)).unwrap();
+        events.send(report()).unwrap();
+        let mut order = Vec::new();
+        turn_events(
+            &receiver,
+            &mut held,
+            Some(request(2)),
+            Instant::now(),
+            |step| order.push(name(step)),
+        );
+        assert_eq!(
+            order,
+            [
+                "report",
+                "report",
+                "reports done",
+                "request 1",
+                "request 2",
+                "request 3"
+            ]
+        );
+        assert!(held.is_empty());
+        // A report as `first`: handled with the reports.
+        events.send(request(4)).unwrap();
+        let mut order = Vec::new();
+        turn_events(
+            &receiver,
+            &mut held,
+            Some(report()),
+            Instant::now(),
+            |step| order.push(name(step)),
+        );
+        assert_eq!(order, ["report", "reports done", "request 4"]);
+        // Over the budget: the count, the rest held for the next turn, ahead
+        // of what comes in meanwhile.
+        for n in 0..(EVENTS_PER_TICK as u64 + 5) {
+            events.send(request(n)).unwrap();
+        }
+        let late = Instant::now() - Duration::from_secs(1);
+        let mut handled = 0;
+        turn_events(&receiver, &mut held, None, late, |step| {
+            if matches!(step, TurnStep::Event(_)) {
+                handled += 1;
+            }
+        });
+        assert_eq!((handled, held.len()), (EVENTS_PER_TICK, 5));
+        events.send(request(999)).unwrap();
+        let mut order = Vec::new();
+        turn_events(&receiver, &mut held, None, late, |step| {
+            order.push(name(step))
+        });
+        assert_eq!(order.last().map(String::as_str), Some("request 999"));
+        assert_eq!(order[1], format!("request {}", EVENTS_PER_TICK));
     }
 }

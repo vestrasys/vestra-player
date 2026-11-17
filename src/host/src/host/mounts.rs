@@ -668,11 +668,13 @@ impl Core {
         if mount.plugin != owner || mount.recorded {
             return;
         }
-        if self.on_demand.held(owner).is_some() {
+        // Held, a tabbed panel stays as a placeholder; a bottom or backdrop
+        // panel goes, as the park removes it (S3a(3) re-review S1).
+        let slot = mount.spec.slot;
+        if self.on_demand.held(owner).is_some() && slot.tabbed() {
             self.mount_recorded(key);
             return;
         }
-        let slot = mount.spec.slot;
         self.mount_remove(key);
         self.ui_command(UiCommand::Panels(PanelsOp::Gone(vec![(key, slot)])));
         self.mount_queue.push_front(MountChange {

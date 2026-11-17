@@ -840,7 +840,7 @@ impl Core {
         self.on_demand.settled || self.startup_settled()
     }
     /// `owner` is held in standby now (its registrations kept under it).
-    fn hold(&mut self, owner: u64, held: Held) {
+    pub(super) fn hold(&mut self, owner: u64, held: Held) {
         self.on_demand
             .names
             .insert(held.id.clone(), held.name.clone());

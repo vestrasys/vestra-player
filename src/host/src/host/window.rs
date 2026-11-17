@@ -526,6 +526,14 @@ impl Core {
     /// (`AreaFitted`, `VideoArea`); S2f(1): the core's part of the UI's
     /// events (`Event`, `Input`) and the interface's facts (`UiFacts`).
     pub(crate) fn report(&mut self, report: UiReport) {
+        // Main broadcast `window.state` at the facts report itself, so it
+        // preceded every line of a later report (R13's `layout.set`
+        // exception: its facts report, then its reply). Only a run of facts
+        // reports is folded (S3a(3) re-review B1): the pending broadcast
+        // goes before a report that writes a line.
+        if self.report_writes_lines(&report) {
+            self.window_state_out();
+        }
         match report {
             // Only a newer value (plan step S3a(3); one queue keeps them in
             // order, so this guards the rule rather than a known overtaking).
@@ -1262,6 +1270,23 @@ impl Core {
         };
         self.window_facts = facts;
     }
+    /// Whether handling `report` may write a plugin line (a reply, an
+    /// event, a broadcast): all but the facts, the frame and the state file,
+    /// and an `Applied` that releases no waiting reply.
+    fn report_writes_lines(&self, report: &UiReport) -> bool {
+        match report {
+            UiReport::UiFacts(..)
+            | UiReport::WindowFacts(_)
+            | UiReport::FrameShown(_)
+            | UiReport::Remembered { .. } => false,
+            UiReport::Applied(seq) => self
+                .outbox
+                .waiting
+                .front()
+                .is_some_and(|(after, _)| after <= seq),
+            _ => true,
+        }
+    }
     /// `window.state` from the window facts as they stand after the reports
     /// the core handled (S3a(3) verification): once, when they differ from
     /// the facts it last broadcast. Before S3a(3) the interface's facts of
@@ -1269,8 +1294,9 @@ impl Core {
     /// turn (a handoff, then the tick's facts) broadcasts the final state
     /// once, not each in-between state. The core's conditions and triggers
     /// are evaluated first (`broadcast`); a value with only the tabs changed
-    /// broadcasts nothing. Called at the end of the event drain, where the
-    /// turn's reports were handled, and at the end of the turn.
+    /// broadcasts nothing. Called before a report that writes a line
+    /// (`report_writes_lines`, re-review B1), after the turn's reports, and
+    /// at the end of the turn.
     pub(crate) fn window_state_out(&mut self) {
         if self.window_facts != self.window_state_sent {
             let facts = self.window_facts.clone();
