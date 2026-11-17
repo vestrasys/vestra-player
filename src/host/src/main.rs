@@ -615,6 +615,8 @@ fn player() -> Result<()> {
         file_types: json!([]),
         window_facts: Value::Null,
         window_facts_seq: None,
+        window_state_sent: Value::Null,
+        held_events: Default::default(),
         ui_facts: Default::default(),
         restarts: Default::default(),
         restart_lines_sent: BTreeMap::new(),
@@ -684,6 +686,7 @@ fn player() -> Result<()> {
         batch_in_flight: Vec::new(),
         mount_singly: 0,
         retry_due: false,
+        retry_changes: Vec::new(),
         clipboard: Default::default(),
         // Made above, before the clock, as before plan step S2c moved it
         // from `Host`.
@@ -717,6 +720,7 @@ fn player() -> Result<()> {
         playback,
         mounts: BTreeMap::new(),
         pages: Vec::new(),
+        stored_in_flight: Default::default(),
         view: Default::default(),
         plugins: Default::default(),
         tick_facts: Default::default(),
@@ -902,7 +906,14 @@ fn player() -> Result<()> {
             if seconds.is_some_and(|seconds| start.elapsed().as_secs_f64() >= seconds) {
                 break;
             }
-            let received = receiver.recv_timeout(Duration::from_millis(10));
+            // No wait while events the last turn held are left
+            // (`Core::held_events`).
+            let wait = if !host.events_held() {
+                Duration::from_millis(10)
+            } else {
+                Duration::ZERO
+            };
+            let received = receiver.recv_timeout(wait);
             // A tick is the work after the wait (`VESTRA_FRAME_LOG=1`).
             let began = Instant::now();
             let first = match received {
@@ -950,7 +961,9 @@ fn player() -> Result<()> {
         // Every plugin process stops within one deadline (supervisor.md
         // T31), each running plugin recorded first.
         // What the last tick changed of the interface's facts first (plan
-        // step S2f(1)).
+        // step S2f(1)). What the core issued before is applied first (its
+        // replies go out before the plugins stop, as in place before S3a(3)).
+        host.apply_queue();
         host.report_ui_facts();
         host.quit_reports(&receiver);
         queue_peak_line(host.queue_peak);
@@ -1308,6 +1321,10 @@ fn player() -> Result<()> {
         } else {
             host::QUIT_BUDGET
         };
+        // What the core issued before the quit is applied first, as it was
+        // in place before S3a(3): its replies go out before the plugins
+        // stop (`quit_reports` handles the interface's reports of it).
+        host.borrow_mut().apply_queue();
         // What the last tick (drops, the options window) changed of the
         // interface's facts reaches the core first (plan step S2f(1)).
         host.borrow_mut().report_ui_facts();

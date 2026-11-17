@@ -865,6 +865,7 @@ pub(crate) enum UiInput {
 /// a row patch the core applies to its copy of the stored array as the
 /// interface did to its own (`ui_patch::apply_vec`), so a patch costs the
 /// rows it carries, not the whole array.
+#[derive(Clone)]
 pub(crate) enum StoredWrite {
     Whole(Value),
     Rows {

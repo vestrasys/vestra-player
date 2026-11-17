@@ -439,7 +439,10 @@ fn mount(
     if core.handed.as_ref().is_some_and(|h| h.removes(key)) {
         core.cancel_handed(MountCancel::Removal { key });
     }
-    if pending_change(core, key) {
+    // A host removal of this panel already in the batch in flight is not
+    // a pending change here (S3a(3) re-review F1): the mount queues behind
+    // it, as it did behind the removal applied in place on main.
+    if core.mount_blocked(key) {
         return Err(RpcError::new(
             "busy",
             "this panel already has a pending UI preparation",

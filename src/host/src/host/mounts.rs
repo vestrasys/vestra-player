@@ -1,7 +1,8 @@
 //! Mounted panels: preparing the shell for mount changes, their values
 //! and callbacks.
 use super::messages::{
-    MountApplied, MountCancel, SetMount, UiCommand, UiReport, UiSnapshot, WindowFacts, WindowOp,
+    MountApplied, MountCancel, PanelsOp, SetMount, UiCommand, UiReport, UiSnapshot, WindowFacts,
+    WindowOp,
 };
 use super::outbox::MountOp;
 use super::*;
@@ -179,6 +180,10 @@ impl Core {
         self.batch_in_flight.clear();
         self.mount_singly = changes.len();
         self.retry_due = true;
+        self.retry_changes = changes
+            .iter()
+            .map(|c| (c.reply.owner, c.reply.id, c.key))
+            .collect();
         for change in changes.into_iter().rev() {
             self.mount_queue.push_front(change);
         }
@@ -231,6 +236,50 @@ impl Core {
     pub(crate) fn mount_pending(&self, key: u64) -> bool {
         self.mount_queue.iter().any(|c| c.key == key) || self.handed_all().any(|h| h.key == key)
     }
+    /// The single-change retry of a failed batch ends once none of the
+    /// changes it gave back waits any more (S3a(3) re-review: a change
+    /// dropped with its plugin must not leave the retry state to the next
+    /// unrelated batch).
+    fn retry_ends(&mut self) {
+        if self.retry_changes.is_empty() {
+            return;
+        }
+        let waits = |(owner, id, key): &(u64, u64, u64)| {
+            let same =
+                |reply: &Reply, k: u64| reply.owner == *owner && reply.id == *id && k == *key;
+            self.mount_queue.iter().any(|c| same(&c.reply, c.key))
+                || self
+                    .window
+                    .as_ref()
+                    .is_some_and(|(c, _)| same(&c.reply, c.key))
+                || self.batch_in_flight.iter().any(|h| same(&h.reply, h.key))
+        };
+        let left = self
+            .retry_changes
+            .iter()
+            .filter(|change| waits(change))
+            .copied()
+            .collect::<Vec<_>>();
+        self.retry_changes = left;
+        if self.retry_changes.is_empty() {
+            self.mount_singly = 0;
+            self.retry_due = false;
+        }
+    }
+    /// A plugin's mount of panel `key` is refused `busy` (S3a(3) re-review
+    /// F1): a change of the panel waits in the queue or the window, or one
+    /// in the batch in flight other than the host's own removal of it (a
+    /// placeholder pruned at the plugin's ready, an id 0 unmount), behind
+    /// which the mount queues, as behind that removal applied in place
+    /// before the batch was in flight.
+    pub(crate) fn mount_blocked(&self, key: u64) -> bool {
+        self.mount_queue.iter().any(|c| c.key == key)
+            || self.handed.as_ref().is_some_and(|h| h.key == key)
+            || self
+                .batch_in_flight
+                .iter()
+                .any(|h| h.key == key && !h.removes(key))
+    }
     /// No mount change waits anywhere (the queue, the window, the batch in
     /// flight; start-up settling reads it, `open_files_tick`).
     pub(crate) fn mounts_idle(&self) -> bool {
@@ -248,6 +297,8 @@ impl Core {
     /// snapshots and the window settings that changed (the interface pulled
     /// them at its points before, `Take::Tables`, `Take::WindowSettings`).
     pub(crate) fn turn_end(&mut self) {
+        self.window_state_out();
+        self.retry_ends();
         if !self.headless {
             if self
                 .window
@@ -565,7 +616,8 @@ impl Core {
     /// `ui.preparing` (`ready` or `failed`; none for a placeholder) and its
     /// reply (a change of the host's own, id 0: a failure is announced as
     /// `host.error`), whose activation completes after it (R12, `respond`),
-    /// (3) `window.state` if the facts changed.
+    /// (3) `window.state` if the facts changed, once for the turn's reports
+    /// (`Core::window_state_out`).
     pub(crate) fn mounts_applied(&mut self, applied: MountApplied) {
         let MountApplied {
             batch,
@@ -574,7 +626,9 @@ impl Core {
             handoff,
             placeholders,
         } = applied;
-        let changed = handoff.is_some_and(|facts| self.apply_facts(*facts));
+        if let Some(facts) = handoff {
+            self.apply_facts(*facts);
+        }
         for (reply, key) in batch {
             // Its outcome: no longer pending (S3a(3) review B2).
             self.batch_applied(&reply, key);
@@ -591,12 +645,42 @@ impl Core {
                 }
             } else {
                 self.respond(reply, result.clone());
+                // Its plugin stopped while the batch was in flight (S3a(3)
+                // re-review F2): its panel gets the end state the stop gave
+                // it when the panel was in place before.
+                if result.is_ok() && !self.plugins.contains_key(&owner) {
+                    self.stopped_owners_mount(owner, key);
+                }
             }
         }
-        if changed {
-            let facts = self.window_facts.clone();
-            self.broadcast("window.state", facts);
+    }
+    /// A mount of `owner`'s panel `key` applied after `owner` stopped (it
+    /// was in the batch in flight when `stop_run` ran, so the stop did not
+    /// see it; the interface's record put it into `Core::mounts` since):
+    /// what `stop_run` does with a panel in place, for this one. Held in
+    /// standby: a placeholder tab (recorded). Otherwise it goes: the record,
+    /// the interface's panel (`PanelsOp::Gone`), and an id 0 unmount at the
+    /// front of the queue, so its slot is free again.
+    pub(crate) fn stopped_owners_mount(&mut self, owner: u64, key: u64) {
+        let Some(mount) = self.mounts.get(&key) else {
+            return;
+        };
+        if mount.plugin != owner || mount.recorded {
+            return;
         }
+        if self.on_demand.held(owner).is_some() {
+            self.mount_recorded(key);
+            return;
+        }
+        let slot = mount.spec.slot;
+        self.mount_remove(key);
+        self.ui_command(UiCommand::Panels(PanelsOp::Gone(vec![(key, slot)])));
+        self.mount_queue.push_front(MountChange {
+            reply: Reply { owner, id: 0 },
+            key,
+            contribution: None,
+            announced: false,
+        });
     }
 }
 impl Host {

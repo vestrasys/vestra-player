@@ -161,9 +161,8 @@ impl Host {
         if let Some(plugins) = copies.plugins {
             self.plugins = plugins;
         }
-        if let Some(pages) = copies.pages {
-            self.pages = pages;
-        }
+        self.stored_in_flight
+            .take(&mut self.pages, copies.stored, copies.pages);
     }
     /// The first half of the core's turn, which began at `began` (plan step
     /// S2e): `first` (an event the headless driver already waited for),
@@ -188,14 +187,43 @@ impl Host {
                 turn.event(label, at.elapsed());
             }
         };
-        let handled = match first {
+        let mut handled = match first {
             Some(event) => {
                 handle(self, event);
                 1
             }
             None => 0,
         };
-        super::events::drain(receiver, began, handled, |event| handle(self, event));
+        // The interface's reports first (S3a(3) verification): on one thread
+        // they come from its last wake, whose work main did in place, before
+        // the core read any line that came in meanwhile; the other events
+        // wait in `Core::held_events`, in their order. Then `window.state`
+        // from the facts the reports left, before the requests that came in
+        // meanwhile (a subscription answered now does not get it, as on
+        // main).
+        while let Ok(event) = receiver.try_recv() {
+            if matches!(event, Event::Report(_)) {
+                handle(self, event);
+                handled += 1;
+            } else {
+                self.link.core.held_events.push_back(event);
+            }
+        }
+        self.link.core.window_state_out();
+        self.link.core.flush();
+        let mut held = std::mem::take(&mut self.link.core.held_events);
+        super::events::drain(
+            || held.pop_front(),
+            began,
+            handled,
+            |event| handle(self, event),
+        );
+        self.link.core.held_events = held;
+    }
+    /// Events the core's last turn left behind the reports
+    /// (`Core::held_events`): the headless driver does not wait for more.
+    pub(crate) fn events_held(&self) -> bool {
+        !self.link.core.held_events.is_empty()
     }
     /// The second half of the core's turn: plan step S3a(3) runs the
     /// panel-restart step first, in the core turn right after the event
@@ -239,6 +267,8 @@ impl Host {
                 self.deliver_event(event);
             }
         }
+        self.link.core.window_state_out();
+        self.link.core.flush();
     }
     /// The core's start-up calls (plan S3a brief, item 9): they run on the
     /// main thread, on the core before the interface's loop starts, at

@@ -63,16 +63,23 @@ pub(crate) struct Outbox {
     /// or standby check of the core must see before the interface's facts
     /// say it (S3a(3) review B3: those facts come a turn later), by number.
     pub(crate) marks: std::collections::VecDeque<(u64, Mark)>,
+    /// The number of the interface's stored writes (`UiInput::Stored`) the
+    /// core handled (`settings_window::StoredInFlight`).
+    pub(crate) stored: u64,
 }
 
 /// What a command in flight already means for the core's checks (S3a(3)
 /// review B3; [`Core::in_flight`]).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum Mark {
-    /// A confirmation or the approval sheet will show (`Ask`, `Review`,
-    /// `Confirm`): another one is refused `busy`, and the plugins wait as
-    /// for an open dialog.
+    /// A confirmation will show (`Ask`, `Confirm`): another one is
+    /// refused `busy`, and the plugins wait as for an open dialog
+    /// (`sheet_waiting`, `confirm_waiting`).
     Ask,
+    /// The approval sheet of a `commands.run` will show (`Review`): another
+    /// asking request is refused as while it waits (`sheet_waiting` only;
+    /// S3a(3) re-review F3).
+    Review,
     /// This plugin's tool window opens (`View` with `Open`): a live
     /// window for its standby record.
     View(u64),
@@ -87,7 +94,8 @@ pub(crate) enum Mark {
 fn mark_of(command: &UiCommand) -> Option<Mark> {
     use super::messages::{ViewKind, WindowOp};
     match command {
-        UiCommand::Ask(_) | UiCommand::Review(_) | UiCommand::Confirm(_) => Some(Mark::Ask),
+        UiCommand::Ask(_) | UiCommand::Confirm(_) => Some(Mark::Ask),
+        UiCommand::Review(_) => Some(Mark::Review),
         UiCommand::View(op) if matches!(op.kind, ViewKind::Open { .. }) => {
             Some(Mark::View(op.reply.owner))
         }
@@ -174,6 +182,7 @@ impl Copies {
             && self.tick.is_none()
             && self.plugins.is_none()
             && self.pages.is_none()
+            && self.stored.is_none()
             && self.mount_ops.is_empty()
     }
 }
@@ -212,6 +221,7 @@ pub(crate) struct Sent {
     tick: Option<TickFacts>,
     plugins: Option<(u64, u64)>,
     pages: Option<u64>,
+    stored: Option<u64>,
 }
 
 /// Small core values the interface reads for drawing and for its own
@@ -315,6 +325,10 @@ pub(crate) struct Copies {
     pub(crate) tick: Option<TickFacts>,
     pub(crate) plugins: Option<PluginsView>,
     pub(crate) pages: Option<Vec<crate::ui::settings_window::Page>>,
+    /// The number of the interface's stored writes the core has handled,
+    /// as of `pages` (`settings_window::StoredInFlight`): given with the
+    /// pages and when it moved.
+    pub(crate) stored: Option<u64>,
     pub(crate) mount_ops: Vec<MountOp>,
 }
 
@@ -353,6 +367,10 @@ impl Core {
         if self.outbox.sent.pages != Some(pages) {
             self.outbox.sent.pages = Some(pages);
             copies.pages = Some(self.settings.pages().to_vec());
+        }
+        if copies.pages.is_some() || self.outbox.sent.stored != Some(self.outbox.stored) {
+            self.outbox.sent.stored = Some(self.outbox.stored);
+            copies.stored = Some(self.outbox.stored);
         }
         copies
     }

@@ -50,6 +50,8 @@ fn core(root: &Path) -> (Core, mpsc::Receiver<Event>, mpsc::Receiver<Command>) {
         file_types: json!([]),
         window_facts: Value::Null,
         window_facts_seq: None,
+        window_state_sent: Value::Null,
+        held_events: Default::default(),
         ui_facts: Default::default(),
         restarts: Default::default(),
         restart_lines_sent: BTreeMap::new(),
@@ -118,6 +120,7 @@ fn core(root: &Path) -> (Core, mpsc::Receiver<Event>, mpsc::Receiver<Command>) {
         batch_in_flight: Vec::new(),
         mount_singly: 0,
         retry_due: false,
+        retry_changes: Vec::new(),
         clipboard: Default::default(),
         on_demand: supervisor::OnDemand::from_env(),
     };
@@ -509,4 +512,285 @@ fn the_core_to_ui_queue_coalesces_snapshots_and_keeps_replies_behind() {
     core.report(UiReport::Applied(3));
     assert!(core.outbox.waiting.is_empty(), "the reply went");
     assert!(!core.lines_pending());
+}
+
+/// A mounted bottom panel of plugin `plugin` at `key`.
+fn bottom_mount(plugin: u64, key: u64) -> Mount {
+    Mount {
+        spec: composition::CompileSpec {
+            owner: key,
+            file: PathBuf::from("bar.slint"),
+            component: "Bar".into(),
+            global: None,
+            slot: composition::Slot::Bottom,
+        },
+        plugin,
+        properties: BTreeMap::new(),
+        visible: true,
+        title: "Bar".into(),
+        manifest: "test.bar".into(),
+        builtin: false,
+        recorded: false,
+        call: Value::Null,
+    }
+}
+
+/// S3a(3) re-review F1: a host removal of a panel (an id 0 unmount) in the
+/// batch in flight does not block its plugin's mount (it queues behind),
+/// any other change of the panel in flight does.
+#[test]
+fn a_host_removal_in_flight_does_not_block_the_plugins_mount() {
+    let root = tempfile::tempdir().unwrap();
+    let (mut core, _events, _commands) = core(root.path());
+    let key = panel_key(7, composition::Slot::Bottom);
+    let removal = super::mounts::HandedMount::of(&unmount(7, 0, key));
+    assert!(removal.removes(key));
+    core.batch_in_flight = vec![removal];
+    assert!(core.mount_pending(key), "pending for every other check");
+    assert!(!core.mount_blocked(key), "not for the plugin's mount");
+    core.batch_in_flight = vec![super::mounts::HandedMount::of(&unmount(7, 3, key))];
+    assert!(
+        core.mount_blocked(key),
+        "the plugin's own unmount in flight blocks"
+    );
+}
+
+/// S3a(3) re-review F2: a mount applied after its plugin stopped (it was
+/// in flight when the stop ran) gets the stop's end state: removed, the
+/// interface told, and an id 0 unmount queued; held in standby, a
+/// placeholder.
+#[test]
+fn a_mount_applied_after_its_plugin_stopped_goes_as_the_stop_would_have_it() {
+    use messages::{PanelsOp, UiCommand};
+    let root = tempfile::tempdir().unwrap();
+    let (mut core, _events, _commands) = core(root.path());
+    let key = panel_key(7, composition::Slot::Bottom);
+    core.mounts.insert(key, bottom_mount(7, key));
+    core.outbox.clear();
+    core.stopped_owners_mount(7, key);
+    assert!(!core.mounts.contains_key(&key), "the slot is free");
+    assert!(
+        core.mount_queue
+            .front()
+            .is_some_and(|c| c.key == key && c.reply.id == 0 && c.contribution.is_none()),
+        "an id 0 unmount at the front"
+    );
+    assert!(core.outbox.iter().any(|out| matches!(
+        out,
+        super::outbox::Out::Ui(UiCommand::Panels(PanelsOp::Gone(panels))) if panels[0].0 == key
+    )));
+    // Another plugin's panel, or one already a placeholder: untouched.
+    core.mount_queue.clear();
+    core.mounts.insert(key, bottom_mount(8, key));
+    core.stopped_owners_mount(7, key);
+    assert!(core.mounts.contains_key(&key) && core.mount_queue.is_empty());
+}
+
+/// S3a(3) review B3 and re-review F3: what each in-flight mark makes the
+/// core's checks read. A confirmation counts as a waiting confirmation and
+/// sheet; a `commands.run` sheet only as a waiting sheet; a tool window
+/// opening, a picture-in-picture request and the options window opening
+/// for their checks; `Applied` ends each.
+#[test]
+fn the_in_flight_marks_reach_their_checks() {
+    use super::outbox::Mark;
+    use messages::{
+        ReviewKind, ReviewRequest, RunSheet, SettingsOp, UiCommand, UiReport, ViewKind, ViewOp,
+        WindowOp,
+    };
+    let root = tempfile::tempdir().unwrap();
+    let (mut core, _events, _commands) = core(root.path());
+    core.ui_command(UiCommand::Review(ReviewRequest {
+        reply: Reply { owner: 7, id: 1 },
+        kind: ReviewKind::CommandRun(RunSheet {
+            ticket: "t".into(),
+            query: "q".into(),
+            steps: Vec::new(),
+            remember: String::new(),
+        }),
+    }));
+    assert!(core.sheet_waiting() && !core.confirm_waiting(), "F3");
+    core.ui_command(UiCommand::View(ViewOp {
+        reply: Reply { owner: 8, id: 2 },
+        id: "w".into(),
+        kind: ViewKind::Open {
+            file: PathBuf::from("w.slint"),
+            properties: BTreeMap::new(),
+            callbacks: Vec::new(),
+        },
+    }));
+    core.ui_command(UiCommand::Window(WindowOp::Pip {
+        reply: Reply { owner: 9, id: 3 },
+        on: true,
+    }));
+    core.ui_command(UiCommand::Settings(SettingsOp::Show {
+        reply: Reply { owner: 9, id: 4 },
+        params: json!({}),
+    }));
+    core.flush();
+    assert!(core.in_flight(Mark::View(8)) && !core.in_flight(Mark::View(9)));
+    assert!(core.in_flight(Mark::Pip(9)) && !core.in_flight(Mark::Pip(8)));
+    assert!(core.in_flight(Mark::Options));
+    let seq = core.outbox.pushed;
+    core.report(UiReport::Applied(seq));
+    for mark in [Mark::Review, Mark::View(8), Mark::Pip(9), Mark::Options] {
+        assert!(!core.in_flight(mark), "{mark:?} ended");
+    }
+    assert!(!core.sheet_waiting());
+}
+
+/// S3a(3) re-review: the single-change retry of a failed batch ends when
+/// none of the changes it gave back waits any more (here: dropped with
+/// their plugin), so the next batch joins as usual.
+#[test]
+fn the_retry_ends_when_its_changes_are_gone() {
+    let root = tempfile::tempdir().unwrap();
+    let (mut core, _events, _commands) = core(root.path());
+    let (a, b) = (
+        panel_key(7, composition::Slot::Bottom),
+        panel_key(7, composition::Slot::Sidebar),
+    );
+    core.batch_retry(vec![unmount(7, 1, a), unmount(7, 2, b)]);
+    assert!(core.retry_due && core.mount_singly == 2);
+    core.mount_queue.retain(|c| c.reply.owner != 7);
+    core.turn_end();
+    assert!(!core.retry_due && core.mount_singly == 0);
+}
+
+/// S3a(3) verification: `vestra.hotkeys` writes two lists of one page
+/// (`rows`, `source-model`). The interface writes its copy of the page and
+/// reports each write; a copy of the pages the core gives before it handled
+/// a report (another page changed meanwhile) lacked that write, so the
+/// interface's `rows` went back to the older value and the next row patch
+/// was refused "insert at N is past the end of the list". The interface now
+/// writes the writes not handled yet again into each copy it is given.
+#[test]
+fn a_copy_of_the_pages_given_before_a_write_is_handled_keeps_the_write() {
+    use crate::ui::settings_window::{Page, StoredInFlight};
+    use crate::ui::ui_patch;
+    use messages::StoredWrite;
+    let root = tempfile::tempdir().unwrap();
+    let (mut core, _events, _commands) = core(root.path());
+    let page = |id: &str, serial: u64| Page {
+        owner: 4,
+        manifest: "vestra.hotkeys".into(),
+        id: id.into(),
+        category: 0,
+        title: id.into(),
+        order: 0,
+        serial,
+        file: PathBuf::from("page.slint"),
+        component: "Page".into(),
+        global: "Bridge".into(),
+        properties: [
+            ("rows".into(), json!([])),
+            ("source-model".into(), json!([])),
+        ]
+        .into_iter()
+        .collect(),
+    };
+    let len = |pages: &[Page], property: &str| {
+        pages
+            .iter()
+            .find(|p| p.id == "keyboard")
+            .unwrap()
+            .properties[property]
+            .as_array()
+            .unwrap()
+            .len()
+    };
+    core.settings.add_page(page("keyboard", 1));
+    let (mut mine, mut in_flight) = (Vec::new(), StoredInFlight::default());
+    let copies = core.copies();
+    in_flight.take(&mut mine, copies.stored, copies.pages);
+
+    // The interface stores the whole `rows` (349) and reports it.
+    let rows = json!((0..349).collect::<Vec<_>>());
+    let whole = StoredWrite::Whole(rows.clone());
+    mine[0].properties.insert("rows".into(), rows);
+    in_flight.reported(4, "keyboard", "rows", &whole);
+    // Before the core handles that report, another page changes: the
+    // copy the core gives lacks the write.
+    core.settings.add_page(page("mouse", 2));
+    let copies = core.copies();
+    assert_eq!(len(copies.pages.as_ref().unwrap(), "rows"), 0);
+    assert_eq!(copies.stored, Some(0));
+    in_flight.take(&mut mine, copies.stored, copies.pages);
+    assert_eq!(len(&mine, "rows"), 349, "the interface keeps its write");
+
+    // A patch of the other list, applied and reported.
+    let ops = json!([{"op": "insert", "at": 0, "rows": [1, 2]}]);
+    let patch = ui_patch::parse(&ops, len(&mine, "source-model")).unwrap();
+    let patch = StoredWrite::Rows {
+        shapes: patch.shapes.clone(),
+        rows: patch.rows.iter().map(|row| (*row).clone()).collect(),
+    };
+    if let (Some(serde_json::Value::Array(stored)), StoredWrite::Rows { shapes, rows }) =
+        (mine[0].properties.get_mut("source-model"), &patch)
+    {
+        ui_patch::apply_vec(stored, shapes, rows.clone());
+    }
+    in_flight.reported(4, "keyboard", "source-model", &patch);
+
+    // The core handles the first report: its copies say so, and the
+    // interface's echo needs no pages.
+    core.settings_stored(4, "keyboard", "rows".into(), whole);
+    let copies = core.copies();
+    assert!(copies.pages.is_none());
+    assert_eq!(copies.stored, Some(1));
+    in_flight.take(&mut mine, copies.stored, copies.pages);
+    assert_eq!(in_flight.pending(), 1);
+    // Another page change before the second report: the copy has `rows`
+    // and lacks the `source-model` patch, which the interface writes again.
+    core.settings.add_page(page("wheel", 3));
+    let copies = core.copies();
+    assert_eq!(len(copies.pages.as_ref().unwrap(), "source-model"), 0);
+    in_flight.take(&mut mine, copies.stored, copies.pages);
+    assert_eq!(len(&mine, "source-model"), 2);
+    // The next `rows` patch fits (it was refused before the fix).
+    let next = json!([{"op": "insert", "at": 209, "rows": [0, 0]}]);
+    assert!(ui_patch::parse(&next, len(&mine, "rows")).is_ok());
+
+    // Once the core has handled both, both copies are the same.
+    core.settings_stored(4, "keyboard", "source-model".into(), patch);
+    let copies = core.copies();
+    assert_eq!(copies.stored, Some(2));
+    in_flight.take(&mut mine, copies.stored, copies.pages);
+    assert_eq!(in_flight.pending(), 0);
+    let core_page = core.settings.page(4, "keyboard").unwrap();
+    assert_eq!(core_page.properties, mine[0].properties);
+}
+
+/// S3a(3) verification: the window facts of several reports one turn
+/// handles (in-between states: backdrop null, 1280x720, then 960x720)
+/// broadcast `window.state` once, with the final state, as the one facts
+/// value per tick before S3a(3) did; the end of the turn sends what the
+/// drain did not.
+#[test]
+fn the_reports_of_one_turn_broadcast_one_window_state() {
+    use messages::{UiReport, WindowFacts};
+    let root = tempfile::tempdir().unwrap();
+    let (mut core, _events, _commands) = core(root.path());
+    let facts = |seq: u64, facts: Value| {
+        UiReport::WindowFacts(Box::new(WindowFacts {
+            seq,
+            facts,
+            shell: Some(1),
+            menu_origin: true,
+            pip_supported: true,
+            pip_active: false,
+            sidebar_panels: vec![],
+            adjust_panels: vec![],
+            bottom_panel: None,
+        }))
+    };
+    core.report(facts(1, json!({"backdrop": null})));
+    core.report(facts(2, json!({"size": [1280, 720]})));
+    core.report(facts(3, json!({"size": [960, 720]})));
+    assert_eq!(core.window_state_sent, Value::Null, "nothing per report");
+    core.window_state_out();
+    assert_eq!(core.window_state_sent, json!({"size": [960, 720]}));
+    core.report(facts(4, json!({"size": [1280, 720]})));
+    core.turn_end();
+    assert_eq!(core.window_state_sent, json!({"size": [1280, 720]}));
 }

@@ -199,6 +199,28 @@ pub fn apply_vec<T>(items: &mut Vec<T>, shapes: &[Shape], rows: impl IntoIterato
     }
 }
 
+/// Whether `shapes`, checked against some list, apply to one of `len`
+/// rows ([`apply_vec`] indexes into it).
+pub fn fits(mut len: usize, shapes: &[Shape]) -> bool {
+    shapes.iter().all(|shape| match *shape {
+        Shape::Set(at) => at < len,
+        Shape::Insert(at, count) => {
+            let fits = at <= len;
+            len += count;
+            fits
+        }
+        Shape::Remove(at, count) => {
+            let fits = at.checked_add(count).is_some_and(|end| end <= len);
+            len = len.saturating_sub(count);
+            fits
+        }
+        Shape::Move { from, count, to } => {
+            from.checked_add(count).is_some_and(|end| end <= len)
+                && to.checked_add(count).is_some_and(|end| end <= len)
+        }
+    })
+}
+
 /// `stored` (a property's array as JSON) with checked ops applied.
 pub fn patched(stored: &[Json], ops: &Ops<'_>) -> Json {
     let mut rows = stored.to_vec();

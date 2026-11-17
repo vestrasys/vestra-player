@@ -438,6 +438,12 @@ pub(crate) struct Core {
     pub(crate) window_facts: Value,
     /// The `seq` of the facts last applied (`None`: none yet).
     pub(crate) window_facts_seq: Option<u64>,
+    /// The events the core took from its queue behind the interface's
+    /// reports and handles after them, in their order, within the turn's
+    /// budget (`Host::core_events`; S3a(3) verification).
+    pub(crate) held_events: std::collections::VecDeque<Event>,
+    /// The facts `window.state` last broadcast (`Core::window_state_out`).
+    pub(crate) window_state_sent: Value,
     /// The interface's facts as last reported (`UiReport::UiFacts`; design
     /// §5.3 group A, plan step S2f(1)).
     pub(crate) ui_facts: messages::UiFacts,
@@ -640,6 +646,10 @@ pub(crate) struct Core {
     pub(crate) batch_in_flight: Vec<mounts::HandedMount>,
     pub(crate) mount_singly: usize,
     pub(crate) retry_due: bool,
+    /// The changes a failed batch gave back (owner, request id, panel):
+    /// once none of them waits any more (applied, or dropped with their
+    /// plugin), the single-change retry ends (S3a(3) re-review).
+    pub(crate) retry_changes: Vec<(u64, u64, u64)>,
     /// The serial clipboard thread (`clipboard.*`; plan step S3a(3), the
     /// S3a brief's item 7), started at its first call.
     pub(crate) clipboard: crate::clipboard::Serial,
@@ -695,6 +705,9 @@ pub(crate) struct Host {
     /// given whole when the core's registry changed; the values the open
     /// window was given flow back to the core (`UiInput::Stored`).
     pub(crate) pages: Vec<settings_window::Page>,
+    /// The interface's writes of `pages` the core has not handled yet,
+    /// written again into each copy it is given (plan step S3a(3)).
+    pub(crate) stored_in_flight: settings_window::StoredInFlight,
     /// The interface's copies of the core's small values (design §5.3 group
     /// D: the dialog flag, the lead, the run tickets, the origins).
     pub(crate) view: outbox::CoreFacts,

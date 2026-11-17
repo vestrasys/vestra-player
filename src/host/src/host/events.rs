@@ -214,13 +214,13 @@ pub(crate) const DRAIN_BUDGET: Duration = Duration::from_millis(4);
 /// already: each queued one, until [`EVENTS_PER_TICK`] are handled and the
 /// tick has taken [`DRAIN_BUDGET`]. Returns how many it handled in all.
 pub(crate) fn drain(
-    receiver: &mpsc::Receiver<Event>,
+    mut next: impl FnMut() -> Option<Event>,
     began: Instant,
     mut handled: usize,
     mut handle: impl FnMut(Event),
 ) -> usize {
     while handled < EVENTS_PER_TICK || began.elapsed() < DRAIN_BUDGET {
-        let Ok(event) = receiver.try_recv() else {
+        let Some(event) = next() else {
             break;
         };
         handle(event);
@@ -334,15 +334,16 @@ mod tests {
         }
         // Over the budget already: the count, as before.
         let late = Instant::now() - Duration::from_secs(1);
-        assert_eq!(drain(&receiver, late, 0, |_| ()), EVENTS_PER_TICK);
+        let next = || receiver.try_recv().ok();
+        assert_eq!(drain(next, late, 0, |_| ()), EVENTS_PER_TICK);
         // One handled before (the headless loop's first): one fewer here.
         let mut here = 0;
-        assert_eq!(drain(&receiver, late, 1, |_| here += 1), EVENTS_PER_TICK);
+        assert_eq!(drain(next, late, 1, |_| here += 1), EVENTS_PER_TICK);
         assert_eq!(here, EVENTS_PER_TICK - 1);
         // Within it: cheap events go on being handled, here all the rest.
         let rest = 1000 - 2 * EVENTS_PER_TICK + 1;
-        assert_eq!(drain(&receiver, Instant::now(), 0, |_| ()), rest);
+        assert_eq!(drain(next, Instant::now(), 0, |_| ()), rest);
         // Nothing queued: nothing to do.
-        assert_eq!(drain(&receiver, Instant::now(), 0, |_| ()), 0);
+        assert_eq!(drain(next, Instant::now(), 0, |_| ()), 0);
     }
 }

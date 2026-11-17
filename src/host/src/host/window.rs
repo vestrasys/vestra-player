@@ -542,13 +542,9 @@ impl Core {
             UiReport::WindowFacts(facts) => {
                 // A value older than the one applied is skipped (module
                 // `messages`: a coalesced snapshot can overtake a handoff).
-                // The core broadcasts `window.state` from the facts (R9): its
-                // conditions and triggers are evaluated first (`broadcast`);
-                // a value with only the tabs changed broadcasts nothing.
-                if self.apply_facts(*facts) {
-                    let facts = self.window_facts.clone();
-                    self.broadcast("window.state", facts);
-                }
+                // `window.state` goes from the facts as they stand after the
+                // turn's reports (`window_state_out`).
+                self.apply_facts(*facts);
             }
             UiReport::MountPreparing(changes) => self.mounts_preparing(changes),
             UiReport::MountApplied(applied) => self.mounts_applied(applied),
@@ -559,14 +555,12 @@ impl Core {
                 handoff,
                 confirm_failed,
             } => {
-                let changed = handoff.is_some_and(|facts| self.apply_facts(*facts));
+                if let Some(facts) = handoff {
+                    self.apply_facts(*facts);
+                }
                 (self.dialog_busy, self.confirm_open) =
                     dialog_flags_after((self.dialog_busy, self.confirm_open), confirm_failed);
                 self.respond(reply, result);
-                if changed {
-                    let facts = self.window_facts.clone();
-                    self.broadcast("window.state", facts);
-                }
             }
             UiReport::Acted { owner, origin } => self.act(owner, origin),
             // Plan step S2c(7): the interface's part of the state file, and
@@ -1227,6 +1221,7 @@ impl Core {
         // A confirmation or sheet issued and not yet shown counts (S3a(3)
         // review B3: the interface's facts say it a turn later).
         self.in_flight(super::outbox::Mark::Ask)
+            || self.in_flight(super::outbox::Mark::Review)
             || self.ui_facts.sheet.is_some_and(|sheet| {
                 sheet.confirm
                     || self.command_runs.waiting(&Reply {
@@ -1245,14 +1240,11 @@ impl Core {
     /// Window facts (`UiReport::WindowFacts`, or the handoff of
     /// `UiReport::Answered` and `UiReport::MountApplied`) reach the core's
     /// copy when newer than the last applied (module `messages`), with the
-    /// panel tabs. Whether the core's facts value changed: then
-    /// `window.state` goes out (after the reply, for a handoff). The
-    /// interface sends a snapshot only when its facts or its tabs changed,
-    /// and its last facts are the core's, so "changed" is today's
-    /// condition for the broadcast.
-    pub(crate) fn apply_facts(&mut self, facts: WindowFacts) -> bool {
+    /// panel tabs. `window.state` goes out once for the turn's reports
+    /// (`window_state_out`; after the reply, for a handoff).
+    pub(crate) fn apply_facts(&mut self, facts: WindowFacts) {
         if !facts.newer_than(self.window_facts_seq) {
-            return false;
+            return;
         }
         let WindowFacts {
             seq,
@@ -1268,9 +1260,23 @@ impl Core {
             sidebar: sidebar_panels,
             adjust: adjust_panels,
         };
-        let changed = self.window_facts != facts;
         self.window_facts = facts;
-        changed
+    }
+    /// `window.state` from the window facts as they stand after the reports
+    /// the core handled (S3a(3) verification): once, when they differ from
+    /// the facts it last broadcast. Before S3a(3) the interface's facts of
+    /// one tick reached the core as one value, so a run of reports in one
+    /// turn (a handoff, then the tick's facts) broadcasts the final state
+    /// once, not each in-between state. The core's conditions and triggers
+    /// are evaluated first (`broadcast`); a value with only the tabs changed
+    /// broadcasts nothing. Called at the end of the event drain, where the
+    /// turn's reports were handled, and at the end of the turn.
+    pub(crate) fn window_state_out(&mut self) {
+        if self.window_facts != self.window_state_sent {
+            let facts = self.window_facts.clone();
+            self.window_state_sent = facts.clone();
+            self.broadcast("window.state", facts);
+        }
     }
 }
 
