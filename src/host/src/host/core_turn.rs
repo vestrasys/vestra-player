@@ -111,6 +111,11 @@ fn core(root: &Path) -> (Core, mpsc::Receiver<Event>, mpsc::Receiver<Command>) {
         },
         binding_revision: u64::MAX,
         outbox: Default::default(),
+        ui_facts_seq: 0,
+        handover_seq: 0,
+        cancelled_handovers: Vec::new(),
+        window_open: false,
+        clipboard: Default::default(),
         on_demand: supervisor::OnDemand::from_env(),
     };
     (core, received, commands)
@@ -147,10 +152,13 @@ fn a_core_turn_runs_on_a_core_without_a_host() {
     assert_eq!(kinds, ["LastSource", "Source"]);
     // A report of the interface reaches the core alone: the interface's
     // facts.
-    core.report(messages::UiReport::UiFacts(Box::new(messages::UiFacts {
-        options_open: true,
-        ..Default::default()
-    })));
+    core.report(messages::UiReport::UiFacts(
+        1,
+        Box::new(messages::UiFacts {
+            options_open: true,
+            ..Default::default()
+        }),
+    ));
     assert!(core.ui_facts.options_open);
     // The periodic steps, a headless run's: on the core alone.
     for step in Core::STEPS.iter().filter(|step| !step.windowed) {
@@ -294,26 +302,26 @@ fn a_skipped_tick_report_changes_nothing_in_the_core() {
     );
 }
 
-/// Plan step S3a(2) keeps today's record of the batching window on one
-/// thread (zero difference): a cancel takes the record and tells the
-/// interface; a report of the window holding a change records it as
-/// reported, a cancelled one too (a cancel drained while the interface
-/// prepares a hand-over, `prepare_mount_tick`), until the window closes.
-/// Dropping such a late report (the S3a brief's risk 3) is plan step
-/// S3a(3)'s, with the core's thread; this test changes with it.
+/// Plan step S3a(3), the S3a brief's risk 3 (the rule moved here from
+/// S3a(2), where on one thread today's re-record stayed): a cancel takes
+/// the record and tells the interface; the window's report of that change,
+/// sent before the cancel reached the interface, is dropped by its
+/// hand-over number; a closed window ends the wait, and a change handed
+/// over again is recorded.
 #[test]
-fn the_batching_record_follows_the_interfaces_reports_on_one_thread() {
+fn a_cancelled_changes_late_report_does_not_bring_it_back() {
     use messages::MountCancel;
     let root = tempfile::tempdir().unwrap();
     let (mut core, _events, _commands) = core(root.path());
     let key = panel_key(7, composition::Slot::Bottom);
-    let held = super::mounts::HandedMount {
+    let held = |seq| super::mounts::HandedMount {
         reply: Reply { owner: 7, id: 3 },
         key,
         slot: Some(composition::Slot::Bottom),
         call: Value::Null,
+        seq,
     };
-    core.batching(Some(held.clone()));
+    core.batching(Some(held(1)));
     assert!(core.handed.is_some());
     core.cancel_handed(MountCancel::Owner(7));
     assert!(core.handed.is_none());
@@ -321,12 +329,59 @@ fn the_batching_record_follows_the_interfaces_reports_on_one_thread() {
         core.outbox.front(),
         Some(super::outbox::Out::Ui(messages::UiCommand::CancelMount(_)))
     ));
-    // The window's report of the change after the cancel: recorded, as
-    // before plan step S3a (the slot stays taken until the window closes).
-    core.batching(Some(held));
-    assert!(core.handed.is_some());
-    assert!(core.mount_pending(key));
-    // The window closed.
-    core.batching(None);
+    // The window's report of the cancelled hand-over: stale.
+    core.batching(Some(held(1)));
     assert!(core.handed.is_none());
+    assert!(!core.mount_pending(key));
+    // The window closed: the cancel is done, and a new hand-over of the
+    // same change is recorded.
+    core.batching(None);
+    core.batching(Some(held(2)));
+    assert!(core.handed.is_some());
+}
+
+/// Plan step S3a(3): the core→UI queue. A newer snapshot replaces a waiting
+/// one of its kind in place (keeping its number); a command is never
+/// coalesced; the numbers have no gaps; a reply kept behind a command whose
+/// interface part writes lines (`Then::Respond`) waits for the interface's
+/// `Applied` of that command, then goes.
+#[test]
+fn the_core_to_ui_queue_coalesces_snapshots_and_keeps_replies_behind() {
+    use super::outbox::ToUi;
+    use messages::{UiCommand, UiReport, UiSnapshot};
+    let root = tempfile::tempdir().unwrap();
+    let (mut core, _events, _commands) = core(root.path());
+    let theme = |name: &str| UiCommand::Snapshot(UiSnapshot::Theme(name.into()));
+    core.ui_command(theme("a"));
+    core.ui_command(UiCommand::Activity);
+    core.ui_command(theme("b"));
+    core.flush();
+    let entries = core.outbox.to_ui.take_all();
+    let commands = entries
+        .into_iter()
+        .filter_map(|entry| match entry {
+            ToUi::Command(seq, command) => Some((seq, command)),
+            ToUi::Copies(_) => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(commands.len(), 2, "the second theme replaced the first");
+    assert!(
+        matches!(&commands[0], (1, UiCommand::Snapshot(UiSnapshot::Theme(name))) if name == "b")
+    );
+    assert!(matches!(commands[1], (2, UiCommand::Activity)));
+    assert_eq!(core.outbox.pushed, 2);
+    // A reply behind a command whose interface part writes lines.
+    core.ui_command(UiCommand::Layout(messages::LayoutOp::Toggle(
+        crate::ui::sidebar_tabs::Column::Sidebar,
+    )));
+    let reply = Reply { owner: 9, id: 4 };
+    core.respond_in_order(reply, Ok(Value::Null));
+    core.flush();
+    assert_eq!(core.outbox.waiting.len(), 1, "the reply waits");
+    assert!(core.lines_pending());
+    core.report(UiReport::Applied(2));
+    assert_eq!(core.outbox.waiting.len(), 1, "not applied that far yet");
+    core.report(UiReport::Applied(3));
+    assert!(core.outbox.waiting.is_empty(), "the reply went");
+    assert!(!core.lines_pending());
 }

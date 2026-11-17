@@ -399,11 +399,17 @@ impl Host {
     /// (`UiReport::AreaFitted`), or why it cannot (`UiReport::Answered`).
     pub(crate) fn video_area_command(&mut self, reply: Reply, width: f64, height: f64) {
         match self.fit_video_area(width, height) {
-            Ok((video, result)) => self.ui_report(UiReport::AreaFitted {
-                reply,
-                video,
-                result,
-            }),
+            Ok((video, result)) => {
+                // The next window tick sends the size even before the core's
+                // copy says a reply waits (plan step S3a(3): that copy comes
+                // a turn after this report).
+                self.area_fitted_sent = true;
+                self.ui_report(UiReport::AreaFitted {
+                    reply,
+                    video,
+                    result,
+                })
+            }
             Err(error) => self.ui_report(UiReport::Answered {
                 reply,
                 result: Err(error),
@@ -489,13 +495,10 @@ impl Host {
     /// it reads them (`apply_on_top`, `window_tick`), as the binding table
     /// and the command registry do (`sync_tables`).
     pub(crate) fn sync_window_settings(&mut self) {
-        // Taken by the interface, so carried out here, not through the
-        // core's outbox (plan step S2f(3)); asked of the core (plan step
+        // Plan step S3a(3): pushed by the core at the end of its turn
+        // (`Core::turn_end`) and applied from the core→UI queue; nothing is
+        // taken here any more (it was asked of the core in place, plan step
         // S3a(1), `Take::WindowSettings`).
-        for command in self.take(super::messages::Take::WindowSettings) {
-            self.apply_ui_command(command);
-            self.report_ui_facts();
-        }
     }
 }
 impl Core {

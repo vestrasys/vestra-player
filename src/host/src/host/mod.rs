@@ -617,9 +617,26 @@ pub(crate) struct Core {
     /// windowed tick).
     pub(crate) binding_revision: u64,
     /// What the core asks of the interface, in order, and the core work
-    /// kept behind it (plan step S2f(3), `outbox.rs`): drained by the
-    /// driver after every event, report and core step.
+    /// kept behind it (plan step S2f(3), `outbox.rs`); plan step S3a(3):
+    /// flushed into the core→UI queue after every event, report and step.
     pub(crate) outbox: outbox::Outbox,
+    /// The number of the interface's facts last applied (`UiReport::UiFacts`;
+    /// plan step S3a(3)).
+    pub(crate) ui_facts_seq: u64,
+    /// The batching window's hand-overs (`UiCommand::HandOver`; plan step
+    /// S3a(3)): the last number given, and the cancelled ones whose late
+    /// report is dropped until the window reports itself closed
+    /// (`Core::batching`).
+    pub(crate) handover_seq: u64,
+    pub(crate) cancelled_handovers: Vec<u64>,
+    /// The interface's batching window holds a change (handed over, or a
+    /// failed batch's first taken again), as its reports say; the core
+    /// hands over the next change only when it does not (plan step
+    /// S3a(3), `Core::turn_end`).
+    pub(crate) window_open: bool,
+    /// The serial clipboard thread (`clipboard.*`; plan step S3a(3), the
+    /// S3a brief's item 7), started at its first call.
+    pub(crate) clipboard: crate::clipboard::Serial,
     /// On-demand start: the Host's side of standby, wake and
     /// classification (`supervisor/`, supervisor.md §4). Moved from `Host`
     /// in plan step S2c as its last field, so it drops after every other
@@ -641,8 +658,21 @@ pub(crate) struct Host {
     /// split.
     pub(crate) link: driver::CoreLink,
     /// The interface's own event sender (`driver::UiEvents`; plan step
-    /// S3a(1)): its callbacks send there.
+    /// S3a(1)): its callbacks send there. Plan step S3a(3): its own queue
+    /// (the S3a brief's item 1), drained at the interface's wake after the
+    /// core→UI queue (R8), its receiver here.
     pub(crate) events: driver::UiEvents,
+    pub(crate) ui_events: mpsc::Receiver<Event>,
+    /// The core's one event queue, where the interface's reports go (plan
+    /// step S3a(3)).
+    pub(crate) to_core: mpsc::Sender<Event>,
+    /// The core→UI queue (plan step S3a(3)), and the number of the last
+    /// command applied from it.
+    pub(crate) queue: outbox::UiQueue,
+    pub(crate) applied_seq: u64,
+    /// The most entries the interface found waiting at one wake (logged at
+    /// quit: the S3a row's measurement of the queue's peak length).
+    pub(crate) queue_peak: usize,
     /// The interface's clock, on the core's epoch (`Host::now_ms` gives
     /// the core's millisecond values; plan S3a brief item 10).
     pub(crate) clock: Instant,
@@ -677,10 +707,14 @@ pub(crate) struct Host {
     /// it and when. The changes the core hands over during the next 32 ms
     /// join it (`prepare_mount_tick`).
     pub(crate) preparing: Option<(Instant, MountChange)>,
-    /// Debug builds: a change is being handed over from the core to the
-    /// batching window (`prepare_mount_tick`; `check_handed` waits).
-    #[cfg(debug_assertions)]
-    pub(crate) handing_over: bool,
+    /// Plan step S3a(3): the window closed and waits for its batch
+    /// (`Take::Close`), since when; the number of the hand-over the window
+    /// holds.
+    pub(crate) closing: Option<Instant>,
+    pub(crate) handover_seq: u64,
+    /// The interface fitted a video area and reported it (`AreaFitted`);
+    /// the next window tick sends the size (plan step S3a(3)).
+    pub(crate) area_fitted_sent: bool,
     /// Shell preparations still to run one change each, after a batch of
     /// changes failed to compile (`prepare_mount_tick`).
     pub(crate) mount_singly: usize,

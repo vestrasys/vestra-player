@@ -1,4 +1,4 @@
-//! The core's outbox (plan step S2f(3); design §5.3, "After S2f"): what
+//! The core's outbox (plan step S2f(3); design 搂5.3, "After S2f"): what
 //! the core asks of the interface, in the core's order, and the core work
 //! that must follow the interface's part of those requests.
 //!
@@ -23,7 +23,7 @@ use super::*;
 
 /// The core's outbox: the requests to the interface in the core's order
 /// ([`Out`]), and what the interface's copies of core data need (plan step
-/// S3a(1), design §5.3 group D): the changes of the mount registry the
+/// S3a(1), design 搂5.3 group D): the changes of the mount registry the
 /// core made itself ([`MountOp`]), and what of the core's facts, plugins
 /// and settings pages the interface was last given ([`Copies`]). The driver
 /// gives the interface its copies at the start of every drain, before the
@@ -37,6 +37,109 @@ pub(crate) struct Outbox {
     pub(crate) mount_ops: Vec<MountOp>,
     /// What the interface was last given (`Core::copies`).
     pub(crate) sent: Sent,
+    /// The core鈫扷I queue (plan step S3a(3)): what [`Core::flush`] pushed,
+    /// shared with the interface, which applies it at its wake.
+    pub(crate) to_ui: UiQueue,
+    /// The number of the last command pushed, and of the last one the
+    /// interface reported applied (`UiReport::Applied`).
+    pub(crate) pushed: u64,
+    pub(crate) applied: u64,
+    /// The commands pushed and not yet applied whose interface part writes
+    /// a plugin line through its report ([`writes_lines`]), by number.
+    pub(crate) lines_in_flight: std::collections::VecDeque<u64>,
+    /// Debug builds: the commands pushed and not yet applied, by number,
+    /// for the stale-read record ([`Core::check_settled`]).
+    #[cfg(debug_assertions)]
+    pub(crate) in_flight: std::collections::VecDeque<(u64, InFlight)>,
+    /// Debug builds: reads of a fact a command in flight changes (allowed,
+    /// S3a brief risk 3; recorded, not asserted).
+    #[cfg(debug_assertions)]
+    pub(crate) stale_reads: std::cell::Cell<u64>,
+    /// [`Then::Respond`] and [`Then::Registered`] waiting for the interface
+    /// to apply the command numbered with them (the "done" report, S3a
+    /// brief item 4).
+    pub(crate) waiting: std::collections::VecDeque<(u64, Then)>,
+}
+
+/// Debug builds: what a command in flight can change of the interface's
+/// facts (`changes`), kept without the command.
+#[cfg(debug_assertions)]
+pub(crate) struct InFlight(Vec<Fact>);
+
+/// One entry of the core鈫扷I queue (plan step S3a(3), the S3a brief's
+/// "Queues"): the interface's copies of core data that changed, then the
+/// commands, in the core's order, each numbered. A command is the common
+/// entry and stays unboxed (no allocation per command); the copies are
+/// boxed.
+#[allow(clippy::large_enum_variant)]
+pub(crate) enum ToUi {
+    Copies(Box<Copies>),
+    Command(u64, UiCommand),
+}
+
+/// The core鈫扷I queue: one FIFO for everything, shared between the core
+/// (which pushes) and the interface (which takes all and applies them in
+/// order). A snapshot (last value wins) replaces a waiting one of its kind
+/// in place, keeping its number; nothing else is coalesced or passed.
+#[derive(Clone, Default)]
+pub(crate) struct UiQueue(Arc<std::sync::Mutex<std::collections::VecDeque<ToUi>>>);
+
+impl UiQueue {
+    fn lock(&self) -> std::sync::MutexGuard<'_, std::collections::VecDeque<ToUi>> {
+        self.0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+    /// Pushes `entry`; a snapshot replaces a waiting one of its kind. Returns
+    /// whether it took a new place (a command then consumes its number).
+    fn push(&self, entry: ToUi) -> bool {
+        let mut queue = self.lock();
+        if let ToUi::Command(_, UiCommand::Snapshot(snapshot)) = &entry
+            && let Some(kind) = snapshot_kind(snapshot)
+            && let Some(ToUi::Command(_, UiCommand::Snapshot(waiting))) =
+                queue.iter_mut().rev().find(|waiting| {
+                    matches!(waiting, ToUi::Command(_, UiCommand::Snapshot(s)) if snapshot_kind(s) == Some(kind))
+                })
+        {
+            let ToUi::Command(_, UiCommand::Snapshot(snapshot)) = entry else {
+                unreachable!()
+            };
+            *waiting = snapshot;
+            return false;
+        }
+        queue.push_back(entry);
+        true
+    }
+    /// Everything waiting, in order (the interface's wake).
+    pub(crate) fn take_all(&self) -> std::collections::VecDeque<ToUi> {
+        std::mem::take(&mut *self.lock())
+    }
+}
+
+/// The kind of a last-value-wins snapshot, for coalescing in place; `None`
+/// for one whose every value must reach the interface.
+fn snapshot_kind(snapshot: &super::messages::UiSnapshot) -> Option<u8> {
+    use super::messages::UiSnapshot;
+    Some(match snapshot {
+        UiSnapshot::Registry(_) => 0,
+        UiSnapshot::Bindings(_) => 1,
+        UiSnapshot::InfoPanels(_) => 2,
+        UiSnapshot::Theme(_) => 3,
+        UiSnapshot::Source(_) => 4,
+        UiSnapshot::CursorAutoHide(_) => 5,
+        UiSnapshot::LastSource(_) => 6,
+        UiSnapshot::StartupSettled(_) => 7,
+    })
+}
+
+impl Copies {
+    fn is_empty(&self) -> bool {
+        self.facts.is_none()
+            && self.tick.is_none()
+            && self.plugins.is_none()
+            && self.pages.is_none()
+            && self.mount_ops.is_empty()
+    }
 }
 
 impl std::ops::Deref for Outbox {
@@ -76,7 +179,7 @@ pub(crate) struct Sent {
 }
 
 /// Small core values the interface reads for drawing and for its own
-/// checks (design §5.3 group D): the interface's copy is `Host::view`.
+/// checks (design 搂5.3 group D): the interface's copy is `Host::view`.
 #[derive(Clone, Default, PartialEq)]
 pub(crate) struct CoreFacts {
     /// A native dialog is open (`Core::dialog_busy`).
@@ -135,42 +238,6 @@ pub(crate) struct PluginsView {
 }
 
 impl PluginsView {
-    /// Debug builds: what two copies are compared by (the packages by
-    /// their id and directories; a catalog is shared, not compared).
-    #[cfg(debug_assertions)]
-    #[allow(clippy::type_complexity)]
-    pub(crate) fn shape(
-        &self,
-    ) -> (
-        &BTreeMap<u64, (String, String)>,
-        Vec<(u64, &str, &Path, Option<&Path>)>,
-        Vec<(u64, &str, &Path, Option<&Path>)>,
-        &BTreeMap<String, String>,
-        &BTreeMap<String, String>,
-    ) {
-        fn packages(
-            origins: &BTreeMap<u64, crate::host::Origin>,
-        ) -> Vec<(u64, &str, &Path, Option<&Path>)> {
-            origins
-                .iter()
-                .map(|(owner, o)| {
-                    (
-                        *owner,
-                        o.id.as_str(),
-                        o.directory.as_path(),
-                        o.data_directory.as_deref(),
-                    )
-                })
-                .collect()
-        }
-        (
-            &self.running,
-            packages(&self.origins),
-            packages(&self.held),
-            &self.names,
-            &self.held_names,
-        )
-    }
     /// `plugin_id`: the manifest id of a running plugin, else the owner.
     pub(crate) fn plugin_id(&self, owner: u64) -> String {
         self.running
@@ -333,7 +400,7 @@ pub(crate) enum Then {
         result: std::result::Result<Value, RpcError>,
     },
     /// `settings.register` of a recorded page again (`SettingsOp::Updated`):
-    /// the open window's `ui.error` lines come first (design §5.1 note 11),
+    /// the open window's `ui.error` lines come first (design 搂5.1 note 11),
     /// then the refused initial values' `ui.error` lines and the reply.
     Registered {
         reply: Reply,
@@ -357,58 +424,174 @@ impl Core {
     pub(crate) fn then(&mut self, then: Then) {
         self.outbox.push_back(Out::Then(then));
     }
-    /// A request waits in the outbox whose interface part writes a plugin
-    /// line through its report ([`writes_lines`]): a line of the core's
-    /// that followed it on today's wire rides behind it ([`Then`]).
+    /// A request waits whose interface part writes a plugin line through
+    /// its report ([`writes_lines`]): in the outbox, or pushed and not yet
+    /// applied (plan step S3a(3)). A line of the core's that followed it on
+    /// today's wire rides behind it ([`Then`]).
     pub(crate) fn lines_pending(&self) -> bool {
-        self.outbox
-            .iter()
-            .any(|out| matches!(out, Out::Ui(command) if writes_lines(command)))
+        !self.outbox.lines_in_flight.is_empty()
+            || self
+                .outbox
+                .iter()
+                .any(|out| matches!(out, Out::Ui(command) if writes_lines(command)))
     }
-    /// Debug builds: where core code reads its copy of the interface's
-    /// facts `read`, no request that changes them waits in the outbox. The
-    /// copy is the interface's as of the last drain, so it is then the
-    /// interface's now, as when every request was carried out in place
-    /// (plan step S2f(3)).
-    #[cfg(debug_assertions)]
-    pub(crate) fn check_settled(&self, read: &[Fact]) {
-        for &fact in read {
-            debug_assert!(
-                !self.outbox.iter().any(|out| match out {
-                    // The core's copy dropped that confirmation already
-                    // (`UiDialog::revoke`): a drop that finds none changes
-                    // nothing.
-                    Out::Ui(UiCommand::DropConfirm { owner }) => {
-                        matches!(fact, Fact::Sheet)
-                            && self
-                                .ui_facts
-                                .sheet
-                                .is_some_and(|sheet| sheet.owner == *owner && sheet.confirm)
+    /// The core's side of its outbox at the end of each handled event,
+    /// report, step and [`Then`] (plan step S3a(3); before, the driver
+    /// drained it there): the interface's copies that changed, then the
+    /// requests in order, pushed into the core鈫扷I queue (applied at the
+    /// interface's wake). [`Then::Event`] and [`Then::SupervisorRun`] run
+    /// here, on the core, never waiting for the interface (design 搂5.3, the
+    /// nesting note); [`Then::Respond`] and [`Then::Registered`] wait until
+    /// the interface reports the command before them applied
+    /// (`UiReport::Applied`), so the lines its part writes through its
+    /// reports, which reach the core before that report, still come first.
+    pub(crate) fn flush(&mut self) {
+        loop {
+            let copies = self.copies();
+            if !copies.is_empty() {
+                self.outbox.to_ui.push(ToUi::Copies(Box::new(copies)));
+            }
+            let entries = std::mem::take(&mut *self.outbox);
+            if entries.is_empty() {
+                return;
+            }
+            for entry in entries {
+                match entry {
+                    Out::Ui(command) => self.push_command(command),
+                    Out::Then(then @ (Then::Respond { .. } | Then::Registered { .. }))
+                        if self.outbox.pushed > self.outbox.applied =>
+                    {
+                        let after = self.outbox.pushed;
+                        self.outbox.waiting.push_back((after, then));
                     }
-                    Out::Ui(command) => changes(command, fact),
-                    Out::Then(_) => false,
-                }),
-                "the core reads {fact:?} while a request that changes it waits"
-            );
+                    Out::Then(then) => {
+                        self.run_then(then);
+                        self.flush();
+                    }
+                }
+            }
         }
     }
-    /// Debug builds: a `DropConfirm` of `owner` waits in the outbox (the
-    /// core's copy of the sheet is ahead of the interface's until it is
-    /// carried out, `UiDialog::revoke`).
-    #[cfg(debug_assertions)]
-    pub(crate) fn drop_pending(&self, owner: u64) -> bool {
-        self.outbox
-            .iter()
-            .any(|out| matches!(out, Out::Ui(UiCommand::DropConfirm { owner: o }) if *o == owner))
+    /// One command into the core鈫扷I queue, numbered.
+    fn push_command(&mut self, command: UiCommand) {
+        let seq = self.outbox.pushed + 1;
+        let lines = writes_lines(&command);
+        #[cfg(debug_assertions)]
+        let facts = facts_of(command_owner(&command))
+            .into_iter()
+            .filter(|&fact| changes(&command, fact))
+            .collect::<Vec<_>>();
+        if self.outbox.to_ui.push(ToUi::Command(seq, command)) {
+            self.outbox.pushed = seq;
+            if lines {
+                self.outbox.lines_in_flight.push_back(seq);
+            }
+            #[cfg(debug_assertions)]
+            if !facts.is_empty() {
+                self.outbox.in_flight.push_back((seq, InFlight(facts)));
+            }
+        }
     }
-    /// Debug builds: a cancel of the batching window's change waits in the
-    /// outbox (the core cleared its record already; the window drops it
-    /// when the request is carried out).
+    /// The interface applied the commands up to `seq` (`UiReport::Applied`):
+    /// what waited for them runs now, in order.
+    pub(crate) fn applied(&mut self, seq: u64) {
+        self.outbox.applied = self.outbox.applied.max(seq);
+        let applied = self.outbox.applied;
+        while self
+            .outbox
+            .lines_in_flight
+            .front()
+            .is_some_and(|&n| n <= applied)
+        {
+            self.outbox.lines_in_flight.pop_front();
+        }
+        #[cfg(debug_assertions)]
+        while self
+            .outbox
+            .in_flight
+            .front()
+            .is_some_and(|(n, _)| *n <= applied)
+        {
+            self.outbox.in_flight.pop_front();
+        }
+        while self
+            .outbox
+            .waiting
+            .front()
+            .is_some_and(|(after, _)| *after <= applied)
+        {
+            let (_, then) = self.outbox.waiting.pop_front().unwrap();
+            self.run_then(then);
+            self.flush();
+        }
+    }
+    /// Debug builds: where core code reads its copy of the interface's
+    /// facts `read`. On one thread before plan step S3a(3) no request that
+    /// changes them could wait (asserted); with the queue the copy can be
+    /// older than a command in flight, which the S3a brief's risk 3 allows
+    /// and lists: such a read is counted ([`Outbox::stale_reads`]), with a
+    /// log line under `VESTRA_DEBUG_STALE=1`.
     #[cfg(debug_assertions)]
-    pub(crate) fn cancel_pending(&self) -> bool {
-        self.outbox
-            .iter()
-            .any(|out| matches!(out, Out::Ui(UiCommand::CancelMount(_))))
+    pub(crate) fn check_settled(&self, read: &[Fact]) {
+        let stale = read.iter().find(|&&fact| {
+            self.outbox
+                .iter()
+                .any(|out| matches!(out, Out::Ui(command) if changes(command, fact)))
+                || self
+                    .outbox
+                    .in_flight
+                    .iter()
+                    .any(|(_, InFlight(facts))| facts.iter().any(|f| same_fact(*f, fact)))
+        });
+        if let Some(fact) = stale {
+            self.outbox
+                .stale_reads
+                .set(self.outbox.stale_reads.get() + 1);
+            if std::env::var_os("VESTRA_DEBUG_STALE").is_some() {
+                diag!("stale read of {fact:?} (a command that changes it is in flight)");
+            }
+        }
+    }
+}
+
+/// Debug builds: every fact, the per-plugin ones of `owner`
+/// ([`Core::check_settled`]).
+#[cfg(debug_assertions)]
+fn facts_of(owner: u64) -> [Fact; 10] {
+    [
+        Fact::Sheet,
+        Fact::Options,
+        Fact::Columns,
+        Fact::NoVideo,
+        Fact::OsdButtons(owner),
+        Fact::Tabs,
+        Fact::Floating,
+        Fact::Views(owner),
+        Fact::Pip,
+        Fact::PipHolder(owner),
+    ]
+}
+
+/// Debug builds: the plugin a command concerns where a per-plugin fact can
+/// depend on it (0: none).
+#[cfg(debug_assertions)]
+fn command_owner(command: &UiCommand) -> u64 {
+    use super::messages::WindowOp;
+    match command {
+        UiCommand::RevokeOwner { owner, .. } => *owner,
+        UiCommand::View(op) => op.reply.owner,
+        UiCommand::Window(WindowOp::Pip { reply, .. }) => reply.owner,
+        _ => 0,
+    }
+}
+
+/// Debug builds: the same fact (a per-plugin one of the same plugin; the
+/// OSD buttons of any plugin, since any message replaces them).
+#[cfg(debug_assertions)]
+fn same_fact(a: Fact, b: Fact) -> bool {
+    match (a, b) {
+        (Fact::OsdButtons(_), Fact::OsdButtons(_)) => true,
+        _ => std::mem::discriminant(&a) == std::mem::discriminant(&b) && a == b,
     }
 }
 
@@ -439,7 +622,7 @@ pub(crate) fn writes_lines(command: &UiCommand) -> bool {
 /// What core code reads of the interface's facts (`UiFacts`) and tabs
 /// (`WindowFacts`), for [`Core::check_settled`].
 #[cfg(debug_assertions)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum Fact {
     /// The approval sheet (`UiFacts::sheet`).
     Sheet,

@@ -341,12 +341,8 @@ const EXCEPTIONS = [
     count: 1,
     why: "settings.register compiles its page in place only when the settings-check thread cannot take it (S3a brief item 8, the named exception: the check thread runs the same compile off the interface's thread; refusing would change a reply)",
   },
-  {
-    file: "capabilities/clipboard.rs",
-    rule: "clipboard",
-    count: 1,
-    why: "clipboard.* runs where it is answered until the serial clipboard thread of plan step S3a(3) (S3a brief item 7)",
-  },
+  // Plan step S3a(3): `clipboard.*` runs on its serial thread
+  // (`clipboard::Serial`), so the clipboard exception of S3a(2) is gone.
 ];
 const THREAD_LOCAL_USE = (names) =>
   new RegExp(

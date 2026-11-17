@@ -46,7 +46,7 @@
 //! and 37 reached the interface as copies (several changes between two
 //! reads collapse), 23 ms in all, every one at start-up or when plugins
 //! parked; none while the clip played.
-use super::messages::{UiCommand, UiSnapshot};
+use super::messages::UiSnapshot;
 use super::*;
 
 /// The core's binding table and what the interface was last given.
@@ -93,18 +93,19 @@ impl Core {
 }
 
 impl Host {
-    /// The interface takes the core's newer table snapshots, in place
-    /// (module docs): what it reads from here on is what the core has.
-    pub(crate) fn sync_tables(&mut self) {
-        // Asked of the core (plan step S3a(1), `Take::Tables`).
-        for command in self.take(super::messages::Take::Tables) {
-            match command {
-                UiCommand::Snapshot(UiSnapshot::Registry(view)) => self.registry = view,
-                UiCommand::Snapshot(UiSnapshot::Bindings(table)) => {
-                    self.input.borrow_mut().table = table.into()
-                }
-                _ => unreachable!("the core answers with its tables only"),
-            }
+    /// The interface's points where it took the core's newer table
+    /// snapshots (plan step S3a(1), `Take::Tables`). Plan step S3a(3): the
+    /// core pushes them at the end of its turn (`Core::turn_end`) and the
+    /// interface applies them from the core→UI queue
+    /// ([`Host::apply_table`]) before it judges any key behind them (R8),
+    /// so nothing is taken here; the points stay named for S3a(4).
+    pub(crate) fn sync_tables(&mut self) {}
+    /// A table snapshot from the core→UI queue (plan step S3a(3)).
+    pub(crate) fn apply_table(&mut self, snapshot: UiSnapshot) {
+        match snapshot {
+            UiSnapshot::Registry(view) => self.registry = view,
+            UiSnapshot::Bindings(table) => self.input.borrow_mut().table = table.into(),
+            _ => unreachable!("only the tables come here"),
         }
     }
 }

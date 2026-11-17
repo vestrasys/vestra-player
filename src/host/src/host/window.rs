@@ -328,8 +328,10 @@ impl Host {
         // The core answers the `window.setVideoArea` requests this layout
         // shows, or whose second is up (plan step S2d).
         // Only while a reply waits (plan step S3a(2), `TickFacts`): with
-        // none the core's side does nothing.
-        if self.tick_facts.area_waiting {
+        // none the core's side does nothing. Plan step S3a(3): also in the
+        // tick after the interface fitted an area itself, before the core's
+        // copy says so.
+        if std::mem::take(&mut self.area_fitted_sent) || self.tick_facts.area_waiting {
             self.ui_report(UiReport::VideoArea { size: video, now });
         }
         self.bar_tick(&shell, columns_seen);
@@ -485,13 +487,17 @@ impl Host {
         let facts = self.ui_facts_now();
         if self.ui_facts_sent.as_ref() != Some(&facts) {
             self.ui_facts_sent = Some(facts.clone());
-            self.ui_report(UiReport::UiFacts(Box::new(facts)));
+            // Numbered from the interface's one counter, the window facts'
+            // (R13, plan step S3a(3)): the core applies only a newer value.
+            self.facts_seq += 1;
+            let seq = self.facts_seq;
+            self.ui_report(UiReport::UiFacts(seq, Box::new(facts)));
         }
     }
-    /// A report of the UI reaches the core (rule R3), delivered in place on
-    /// this thread until plan step S3a: the interface's facts first, then
-    /// the core's side (`Core::report`), then what the core issued for it
-    /// is carried out (plan step S2f(3), `outbox.rs`).
+    /// A report of the UI reaches the core (rule R3): the interface's facts
+    /// first, then the report, into the core's one event queue (plan step
+    /// S3a(3)). The core handles both in its next turn; what it issues for
+    /// them reaches the interface through the core→UI queue.
     pub(crate) fn ui_report(&mut self, report: UiReport) {
         // Plan step S2f(1): the interface's facts reach the core before
         // anything the core does for this report reads them.
@@ -499,13 +505,10 @@ impl Host {
         // (Nor for what the interface did in place of the core before plan
         // step S3a(1): `UiInput::reads_no_facts`.)
         let quiet = matches!(&report, UiReport::Input(input) if input.reads_no_facts());
-        if !quiet && !matches!(report, UiReport::UiFacts(_) | UiReport::FrameShown(_)) {
+        if !quiet && !matches!(report, UiReport::UiFacts(..) | UiReport::FrameShown(_)) {
             self.report_ui_facts();
         }
-        // Plan step S2f(3): what the core issued for this report is carried
-        // out now, before the interface goes on (the driver, plan step
-        // S3a(1)).
-        self.deliver_report(report);
+        self.send_report(report);
     }
 }
 impl Core {
@@ -524,7 +527,17 @@ impl Core {
     /// events (`Event`, `Input`) and the interface's facts (`UiFacts`).
     pub(crate) fn report(&mut self, report: UiReport) {
         match report {
-            UiReport::UiFacts(facts) => self.ui_facts = *facts,
+            // Only a newer value (plan step S3a(3); one queue keeps them in
+            // order, so this guards the rule rather than a known overtaking).
+            UiReport::UiFacts(seq, facts) => {
+                if seq > self.ui_facts_seq {
+                    self.ui_facts_seq = seq;
+                    self.ui_facts = *facts;
+                }
+            }
+            // Plan step S3a(3): the interface applied the queue up to here.
+            UiReport::Applied(seq) => self.applied(seq),
+            UiReport::Take(take) => self.take(take),
             // Plan step S2f(2): a video frame was shown (`power_tick`).
             UiReport::FrameShown(at) => self.last_frame = Some(at),
             UiReport::WindowFacts(facts) => {

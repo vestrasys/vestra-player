@@ -130,6 +130,9 @@ pub(crate) enum Event {
     Position(crate::playback::position_model::Report),
     /// The primary subtitle track changed (the `subtitleTrack` condition).
     SubtitleTrack(Option<String>),
+    /// A report of the interface's (plan step S3a(3)): into the core's one
+    /// event queue, handled in the core's turn (`Core::report`).
+    Report(Box<super::messages::UiReport>),
 }
 
 impl Event {
@@ -188,6 +191,7 @@ impl Event {
             Self::OwnerResources(owner, _) => ("OwnerResources", Some(*owner)),
             Self::Position(_) => ("Position", None),
             Self::SubtitleTrack(_) => ("SubtitleTrack", None),
+            Self::Report(report) => (report.label(), None),
         }
     }
 }
