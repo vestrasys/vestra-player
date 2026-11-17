@@ -1,11 +1,65 @@
 //! `plugin.clipboard`: plain text and PNG/JPEG images on the system
-//! clipboard. Called on the UI thread; the headless host has no clipboard.
-//! The checks are here; the system side is `platform::clipboard_*`.
+//! clipboard; the headless host has no clipboard. The checks are here; the
+//! system side is `platform::clipboard_*`. Plan step S3a(3) (the S3a
+//! brief's item 7, design §5.1 note 10, K10): every call runs on one serial
+//! clipboard thread of its own ([`Serial`]), on every platform, not where
+//! the request is answered; its result comes back to the core as a reply
+//! event, in the order the calls were made.
 #![forbid(unsafe_code)]
 
-use crate::{host::RpcError, platform};
+use crate::{
+    host::{Event, Reply, RpcError},
+    platform,
+};
 use serde_json::Value;
 use std::path::Path;
+use std::sync::mpsc;
+
+/// The serial clipboard thread, started at its first call (`Core::clipboard`).
+#[derive(Default)]
+pub(crate) struct Serial {
+    jobs: Option<mpsc::Sender<(Reply, String, Value)>>,
+}
+
+impl Serial {
+    /// Runs `method` with `params` on the clipboard thread; its result
+    /// reaches `events` as `Event::Reply(reply, ..)`. A thread that cannot
+    /// start answers `failed` at once.
+    pub(crate) fn call(
+        &mut self,
+        events: &mpsc::Sender<Event>,
+        reply: Reply,
+        method: &str,
+        params: Value,
+    ) -> Result<(), RpcError> {
+        if self.jobs.is_none() {
+            let (jobs, queue) = mpsc::channel::<(Reply, String, Value)>();
+            let events = events.clone();
+            std::thread::Builder::new()
+                .name("clipboard".into())
+                .spawn(move || {
+                    for (reply, method, params) in queue {
+                        // A panic in a call answers it with an error and
+                        // keeps the thread (S3a(3) review item 7).
+                        let result = std::panic::catch_unwind(|| dispatch(&method, &params))
+                            .unwrap_or_else(|_| {
+                                Err(RpcError::new("failed", "the clipboard call failed"))
+                            });
+                        if events.send(Event::Reply(reply, result)).is_err() {
+                            break;
+                        }
+                    }
+                })
+                .map_err(|error| RpcError::new("failed", error.to_string()))?;
+            self.jobs = Some(jobs);
+        }
+        self.jobs
+            .as_ref()
+            .expect("started above")
+            .send((reply, method.to_owned(), params))
+            .map_err(|_| RpcError::new("failed", "the clipboard thread stopped"))
+    }
+}
 
 pub const MAX_TEXT_BYTES: usize = 1024 * 1024;
 pub const MAX_IMAGE_BYTES: u64 = 16 * 1024 * 1024;

@@ -34,7 +34,10 @@ impl Capability for WindowControl {
         {
             core.check_settled(&[crate::host::outbox::Fact::PipHolder(owner)]);
         }
+        // A picture-in-picture request issued, not yet applied, counts
+        // (S3a(3) review B3).
         if core.ui_facts.pip.holder == Some(owner)
+            || core.in_flight(crate::host::outbox::Mark::Pip(owner))
             || core.area_replies.iter().any(|a| a.reply.owner == owner)
         {
             return Recorded::Live("a window setting");

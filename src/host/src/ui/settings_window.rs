@@ -392,6 +392,80 @@ fn patch_stored(
     write
 }
 
+/// `write` into `page`'s stored `property`, the same on the core's page and
+/// on the interface's copy ([`StoredInFlight`]). A row patch that does not
+/// fit the stored array (a page registered again with another value since)
+/// is not applied.
+fn store_into(page: &mut Page, property: String, write: StoredWrite) {
+    match write {
+        StoredWrite::Whole(value) => {
+            page.properties.insert(property, value);
+        }
+        StoredWrite::Rows { shapes, rows } => {
+            if let Some(Value::Array(stored)) = page.properties.get_mut(&property)
+                && ui_patch::fits(stored.len(), &shapes)
+            {
+                ui_patch::apply_vec(stored, &shapes, rows);
+            }
+        }
+    }
+}
+
+/// The interface's stored writes the core has not handled yet (plan step
+/// S3a(3)). The interface writes its copy of a page first and reports the
+/// write (`UiInput::Stored`); a copy of the pages the core gives before it
+/// handled that report lacks the write. The interface keeps each write,
+/// numbered, until the core says it handled it (`Copies::stored`), and
+/// writes the ones not handled yet again into each copy it is given, in
+/// order, as the core will: so its copy never goes back to an older value
+/// of its own write (a row patch's next base would not match it).
+#[derive(Default)]
+pub(crate) struct StoredInFlight {
+    reported: u64,
+    pending: std::collections::VecDeque<(u64, u64, String, String, StoredWrite)>,
+}
+
+impl StoredInFlight {
+    /// A write of the interface's, reported to the core now.
+    pub(crate) fn reported(&mut self, owner: u64, id: &str, property: &str, write: &StoredWrite) {
+        self.reported += 1;
+        self.pending.push_back((
+            self.reported,
+            owner,
+            id.to_owned(),
+            property.to_owned(),
+            write.clone(),
+        ));
+    }
+    /// The core's copies: `handled`, the number of stored writes it has
+    /// handled, and `pages`, its pages as of then, which replace `mine`
+    /// with the writes not handled yet written again.
+    pub(crate) fn take(
+        &mut self,
+        mine: &mut Vec<Page>,
+        handled: Option<u64>,
+        pages: Option<Vec<Page>>,
+    ) {
+        if let Some(handled) = handled {
+            while self.pending.front().is_some_and(|(n, ..)| *n <= handled) {
+                self.pending.pop_front();
+            }
+        }
+        if let Some(pages) = pages {
+            *mine = pages;
+            for (_, owner, id, property, write) in &self.pending {
+                if let Some(page) = mine.iter_mut().find(|p| p.owner == *owner && p.id == *id) {
+                    store_into(page, property.clone(), write.clone());
+                }
+            }
+        }
+    }
+    #[cfg(test)]
+    pub(crate) fn pending(&self) -> usize {
+        self.pending.len()
+    }
+}
+
 /// The properties `after` sets to other values than `before` had: what a
 /// page registered again writes into an open window (one it no longer sets
 /// builds the window again: `Settings::in_place`).
@@ -415,6 +489,11 @@ impl Settings {
     pub fn pages(&self) -> &[Page] {
         &self.pages
     }
+    /// A page registered as it is (tests of the core's copies).
+    #[cfg(test)]
+    pub(crate) fn add_page(&mut self, page: Page) {
+        self.pages_mut().push(page);
+    }
     /// How often the pages changed ([`Settings::changes`]).
     pub fn pages_revision(&self) -> u64 {
         self.changes
@@ -436,18 +515,8 @@ impl Settings {
     /// S3a(1)): a whole value, or the row patch the interface applied to
     /// its copy, applied here to the same array ([`patch_stored`]).
     pub(crate) fn store(&mut self, owner: u64, id: &str, property: String, write: StoredWrite) {
-        let Some(page) = self.page_mut(owner, id) else {
-            return;
-        };
-        match write {
-            StoredWrite::Whole(value) => {
-                page.properties.insert(property, value);
-            }
-            StoredWrite::Rows { shapes, rows } => {
-                if let Some(Value::Array(stored)) = page.properties.get_mut(&property) {
-                    ui_patch::apply_vec(stored, &shapes, rows);
-                }
-            }
+        if let Some(page) = self.page_mut(owner, id) {
+            store_into(page, property, write);
         }
     }
     /// `owner`'s pages and registrations go; whether a page went (an open
@@ -1066,6 +1135,7 @@ impl Host {
         self.report_stored(owner, id, property, StoredWrite::Whole(value));
     }
     fn report_stored(&mut self, owner: u64, id: &str, property: &str, write: StoredWrite) {
+        self.stored_in_flight.reported(owner, id, property, &write);
         self.ui_report(UiReport::Input(crate::host::messages::UiInput::Stored {
             owner,
             id: id.to_owned(),
@@ -1086,6 +1156,7 @@ impl Core {
         property: String,
         write: StoredWrite,
     ) {
+        self.outbox.stored += 1;
         let before = self.settings.pages_revision();
         self.settings.store(owner, id, property, write);
         self.pages_echoed(before);

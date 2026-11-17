@@ -328,12 +328,24 @@ export const INTERFACE_ERRORS = new Set([
 ]);
 
 /**
+ * UI-independent methods answered from a worker thread of the core's, not
+ * in the core's turn (plan step S3a(3): `clipboard.*` on its serial
+ * thread): their replies keep their order among themselves and may move
+ * against every other line (class 4 of [`lineClass`]).
+ */
+export const WORKER_REPLIES = ["clipboard."];
+
+/**
  * The class of a line written to a plugin (the S3a row's wire-trace rule):
  * 1 a core line, 2 a reply to a UI-bound request (R4), 3 a line caused by
- * an interface report.
+ * an interface report, 4 a reply from a worker thread (`WORKER_REPLIES`).
  */
 export function lineClass(entry) {
-  if (entry.kind.startsWith("reply:")) return entry.stream === "B" ? 2 : 1;
+  if (entry.kind.startsWith("reply:")) {
+    const method = entry.kind.slice("reply:".length);
+    if (WORKER_REPLIES.some((prefix) => method.startsWith(prefix))) return 4;
+    return entry.stream === "B" ? 2 : 1;
+  }
   if (!entry.kind.startsWith("event:")) return 1;
   const name = entry.kind.slice("event:".length);
   if (REPORT_EVENTS.has(name) || name.startsWith("drops.")) return 3;
@@ -400,8 +412,9 @@ export function compareTraces(a, b, { allowReorders = false } = {}) {
                 ["interface-report lines", (e) => lineClass(e) === 3],
                 [
                   "UI-bound replies with the interface-report lines",
-                  (e) => lineClass(e) !== 1,
+                  (e) => lineClass(e) === 2 || lineClass(e) === 3,
                 ],
+                ["worker replies", (e) => lineClass(e) === 4],
               ];
         const broken = parts
           .map(([name, keep]) => [
@@ -425,8 +438,11 @@ export function compareTraces(a, b, { allowReorders = false } = {}) {
             let core = 0;
             const out = [];
             for (const entry of list) {
-              if (lineClass(entry) === 1) core++;
-              else out.push([lineClass(entry), core]);
+              const kind = lineClass(entry);
+              if (kind === 1) core++;
+              // A worker reply may move anywhere (its own order checked
+              // above); it is not counted as a move.
+              else if (kind !== 4) out.push([kind, core]);
             }
             return out;
           };

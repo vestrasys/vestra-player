@@ -536,6 +536,22 @@ fn r5_r6_r13_a_mount_and_a_layout_change_are_in_place_when_answered() {
         states.iter().any(|e| seq(e) > seq(mount_reply)),
         "a window.state follows the mount (the sidebar took its width)"
     );
+    // R13's `layout.set` exception, as on main: its `window.state`, showing
+    // the change, is written before its reply (S3a(3) re-review B1: the core
+    // sends a facts report's broadcast before the next report that writes a
+    // line, here the reply).
+    for visible in [false, true] {
+        let set = request(&records, "layout.set", |params| {
+            params["visible"] == visible
+        });
+        let set_reply = reply_to(&records, set);
+        assert!(
+            states.iter().any(|e| seq(e) > seq(set)
+                && seq(e) < seq(set_reply)
+                && e["line"]["data"]["slots"]["sidebar"]["effective"] == visible),
+            "R13: layout.set (visible {visible}): its window.state before its reply"
+        );
+    }
 }
 
 const ORDER: &str = "test.spec-order";

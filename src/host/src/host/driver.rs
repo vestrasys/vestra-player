@@ -4,13 +4,18 @@
 //! keeps every other `impl Host` off the core's data: the interface gives
 //! the core an event, a report or a turn, takes what the core answers to
 //! its requests (`Take`), and reads its own copies of the core's data
-//! (`Host::mounts`, `Host::pages`, `Host::view`, `Host::plugins`), given
-//! at the start of every drain ([`Host::drain_outbox`]). On one thread
-//! everything here is still delivered in place, at today's points (zero
-//! difference); plan step S3a(2) moves the core behind this link to its
-//! own thread.
-use super::messages::{Take, UiCommand, UiReport};
-use super::outbox::Out;
+//! (`Host::mounts`, `Host::pages`, `Host::view`, `Host::plugins`).
+//!
+//! Plan step S3a(3), the queues on one thread: nothing is delivered in
+//! place any more. The interface's reports go into the core's one event
+//! queue ([`Host::send_report`]) and are handled in the core's turn; what
+//! the core issues goes into the one core→UI queue (`Core::flush`), which
+//! the interface applies at its wake ([`Host::apply_queue`]). The core's
+//! turn is still called from the UI thread's timer (the arrangement
+//! `VESTRA_CORE_ON_UI=1` keeps from plan step S3a(4) on, when the core
+//! gets its own thread).
+use super::messages::UiReport;
+use super::outbox::{Copies, ToUi};
 use super::*;
 
 /// The core, as the interface holds it until plan step S3a(2).
@@ -85,74 +90,65 @@ impl Host {
 }
 
 impl Host {
-    /// An event of the core (`Host::handle`): the interface's facts first
-    /// (plan step S2f(1)), then the core's handling, then what it issued
-    /// (plan step S2f(3)).
+    /// An event of the core's queue (`Host::handle`): the core handles it,
+    /// then pushes what it issued into the core→UI queue (plan step
+    /// S3a(3), `Core::flush`). The interface's facts are not reported here
+    /// any more: they reach the core's queue with each report, numbered.
     pub(crate) fn deliver_event(&mut self, event: Event) {
-        self.report_ui_facts();
-        #[cfg(debug_assertions)]
-        self.check_copies();
         self.link.core.handle(event);
-        self.drain_outbox();
+        self.link.core.flush();
     }
-    /// The core's side of a report (`Host::ui_report`), then what it issued.
-    pub(crate) fn deliver_report(&mut self, report: UiReport) {
-        self.link.core.report(report);
-        self.drain_outbox();
+    /// A report of the interface, into the core's one event queue (plan
+    /// step S3a(3), the S3a brief's "Queues"): handled in the core's next
+    /// turn.
+    pub(crate) fn send_report(&mut self, report: UiReport) {
+        let _ = self.to_core.send(Event::Report(Box::new(report)));
     }
-    /// What the core answers to a request of the interface's (plan step
-    /// S3a(1): the interface's pulls of core data are requests now). On one
-    /// thread it is answered in place, where the interface pulled before;
-    /// it reads none of the interface's facts, so none are reported first.
-    pub(crate) fn take(&mut self, take: Take) -> Vec<UiCommand> {
-        let answer = self.link.core.take(take);
-        self.drain_outbox();
-        answer
-    }
-    /// The driver's side of the outbox (plan step S2f(3)): every entry in
-    /// the core's order. The interface's copies of the core's data come
-    /// first (plan step S3a(1): `Core::copies`), so what an entry's
-    /// interface part reads is the core's data as the handler left it. A
-    /// request is carried out by the interface, then its facts go to the
-    /// core (`report_ui_facts`, as after every request since S2f(1)); a
-    /// report it sends on the way is handled by the core at once and drains
-    /// what that issued (`ui_report`). A [`super::outbox::Then`] is the
-    /// core's, run here, its own requests drained before the next entry.
-    /// Each pass takes the entries issued so far, so what an entry's
-    /// handling issues is carried out before the entries after it, as when
-    /// each request was carried out in place.
-    pub(crate) fn drain_outbox(&mut self) {
-        loop {
-            self.take_copies();
-            let entries = std::mem::take(&mut *self.link.core.outbox);
-            if entries.is_empty() {
-                return;
-            }
-            for entry in entries {
-                match entry {
-                    Out::Ui(command) => {
-                        self.apply_ui_command(command);
-                        self.report_ui_facts();
-                    }
-                    Out::Then(then) => {
-                        self.report_ui_facts();
-                        self.link.core.run_then(then);
-                        self.drain_outbox();
-                    }
+    /// The interface's wake (plan step S3a(3)): every entry the core pushed
+    /// since, in order, applied: the copies of the core's data that changed
+    /// (as at the start of every drain before), then each command, followed
+    /// by the interface's facts. The commands arrive numbered without gaps
+    /// (checked; the drain's "nothing left behind" assert before). The
+    /// interface then tells the core how far it applied
+    /// (`UiReport::Applied`), after the reports those commands' parts sent.
+    pub(crate) fn apply_queue(&mut self) {
+        let entries = self.queue.take_all();
+        // The queue's peak length (the S3a row's measurement), logged at
+        // the end of the run.
+        self.queue_peak = self.queue_peak.max(entries.len());
+        let mut last = None;
+        for entry in entries {
+            match entry {
+                ToUi::Copies(copies) => self.apply_copies(*copies),
+                ToUi::Command(seq, command) => {
+                    debug_assert_eq!(
+                        seq,
+                        self.applied_seq + 1,
+                        "the core→UI queue skipped or repeated a command"
+                    );
+                    self.applied_seq = seq;
+                    self.apply_ui_command(command);
+                    self.report_ui_facts();
+                    last = Some(seq);
                 }
-                // Every report drained what it issued: nothing waits
-                // behind the entries still to come.
-                debug_assert!(
-                    self.link.core.outbox.is_empty(),
-                    "a request was issued and not drained"
-                );
             }
         }
+        if let Some(seq) = last {
+            self.send_report(UiReport::Applied(seq));
+        }
+    }
+    /// Both sides at once where nothing else runs (plan S3a brief item 9:
+    /// the start-up calls before the interface's loop; the quit calls
+    /// after it): the core pushes what it issued, the interface applies it.
+    /// Reports the interface's part sends are handled in the core's next
+    /// turn (at start-up: the first turn of the loop).
+    pub(crate) fn sync(&mut self) {
+        self.link.core.flush();
+        self.apply_queue();
     }
     /// The interface's copies of the core's data follow the core (plan step
-    /// S3a(1)).
-    fn take_copies(&mut self) {
-        let copies = self.link.core.copies();
+    /// S3a(1)); S3a(3): from the core→UI queue.
+    fn apply_copies(&mut self, copies: Copies) {
         for op in copies.mount_ops {
             self.mount_op(op);
         }
@@ -165,16 +161,16 @@ impl Host {
         if let Some(plugins) = copies.plugins {
             self.plugins = plugins;
         }
-        if let Some(pages) = copies.pages {
-            self.pages = pages;
-        }
+        self.stored_in_flight
+            .take(&mut self.pages, copies.stored, copies.pages);
     }
     /// The first half of the core's turn, which began at `began` (plan step
     /// S2e): `first` (an event the headless driver already waited for),
     /// then the queued ones ([`super::events::drain`]), each handled.
     /// `observe` sees each event before it is handled (the headless
     /// evidence); `turn`, the windowed tick's record, gets each event's
-    /// handling time (`host/stall.rs`).
+    /// handling time (`host/stall.rs`). Plan step S3a(3): the interface's
+    /// reports are events of this queue too.
     pub(crate) fn core_events(
         &mut self,
         receiver: &mpsc::Receiver<Event>,
@@ -191,197 +187,85 @@ impl Host {
                 turn.event(label, at.elapsed());
             }
         };
-        let handled = match first {
-            Some(event) => {
-                handle(self, event);
-                1
+        // The interface's reports first, then `window.state` from the facts
+        // they left, then the other events in their order (S3a(3)
+        // verification, re-review B2: `events::turn_events`); a subscription
+        // that came in meanwhile is answered after that state, as on main.
+        let mut held = std::mem::take(&mut self.link.core.held_events);
+        super::events::turn_events(receiver, &mut held, first, began, |step| match step {
+            super::events::TurnStep::Event(event) => handle(self, event),
+            super::events::TurnStep::ReportsDone => {
+                self.link.core.window_state_out();
+                self.link.core.flush();
             }
-            None => 0,
-        };
-        super::events::drain(receiver, began, handled, |event| handle(self, event));
+        });
+        self.link.core.held_events = held;
     }
-    /// The second half of the core's turn: its periodic steps
-    /// ([`Core::STEPS`]), in their order, each followed by what it asked of
-    /// the interface (plan step S2f(3), `outbox.rs`). A headless run never
-    /// ran the windowed steps and still does not. `turn` names the steps
-    /// for the windowed tick's record.
+    /// Events the core's last turn left behind the reports
+    /// (`Core::held_events`): the headless driver does not wait for more.
+    pub(crate) fn events_held(&self) -> bool {
+        !self.link.core.held_events.is_empty()
+    }
+    /// The second half of the core's turn: plan step S3a(3) runs the
+    /// panel-restart step first, in the core turn right after the event
+    /// drain (the S3a brief's item 3; it ran from the windowed tick between
+    /// the interface's mount step and window tick before), then its
+    /// periodic steps ([`Core::STEPS`]), in their order, each followed by
+    /// what it issued (`Core::flush`), then the end of the turn's pushes
+    /// (the tables and window settings that changed, `Core::turn_end`). A
+    /// headless run never ran the windowed steps and still does not. `turn`
+    /// names the steps for the windowed tick's record.
     pub(crate) fn core_steps(&mut self, mut turn: Option<&mut super::stall::Turn>) {
-        // The interface's facts as the core's steps read them (plan step
-        // S2f(1)).
-        self.report_ui_facts();
-        #[cfg(debug_assertions)]
-        self.check_copies();
+        let core = &mut self.link.core;
+        if !core.headless && !core.restarts.plugins.is_empty() {
+            core.panel_restart_tick();
+            core.flush();
+            if let Some(turn) = turn.as_deref_mut() {
+                turn.step("panel restarts");
+            }
+        }
         for step in Core::STEPS {
-            if step.windowed && self.headless {
+            if step.windowed && core.headless {
                 break;
             }
-            (step.run)(&mut self.link.core);
-            self.drain_outbox();
+            (step.run)(core);
+            core.flush();
             if let (Some(what), Some(turn)) = (step.ends, turn.as_deref_mut()) {
                 turn.step(what);
             }
         }
+        core.turn_end();
+        core.flush();
     }
-    /// The core's panel-restart step at its point of the windowed tick
-    /// (between the two halves of the core's turn): a hand-over to the core
-    /// (plan step S2f(1)), then what it asked of the interface (plan step
-    /// S2f(3)).
-    pub(crate) fn panel_restart_tick(&mut self) {
-        if self.link.core.restarts.plugins.is_empty() {
-            return;
+    /// At quit, before the core's quit calls (S3a(3) review item 9): the
+    /// interface's reports waiting in the core's queue are handled (its
+    /// last facts, a final `Remembered` for the state file), as each was
+    /// handled in place before; the other events waiting are left, as they
+    /// were at quit before.
+    pub(crate) fn quit_reports(&mut self, receiver: &mpsc::Receiver<Event>) {
+        while let Ok(event) = receiver.try_recv() {
+            if matches!(event, Event::Report(_)) {
+                self.deliver_event(event);
+            }
         }
-        self.report_ui_facts();
-        #[cfg(debug_assertions)]
-        self.check_copies();
-        self.link.core.panel_restart_tick();
-        self.drain_outbox();
+        self.link.core.window_state_out();
+        self.link.core.flush();
     }
     /// The core's start-up calls (plan S3a brief, item 9): they run on the
     /// main thread, on the core before the interface's loop starts, at
     /// today's points; nothing of them runs while the interface does. What
-    /// they ask of the interface is drained where the start drained before.
+    /// they ask of the interface is applied where the start drained before
+    /// ([`Host::sync`]).
     pub(crate) fn starting<R>(&mut self, start: impl FnOnce(&mut Core) -> R) -> R {
         start(&mut self.link.core)
     }
     /// The core's calls at quit (design §5.3 group F), after the interface's
-    /// loop ended; plan step S3a(2) gives the core its own deadline and exit.
+    /// loop ended; plan step S3a(4) gives the core its own deadline and exit.
     pub(crate) fn quitting<R>(&mut self, quit: impl FnOnce(&mut Core) -> R) -> R {
         quit(&mut self.link.core)
     }
     /// The playback backend, for the headless driver's evidence.
     pub(crate) fn backend(&self) -> &Backend {
         &self.link.core.backend
-    }
-    /// Debug builds: where the driver hands a turn to the core (an event of
-    /// the core, the core's steps, the panel-restart step), the core's
-    /// copies of the interface's state are the interface's: its facts, its
-    /// tabs and its record of the batching window (plan step S2f(3)). Core
-    /// code takes no `Host`, so the checks run here, not at the reads: the
-    /// interface does not run inside a core turn, and a read inside it
-    /// checks that no command that would change what it reads waits in the
-    /// outbox (`Core::check_settled`). They compare the two sides in place
-    /// and are removed with the in-place delivery (plan step S3a(2)).
-    #[cfg(debug_assertions)]
-    pub(crate) fn check_copies(&self) {
-        self.check_ui_facts();
-        self.check_panel_tabs();
-        self.check_handed();
-        self.check_mounts();
-        self.check_core_copies();
-    }
-    /// Debug builds: the core's copy of the interface's facts is the
-    /// interface's (plan step S2f(1)), and the current tabs the core derives
-    /// from it are the interface's (`check_copies`).
-    #[cfg(debug_assertions)]
-    fn check_ui_facts(&self) {
-        let core = &self.link.core;
-        let mut now = self.ui_facts_now();
-        // A stopped plugin's confirmation that a waiting `DropConfirm`
-        // drops: the core's copy is ahead (plan step S2f(3),
-        // `UiDialog::revoke`).
-        if now
-            .sheet
-            .is_some_and(|sheet| sheet.confirm && core.drop_pending(sheet.owner))
-        {
-            now.sheet = None;
-        }
-        debug_assert_eq!(
-            core.ui_facts, now,
-            "the core's interface facts are behind the interface"
-        );
-        for column in sidebar_tabs::Column::ALL {
-            debug_assert_eq!(
-                core.current_tab(column),
-                self.current_tab(column),
-                "the core's current tab of {column:?} differs"
-            );
-        }
-    }
-    /// Debug builds: the core's copy of the tabs is the policy's wherever
-    /// the core reads it (plan step S2c(5): `report_tabs` after every
-    /// change).
-    #[cfg(debug_assertions)]
-    fn check_panel_tabs(&self) {
-        debug_assert_eq!(
-            self.link.core.panel_tabs,
-            self.policy_tabs(),
-            "the core's panel tabs are behind the policy"
-        );
-    }
-    /// Debug builds: the core's record of the change the batching window
-    /// holds is the window's at the core's reads of it (plan step S2d(2)),
-    /// except while a change is being handed over (`handing_over`: the
-    /// record is set, the window not yet).
-    #[cfg(debug_assertions)]
-    fn check_handed(&self) {
-        let core = &self.link.core;
-        // Nor while a cancel of the core's waits in its outbox (plan step
-        // S2f(3)): the core cleared its record, the window drops the
-        // change when the cancel is carried out.
-        if self.handing_over || core.cancel_pending() {
-            return;
-        }
-        let window = self
-            .preparing
-            .as_ref()
-            .map(|(_, change)| super::mounts::HandedMount::of(change));
-        let same = match (&core.handed, &window) {
-            (None, None) => true,
-            (Some(core), Some(window)) => core.same(window),
-            _ => false,
-        };
-        debug_assert!(
-            same,
-            "the core's record of the batching window is behind it"
-        );
-    }
-    /// Debug builds (plan step S3a(1)): the interface's copy of the mount
-    /// registry has the core's panels, slots, plugins and placeholders.
-    #[cfg(debug_assertions)]
-    fn check_mounts(&self) {
-        let shape = |mounts: &BTreeMap<u64, Mount>| {
-            mounts
-                .iter()
-                .map(|(key, m)| (*key, m.spec.owner, m.spec.slot as u8, m.plugin, m.recorded))
-                .collect::<Vec<_>>()
-        };
-        debug_assert_eq!(
-            shape(&self.mounts),
-            shape(&self.link.core.mounts),
-            "the interface's copy of the mount registry is behind the core's"
-        );
-    }
-    /// Debug builds (plan step S3a(1), from the static review): the
-    /// interface's copies of the settings pages, the core's small values
-    /// and the plugins are the core's.
-    #[cfg(debug_assertions)]
-    fn check_core_copies(&self) {
-        let core = &self.link.core;
-        debug_assert!(
-            self.pages == core.settings.pages(),
-            "the interface's copy of the settings pages is behind the core's"
-        );
-        debug_assert!(
-            self.view == core.facts_now(),
-            "the interface's copy of the core's facts is behind the core's"
-        );
-        debug_assert!(
-            self.tick_facts == core.tick_facts(),
-            "the interface's copy of the core's tick facts is behind the core's"
-        );
-        debug_assert!(
-            self.plugins.shape() == core.plugins_view().shape(),
-            "the interface's copy of the plugins is behind the core's"
-        );
-    }
-    /// Debug builds: the interface's restart lines are the core's record's
-    /// (plan step S2f(2); `Host::restart_waiting`).
-    #[cfg(debug_assertions)]
-    pub(crate) fn check_restart_lines(&self) {
-        debug_assert_eq!(
-            self.restart_lines,
-            self.link.core.restarts.lines(),
-            "the interface's restart lines are behind the core's record"
-        );
     }
 }

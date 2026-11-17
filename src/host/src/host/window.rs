@@ -328,8 +328,10 @@ impl Host {
         // The core answers the `window.setVideoArea` requests this layout
         // shows, or whose second is up (plan step S2d).
         // Only while a reply waits (plan step S3a(2), `TickFacts`): with
-        // none the core's side does nothing.
-        if self.tick_facts.area_waiting {
+        // none the core's side does nothing. Plan step S3a(3): also in the
+        // tick after the interface fitted an area itself, before the core's
+        // copy says so.
+        if std::mem::take(&mut self.area_fitted_sent) || self.tick_facts.area_waiting {
             self.ui_report(UiReport::VideoArea { size: video, now });
         }
         self.bar_tick(&shell, columns_seen);
@@ -485,13 +487,17 @@ impl Host {
         let facts = self.ui_facts_now();
         if self.ui_facts_sent.as_ref() != Some(&facts) {
             self.ui_facts_sent = Some(facts.clone());
-            self.ui_report(UiReport::UiFacts(Box::new(facts)));
+            // Numbered from the interface's one counter, the window facts'
+            // (R13, plan step S3a(3)): the core applies only a newer value.
+            self.facts_seq += 1;
+            let seq = self.facts_seq;
+            self.ui_report(UiReport::UiFacts(seq, Box::new(facts)));
         }
     }
-    /// A report of the UI reaches the core (rule R3), delivered in place on
-    /// this thread until plan step S3a: the interface's facts first, then
-    /// the core's side (`Core::report`), then what the core issued for it
-    /// is carried out (plan step S2f(3), `outbox.rs`).
+    /// A report of the UI reaches the core (rule R3): the interface's facts
+    /// first, then the report, into the core's one event queue (plan step
+    /// S3a(3)). The core handles both in its next turn; what it issues for
+    /// them reaches the interface through the core→UI queue.
     pub(crate) fn ui_report(&mut self, report: UiReport) {
         // Plan step S2f(1): the interface's facts reach the core before
         // anything the core does for this report reads them.
@@ -499,13 +505,10 @@ impl Host {
         // (Nor for what the interface did in place of the core before plan
         // step S3a(1): `UiInput::reads_no_facts`.)
         let quiet = matches!(&report, UiReport::Input(input) if input.reads_no_facts());
-        if !quiet && !matches!(report, UiReport::UiFacts(_) | UiReport::FrameShown(_)) {
+        if !quiet && !matches!(report, UiReport::UiFacts(..) | UiReport::FrameShown(_)) {
             self.report_ui_facts();
         }
-        // Plan step S2f(3): what the core issued for this report is carried
-        // out now, before the interface goes on (the driver, plan step
-        // S3a(1)).
-        self.deliver_report(report);
+        self.send_report(report);
     }
 }
 impl Core {
@@ -523,20 +526,33 @@ impl Core {
     /// (`AreaFitted`, `VideoArea`); S2f(1): the core's part of the UI's
     /// events (`Event`, `Input`) and the interface's facts (`UiFacts`).
     pub(crate) fn report(&mut self, report: UiReport) {
+        // Main broadcast `window.state` at the facts report itself, so it
+        // preceded every line of a later report (R13's `layout.set`
+        // exception: its facts report, then its reply). Only a run of facts
+        // reports is folded (S3a(3) re-review B1): the pending broadcast
+        // goes before a report that writes a line.
+        if self.report_writes_lines(&report) {
+            self.window_state_out();
+        }
         match report {
-            UiReport::UiFacts(facts) => self.ui_facts = *facts,
+            // Only a newer value (plan step S3a(3); one queue keeps them in
+            // order, so this guards the rule rather than a known overtaking).
+            UiReport::UiFacts(seq, facts) => {
+                if seq > self.ui_facts_seq {
+                    self.ui_facts_seq = seq;
+                    self.ui_facts = *facts;
+                }
+            }
+            // Plan step S3a(3): the interface applied the queue up to here.
+            UiReport::Applied(seq) => self.applied(seq),
             // Plan step S2f(2): a video frame was shown (`power_tick`).
             UiReport::FrameShown(at) => self.last_frame = Some(at),
             UiReport::WindowFacts(facts) => {
                 // A value older than the one applied is skipped (module
                 // `messages`: a coalesced snapshot can overtake a handoff).
-                // The core broadcasts `window.state` from the facts (R9): its
-                // conditions and triggers are evaluated first (`broadcast`);
-                // a value with only the tabs changed broadcasts nothing.
-                if self.apply_facts(*facts) {
-                    let facts = self.window_facts.clone();
-                    self.broadcast("window.state", facts);
-                }
+                // `window.state` goes from the facts as they stand after the
+                // turn's reports (`window_state_out`).
+                self.apply_facts(*facts);
             }
             UiReport::MountPreparing(changes) => self.mounts_preparing(changes),
             UiReport::MountApplied(applied) => self.mounts_applied(applied),
@@ -547,14 +563,12 @@ impl Core {
                 handoff,
                 confirm_failed,
             } => {
-                let changed = handoff.is_some_and(|facts| self.apply_facts(*facts));
+                if let Some(facts) = handoff {
+                    self.apply_facts(*facts);
+                }
                 (self.dialog_busy, self.confirm_open) =
                     dialog_flags_after((self.dialog_busy, self.confirm_open), confirm_failed);
                 self.respond(reply, result);
-                if changed {
-                    let facts = self.window_facts.clone();
-                    self.broadcast("window.state", facts);
-                }
             }
             UiReport::Acted { owner, origin } => self.act(owner, origin),
             // Plan step S2c(7): the interface's part of the state file, and
@@ -1212,30 +1226,33 @@ impl Core {
     /// from the core's copy): a confirmation always, a plan while its run
     /// waits.
     pub(crate) fn sheet_waiting(&self) -> bool {
-        self.ui_facts.sheet.is_some_and(|sheet| {
-            sheet.confirm
-                || self.command_runs.waiting(&Reply {
-                    owner: sheet.owner,
-                    id: sheet.id,
-                })
-        })
+        // A confirmation or sheet issued and not yet shown counts (S3a(3)
+        // review B3: the interface's facts say it a turn later).
+        self.in_flight(super::outbox::Mark::Ask)
+            || self.in_flight(super::outbox::Mark::Review)
+            || self.ui_facts.sheet.is_some_and(|sheet| {
+                sheet.confirm
+                    || self.command_runs.waiting(&Reply {
+                        owner: sheet.owner,
+                        id: sheet.id,
+                    })
+            })
     }
     /// A confirmation waits on the sheet: as a native dialog open, its wait
-    /// keeps the plugins running (`Busy::Dialog`).
+    /// keeps the plugins running (`Busy::Dialog`). One issued and not yet
+    /// shown counts (S3a(3) review B3).
     pub(crate) fn confirm_waiting(&self) -> bool {
-        self.ui_facts.sheet.is_some_and(|sheet| sheet.confirm)
+        self.in_flight(super::outbox::Mark::Ask)
+            || self.ui_facts.sheet.is_some_and(|sheet| sheet.confirm)
     }
     /// Window facts (`UiReport::WindowFacts`, or the handoff of
     /// `UiReport::Answered` and `UiReport::MountApplied`) reach the core's
     /// copy when newer than the last applied (module `messages`), with the
-    /// panel tabs. Whether the core's facts value changed: then
-    /// `window.state` goes out (after the reply, for a handoff). The
-    /// interface sends a snapshot only when its facts or its tabs changed,
-    /// and its last facts are the core's, so "changed" is today's
-    /// condition for the broadcast.
-    pub(crate) fn apply_facts(&mut self, facts: WindowFacts) -> bool {
+    /// panel tabs. `window.state` goes out once for the turn's reports
+    /// (`window_state_out`; after the reply, for a handoff).
+    pub(crate) fn apply_facts(&mut self, facts: WindowFacts) {
         if !facts.newer_than(self.window_facts_seq) {
-            return false;
+            return;
         }
         let WindowFacts {
             seq,
@@ -1251,9 +1268,41 @@ impl Core {
             sidebar: sidebar_panels,
             adjust: adjust_panels,
         };
-        let changed = self.window_facts != facts;
         self.window_facts = facts;
-        changed
+    }
+    /// Whether handling `report` may write a plugin line (a reply, an
+    /// event, a broadcast): all but the facts, the frame and the state file,
+    /// and an `Applied` that releases no waiting reply.
+    fn report_writes_lines(&self, report: &UiReport) -> bool {
+        match report {
+            UiReport::UiFacts(..)
+            | UiReport::WindowFacts(_)
+            | UiReport::FrameShown(_)
+            | UiReport::Remembered { .. } => false,
+            UiReport::Applied(seq) => self
+                .outbox
+                .waiting
+                .front()
+                .is_some_and(|(after, _)| after <= seq),
+            _ => true,
+        }
+    }
+    /// `window.state` from the window facts as they stand after the reports
+    /// the core handled (S3a(3) verification): once, when they differ from
+    /// the facts it last broadcast. Before S3a(3) the interface's facts of
+    /// one tick reached the core as one value, so a run of reports in one
+    /// turn (a handoff, then the tick's facts) broadcasts the final state
+    /// once, not each in-between state. The core's conditions and triggers
+    /// are evaluated first (`broadcast`); a value with only the tabs changed
+    /// broadcasts nothing. Called before a report that writes a line
+    /// (`report_writes_lines`, re-review B1), after the turn's reports, and
+    /// at the end of the turn.
+    pub(crate) fn window_state_out(&mut self) {
+        if self.window_facts != self.window_state_sent {
+            let facts = self.window_facts.clone();
+            self.window_state_sent = facts.clone();
+            self.broadcast("window.state", facts);
+        }
     }
 }
 

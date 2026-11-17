@@ -8,13 +8,33 @@ use super::messages::{CommandFrom, PluginLine, UiEvent, UiInput, UiReport};
 use super::*;
 
 impl Host {
+    /// An event of the core's queue. Plan step S3a(3): the interface's
+    /// events have a queue of their own ([`Host::ui_events_tick`]); one
+    /// that still reaches the core's queue is the interface's all the same
+    /// and runs here, on this thread (none is known: every UI callback
+    /// sends through `UiEvents`).
     pub(crate) fn handle(&mut self, event: Event) {
         match UiEvent::new(event) {
             Ok(event) => self.ui_event(event.into_event()),
             // The core's, through the driver (plan step S3a(1),
-            // `driver.rs`): the interface's facts first, then the core's
-            // handling, then what it issued.
+            // `driver.rs`): the core's handling, then what it issued.
             Err(event) => self.deliver_event(event),
+        }
+    }
+    /// The interface's own events (plan step S3a(3), the S3a brief's item
+    /// 1), at its wake after the core→UI queue was applied, so a key is
+    /// judged by the tables pushed before it (R8). A line from the
+    /// interface's own threads that is the core's (`PluginMessage`,
+    /// `Broadcast` from a view's or a settings page's callbacks) goes on to
+    /// the core's queue, in its order.
+    pub(crate) fn ui_events_tick(&mut self) {
+        while let Ok(event) = self.ui_events.try_recv() {
+            match UiEvent::new(event) {
+                Ok(event) => self.ui_event(event.into_event()),
+                Err(event) => {
+                    let _ = self.to_core.send(event);
+                }
+            }
         }
     }
 }
@@ -184,6 +204,8 @@ impl Core {
             Event::OwnerResources(owner, answer) => self.resources_answer(owner, &answer),
             Event::Position(report) => self.triggers_position(report),
             Event::SubtitleTrack(track) => self.triggers_subtitle(track),
+            // Plan step S3a(3): a report of the interface's, from the queue.
+            Event::Report(report) => self.report(*report),
             Event::PluginMessage(owner, event, data) => {
                 self.send(owner, json!({"event":event,"data":data}))
             }
@@ -709,11 +731,9 @@ impl Core {
                 #[cfg(feature = "producer-audio")]
                 self.physical_revoke(producer_input::RevokeReason::Dialog);
             }
-            UiInput::MountRetry(changes) => {
-                for change in changes.into_iter().rev() {
-                    self.mount_queue.push_front(change);
-                }
-            }
+            // The batch failed (S3a(3) review B1/B2: its outcome ends its
+            // wait; the core tries the changes one at a time).
+            UiInput::MountRetry(changes) => self.batch_retry(changes),
             // Plan step S3a(1): what the interface wrote in the core's data,
             // or called on the core, in place before.
             UiInput::Mounts(record) => self.mounts = record,

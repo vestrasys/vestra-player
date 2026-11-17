@@ -295,10 +295,11 @@ impl Host {
         }
     }
     /// Panel `key` waits for its plugin's restart, as the interface's copy
-    /// has it (`Host::restart_lines`).
+    /// has it (`Host::restart_lines`). Plan step S3a(3): the copy is no
+    /// longer compared with the core's record in place (the restart-lines
+    /// assert); `PanelsOp::Restarting` is numbered like every command of
+    /// the core→UI queue, whose order `Host::apply_queue` checks.
     pub(crate) fn restart_waiting(&self, key: u64) -> bool {
-        #[cfg(debug_assertions)]
-        self.check_restart_lines();
         self.restart_lines.contains_key(&key)
     }
     /// The places (a window, its generation, a slot) whose container shows

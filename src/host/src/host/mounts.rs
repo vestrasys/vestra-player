@@ -1,7 +1,8 @@
 //! Mounted panels: preparing the shell for mount changes, their values
 //! and callbacks.
 use super::messages::{
-    MountApplied, MountCancel, SetMount, UiCommand, UiReport, UiSnapshot, WindowFacts, WindowOp,
+    MountApplied, MountCancel, PanelsOp, SetMount, UiCommand, UiReport, UiSnapshot, WindowFacts,
+    WindowOp,
 };
 use super::outbox::MountOp;
 use super::*;
@@ -79,89 +80,246 @@ pub(crate) fn refuse_initial(properties: &mut BTreeMap<String, Value>) -> Vec<Rp
     refused
 }
 
+/// The batching window (K6): mounts arriving together (the plugins'
+/// activations at start-up) are applied as one change.
+const MOUNT_WINDOW: Duration = Duration::from_millis(32);
+
 impl Core {
-    /// The core's side of `UiCommand::Mount` (K6; plan step S2c(3)): its
-    /// oldest accepted mount change, handed to the interface's batching
-    /// window. Until plan step S3a the interface takes it in place, at the
-    /// point it took it from the queue before (`prepare_mount_tick`).
-    /// The core records the change it hands over (`Core::handed`, plan step
-    /// S2d(2)): until the interface reports its window closed
-    /// (`UiReport::Batching`), the change still counts as pending for the
-    /// core's own checks.
-    fn mount_command(&mut self) -> Option<UiCommand> {
-        let change = self.mount_queue.pop_front()?;
-        self.handed = Some(HandedMount::of(&change));
-        Some(UiCommand::Mount(change))
+    /// The hand-over (K6; plan step S2c(3); S3a(3): pushed at the end of the
+    /// core's turn, `UiCommand::HandOver`, where the interface took it
+    /// before, `Take::Mount`): its oldest accepted mount change, handed to
+    /// the interface's empty batching window, numbered. The core records
+    /// the change (`Core::handed`, plan step S2d(2)) and keeps the window's
+    /// change and when it opened (`Core::window`): it closes the window
+    /// itself 32 ms later (S3a(3) review item 6, [`Core::close_window`]).
+    /// After a failed batch the window opens due at once, as the interface
+    /// took the batch's first change again before. Its `ui.preparing` goes
+    /// out here, after the hand-over is queued: a full pipe that stops the
+    /// plugin right there cancels the change (`stop_run`), and that cancel
+    /// then follows the hand-over in the queue.
+    fn hand_over(&mut self) {
+        let Some(change) = self.mount_queue.pop_front() else {
+            return;
+        };
+        self.handover_seq += 1;
+        let seq = self.handover_seq;
+        let mut handed = HandedMount::of(&change);
+        handed.seq = seq;
+        self.handed = Some(handed);
+        let now = Instant::now();
+        let since = if std::mem::take(&mut self.retry_due) {
+            now.checked_sub(MOUNT_WINDOW).unwrap_or(now)
+        } else {
+            now
+        };
+        self.window = Some((change.clone(), since));
+        let preparing = unannounced([&change]);
+        self.ui_command(UiCommand::HandOver { seq, change });
+        if !preparing.is_empty() {
+            self.mounts_preparing(preparing);
+        }
+    }
+    /// The batching window closes (S3a(3) review item 6: on the core's
+    /// clock at the end of its turn, 32 ms after the hand-over; the
+    /// interface closed it and asked, `Take::Close`, before): the window's
+    /// change, then every change accepted meanwhile unless after a failed
+    /// batch (`mount_singly`), those announced (`ui.preparing`), then only
+    /// the ones whose plugin still runs or is held, pushed as one batch.
+    /// The batch stays pending in the core (`batch_in_flight`, review B2)
+    /// until the interface reports its outcome (`MountApplied` per change,
+    /// or `MountRetry`); no change is handed over meanwhile (review B1).
+    pub(crate) fn close_window(&mut self) {
+        let Some((change, _)) = self.window.take() else {
+            return;
+        };
+        // Its change is applied now, not held, and every cancel's wait ends
+        // (the interface's `Batching(None)` before plan step S3a(3)).
+        self.handed = None;
+        self.cancelled_handovers.clear();
+        let mut changes = vec![change];
+        if self.mount_singly > 0 {
+            self.mount_singly -= 1;
+        } else {
+            let joining = self.mount_queue.drain(..).collect::<Vec<_>>();
+            let preparing = unannounced(&joining);
+            if !preparing.is_empty() {
+                self.mounts_preparing(preparing);
+            }
+            changes.extend(joining);
+        }
+        // A mount of a plugin stopped since is dropped, as before; a tab
+        // replayed from a recording belongs to a plugin in standby, which
+        // has no process (dropped when it is no longer held either).
+        let changes = changes
+            .into_iter()
+            .filter(|change| {
+                let owner = change.reply.owner;
+                match &change.contribution {
+                    None => true,
+                    Some(mount) if mount.recorded => {
+                        self.plugins.contains_key(&owner) || self.on_demand.held(owner).is_some()
+                    }
+                    Some(_) => self.plugins.contains_key(&owner),
+                }
+            })
+            .collect::<Vec<_>>();
+        self.batch_in_flight = changes.iter().map(HandedMount::of).collect();
+        self.ui_command(UiCommand::Batch(changes));
+    }
+    /// The interface reported a change of the batch in flight applied
+    /// (`MountApplied`, one per change): it is pending no longer.
+    pub(crate) fn batch_applied(&mut self, reply: &Reply, key: u64) {
+        self.batch_in_flight.retain(|held| {
+            !(held.key == key && held.reply.owner == reply.owner && held.reply.id == reply.id)
+        });
+    }
+    /// The interface's batch failed with more than one change
+    /// (`UiInput::MountRetry`): they go back to the front of the queue, in
+    /// their order, and are tried one at a time, the first at once.
+    pub(crate) fn batch_retry(&mut self, changes: Vec<MountChange>) {
+        self.batch_in_flight.clear();
+        self.mount_singly = changes.len();
+        self.retry_due = true;
+        self.retry_changes = changes
+            .iter()
+            .map(|c| (c.reply.owner, c.reply.id, c.key))
+            .collect();
+        for change in changes.into_iter().rev() {
+            self.mount_queue.push_front(change);
+        }
     }
     /// The core cancels the change the interface's batching window holds
-    /// (plan step S2d(2)): its record goes now, and the interface drops the
-    /// change when `UiCommand::CancelMount` reaches it.
+    /// (plan step S2d(2)): its record and the window go now, and the
+    /// interface drops the change when `UiCommand::CancelMount` reaches it.
+    /// Plan step S3a(3) (the S3a brief's risk 3): the cancelled change's
+    /// number is kept until the interface reports its window empty, so a
+    /// report of that change the interface sent before the cancel reached
+    /// it (`Batching(Some)`) does not bring the record back
+    /// ([`Core::batching`]); no change is handed over meanwhile.
     pub(crate) fn cancel_handed(&mut self, cancel: MountCancel) {
-        self.handed = None;
+        if let Some(handed) = self.handed.take() {
+            self.cancelled_handovers.push(handed.seq);
+        }
+        self.window = None;
         self.ui_command(UiCommand::CancelMount(cancel));
     }
     /// The core's side of `UiReport::Batching` (plan step S2d(2)): the
-    /// change the interface's window holds now, or none, recorded as
-    /// reported. Hand-overs are only asked by the interface (`Take::Mount`,
-    /// plan step S3a(1)), and its reports and requests reach the core in
-    /// their order, so a `Batching(None)` never overtakes a later
-    /// hand-over.
-    ///
-    /// On one thread a report of a change the core cancelled can still
-    /// arrive: a cancel issued while the interface prepares a hand-over
-    /// (`prepare_mount_tick`: the `ui.preparing` write fails, the run
-    /// stops) is drained before the window holds the change, and the
-    /// window's `Batching(Some)` then records it again until the window
-    /// closes (up to 32 ms), as before plan step S3a. That is today's
-    /// behaviour and stays (zero difference). Dropping such a late report
-    /// (the S3a brief's risk 3) belongs to plan step S3a(3), with the
-    /// thread that makes a report able to cross a cancel.
+    /// change the interface's window holds now, or none. Plan step S3a(3):
+    /// the core records the window itself at the hand-over and its close;
+    /// a report of the window it holds confirms it, one of a change the
+    /// core cancelled or closed since is stale and dropped, and the
+    /// interface's report of an empty window (a cancelled change dropped)
+    /// ends every cancel's wait.
     pub(crate) fn batching(&mut self, held: Option<HandedMount>) {
-        self.handed = held;
+        match held {
+            Some(held) => {
+                let current = self.window.is_some()
+                    && self
+                        .handed
+                        .as_ref()
+                        .is_some_and(|handed| handed.seq == held.seq);
+                if current && !self.cancelled_handovers.contains(&held.seq) {
+                    self.handed = Some(held);
+                }
+            }
+            None => self.cancelled_handovers.clear(),
+        }
     }
-    /// The change of panel `key` the interface's batching window holds,
-    /// as the core recorded it (`handed`), or one in the core's queue.
+    /// The changes of the batching window and of the batch in flight, as
+    /// the core recorded them (S3a(3) review B2: a batch in flight is
+    /// pending until its outcome).
+    pub(crate) fn handed_all(&self) -> impl Iterator<Item = &HandedMount> {
+        self.handed.iter().chain(self.batch_in_flight.iter())
+    }
+    /// A change of panel `key` waits: in the core's queue, in the batching
+    /// window, or in the batch in flight.
     pub(crate) fn mount_pending(&self, key: u64) -> bool {
+        self.mount_queue.iter().any(|c| c.key == key) || self.handed_all().any(|h| h.key == key)
+    }
+    /// The single-change retry of a failed batch ends once none of the
+    /// changes it gave back waits any more (S3a(3) re-review: a change
+    /// dropped with its plugin must not leave the retry state to the next
+    /// unrelated batch).
+    fn retry_ends(&mut self) {
+        if self.retry_changes.is_empty() {
+            return;
+        }
+        let waits = |(owner, id, key): &(u64, u64, u64)| {
+            let same =
+                |reply: &Reply, k: u64| reply.owner == *owner && reply.id == *id && k == *key;
+            self.mount_queue.iter().any(|c| same(&c.reply, c.key))
+                || self
+                    .window
+                    .as_ref()
+                    .is_some_and(|(c, _)| same(&c.reply, c.key))
+                || self.batch_in_flight.iter().any(|h| same(&h.reply, h.key))
+        };
+        let left = self
+            .retry_changes
+            .iter()
+            .filter(|change| waits(change))
+            .copied()
+            .collect::<Vec<_>>();
+        self.retry_changes = left;
+        if self.retry_changes.is_empty() {
+            self.mount_singly = 0;
+            self.retry_due = false;
+        }
+    }
+    /// A plugin's mount of panel `key` is refused `busy` (S3a(3) re-review
+    /// F1): a change of the panel waits in the queue or the window, or one
+    /// in the batch in flight other than the host's own removal of it (a
+    /// placeholder pruned at the plugin's ready, an id 0 unmount), behind
+    /// which the mount queues, as behind that removal applied in place
+    /// before the batch was in flight.
+    pub(crate) fn mount_blocked(&self, key: u64) -> bool {
         self.mount_queue.iter().any(|c| c.key == key)
             || self.handed.as_ref().is_some_and(|h| h.key == key)
+            || self
+                .batch_in_flight
+                .iter()
+                .any(|h| h.key == key && !h.removes(key))
     }
-    /// Every accepted mount change, oldest first, for the batching window
-    /// about to close (a `UiCommand::Mount` each).
-    fn mount_commands(&mut self) -> Vec<UiCommand> {
-        self.mount_queue.drain(..).map(UiCommand::Mount).collect()
+    /// No mount change waits anywhere (the queue, the window, the batch in
+    /// flight; start-up settling reads it, `open_files_tick`).
+    pub(crate) fn mounts_idle(&self) -> bool {
+        self.mount_queue.is_empty()
+            && self.window.is_none()
+            && self.handed.is_none()
+            && self.batch_in_flight.is_empty()
     }
-    /// The core's answer to a request of the interface's (`Take`; plan step
-    /// S3a(1)): what the interface pulled from the core in place before,
-    /// answered in place on one thread.
-    pub(crate) fn take(&mut self, take: messages::Take) -> Vec<UiCommand> {
-        use messages::Take;
-        match take {
-            Take::Mount => self.mount_command().into_iter().collect(),
-            Take::Mounts => self.mount_commands(),
-            // A mount of a plugin stopped since is dropped, as before; a tab
-            // replayed from a recording belongs to a plugin in standby, which
-            // has no process (dropped when it is no longer held either).
-            Take::Live(changes) => changes
-                .into_iter()
-                .filter(|change| {
-                    let owner = change.reply.owner;
-                    match &change.contribution {
-                        None => true,
-                        Some(mount) if mount.recorded => {
-                            self.plugins.contains_key(&owner)
-                                || self.on_demand.held(owner).is_some()
-                        }
-                        Some(_) => self.plugins.contains_key(&owner),
-                    }
-                })
-                .map(UiCommand::Mount)
-                .collect(),
-            Take::Tables => self
-                .table_snapshots()
-                .into_iter()
-                .map(UiCommand::Snapshot)
-                .collect(),
-            Take::WindowSettings => self.window_settings(),
+    /// The end of the core's turn (plan step S3a(3)): the batching window
+    /// closes when it is due (review item 6); the oldest accepted mount
+    /// change is handed to the window when it is empty, no batch is in
+    /// flight (review B1) and no cancel waits for the window to report
+    /// itself empty (the interface took it at its mount step in the same
+    /// tick before, `Take::Mount`; a push keeps that tick); then the table
+    /// snapshots and the window settings that changed (the interface pulled
+    /// them at its points before, `Take::Tables`, `Take::WindowSettings`).
+    pub(crate) fn turn_end(&mut self) {
+        self.window_state_out();
+        self.retry_ends();
+        if !self.headless {
+            if self
+                .window
+                .as_ref()
+                .is_some_and(|(_, since)| since.elapsed() >= MOUNT_WINDOW)
+            {
+                self.close_window();
+            }
+            if self.window.is_none()
+                && self.batch_in_flight.is_empty()
+                && self.cancelled_handovers.is_empty()
+                && !self.mount_queue.is_empty()
+            {
+                self.hand_over();
+            }
+        }
+        for snapshot in self.table_snapshots() {
+            self.ui_command(UiCommand::Snapshot(snapshot));
+        }
+        for command in self.window_settings() {
+            self.ui_command(command);
         }
     }
     /// The core's own changes of its mount registry, each recorded for the
@@ -235,10 +393,14 @@ pub(crate) struct HandedMount {
     /// A mount's call as a recording keeps it (`Mount::call`); `Null` for
     /// an unmount.
     pub(crate) call: Value,
+    /// The hand-over's number (`UiCommand::HandOver`; plan step S3a(3));
+    /// 0 for a change not handed over that way.
+    pub(crate) seq: u64,
 }
 impl HandedMount {
     pub(crate) fn of(change: &MountChange) -> Self {
         Self {
+            seq: 0,
             reply: change.reply.clone(),
             key: change.key,
             slot: change.contribution.as_ref().map(|m| m.spec.slot),
@@ -253,22 +415,14 @@ impl HandedMount {
     pub(crate) fn removes(&self, key: u64) -> bool {
         self.key == key && self.reply.id == 0 && self.slot.is_none()
     }
-    /// The same change (debug check of the record against the window).
-    #[cfg(debug_assertions)]
+    /// The same change (the unit tests).
+    #[cfg(test)]
     pub(crate) fn same(&self, other: &Self) -> bool {
         self.reply.owner == other.reply.owner
             && self.reply.id == other.reply.id
             && self.key == other.key
             && self.slot == other.slot
             && self.call == other.call
-    }
-}
-
-/// The change a `UiCommand::Mount` carries.
-fn mount_change(command: UiCommand) -> MountChange {
-    match command {
-        UiCommand::Mount(change) => change,
-        _ => unreachable!("the core hands the batching window only mount changes"),
     }
 }
 
@@ -284,83 +438,41 @@ fn unannounced<'a>(changes: impl IntoIterator<Item = &'a MountChange>) -> Vec<(R
 
 impl Host {
     /// The interface's mount batching window and the apply (K6, plan step
-    /// S2c(3)). The core hands over its accepted changes as
-    /// `UiCommand::Mount`; the interface reports `UiReport::MountPreparing`
-    /// when changes leave its queue (R6: their `ui.preparing` goes out
-    /// then) and `UiReport::MountApplied` once a batch was applied (R13:
-    /// the core applies the state it carries, then answers). Until plan
-    /// step S3a both run on this thread: each message is delivered in
-    /// place, at the point today's code did its work, so order and timing
-    /// are unchanged.
+    /// S2c(3)). The core hands over its accepted changes; the interface
+    /// reports `UiReport::MountApplied` once a batch was applied (R13: the
+    /// core applies the state it carries, then answers). Plan step S3a(3):
+    /// the core hands the empty window a change at the end of its turn
+    /// (`UiCommand::HandOver`, [`Host::hand_over`]) and closes it itself 32
+    /// ms later, joining the changes accepted meanwhile (review item 6:
+    /// `Core::close_window`, a mount's reply one turn sooner than the
+    /// interface's close and ask); the interface applies the batch it
+    /// pushes (`UiCommand::Batch`, [`Host::apply_batch`]). A short wait, so
+    /// that mounts arriving together (the plugins' activations at start-up)
+    /// are applied as one change; nothing waits for plugins that have not
+    /// asked yet: each panel compiles on its own when it is first shown
+    /// (`ui/panels.rs`). The core writes the `ui.preparing` lines itself
+    /// (R6), at the hand-over and at the join.
     pub(crate) fn prepare_mount_tick(&mut self) {
         // The core answers what it held first (plan step S2f(1)): only
         // while it holds something (plan step S3a(2), `TickFacts`).
         if self.tick_facts.held_mounts {
             self.ui_report(UiReport::Input(messages::UiInput::MountTick));
         }
-        if self.preparing.is_none() {
-            // Taken from the core's queue (`Take::Mount`, plan step S3a(1)).
-            let taken = self.take(messages::Take::Mount).into_iter().next();
-            if let Some(change) = taken.map(mount_change) {
-                let preparing = unannounced([&change]);
-                // Handed over, not yet in the window: its `ui.preparing` goes
-                // out first (a full pipe can stop its plugin right there,
-                // `transport_failed`, and `stop_run` cancels the record), so
-                // the debug check of the record waits until the window has it.
-                #[cfg(debug_assertions)]
-                {
-                    self.handing_over = true;
-                }
-                if !preparing.is_empty() {
-                    self.ui_report(UiReport::MountPreparing(preparing));
-                }
-                #[cfg(debug_assertions)]
-                {
-                    self.handing_over = false;
-                }
-                self.set_preparing(Some((Instant::now(), change)));
-            }
-            return;
-        }
-        // A short wait, so that mounts arriving together (the plugins'
-        // activations at start-up) are applied as one change. Nothing waits
-        // for plugins that have not asked yet: the shell never compiles
-        // again, and each panel compiles on its own when it is first shown
-        // (`ui/panels.rs`), so a late mount costs only its own panel.
-        let waited = self.preparing.as_ref().unwrap().0.elapsed();
-        if waited < Duration::from_millis(32) {
-            return;
-        }
-        let (_, change) = self.preparing.take().unwrap();
-        // The window closed: its change is applied now, not held.
-        self.ui_report(UiReport::Batching(None));
+    }
+    /// The core's hand-over (plan step S3a(3)): the empty window opens on
+    /// the change. The core hands over only to an empty window (S3a(3)
+    /// review B1).
+    pub(crate) fn hand_over(&mut self, seq: u64, change: MountChange) {
+        debug_assert!(self.preparing.is_none(), "the batching window is empty");
+        self.handover_seq = seq;
+        self.set_preparing(Some((Instant::now(), change)));
+    }
+    /// The batch the core closed the window on (plan step S3a(3)), joined
+    /// and filtered by the core, applied. The window is empty again (the
+    /// core knows: it closed it).
+    pub(crate) fn apply_batch(&mut self, changes: Vec<MountChange>) {
         let started = Instant::now();
-        // Every change queued meanwhile joins this one. After a failed
-        // batch its changes go one at a time again, so that one bad
-        // component fails only its own mount.
-        let mut changes = vec![change];
-        if self.mount_singly > 0 {
-            self.mount_singly -= 1;
-        } else {
-            let joining = self
-                .take(messages::Take::Mounts)
-                .into_iter()
-                .map(mount_change)
-                .collect::<Vec<_>>();
-            let preparing = unannounced(&joining);
-            if !preparing.is_empty() {
-                self.ui_report(UiReport::MountPreparing(preparing));
-            }
-            changes.extend(joining);
-        }
-        // A mount of a plugin stopped since is dropped, as before: the core
-        // keeps the changes whose plugin still runs or is held (`Take::Live`,
-        // plan step S3a(1)).
-        let changes: Vec<MountChange> = self
-            .take(messages::Take::Live(changes))
-            .into_iter()
-            .map(mount_change)
-            .collect();
+        self.preparing = None;
         if changes.is_empty() {
             return;
         }
@@ -380,24 +492,19 @@ impl Host {
         let result = self.apply_mounts(next, &batch);
         self.log_prepared(changes.len(), started, result.is_ok());
         if result.is_err() && changes.len() > 1 {
-            // Again one at a time, from the next tick on: the first, then
-            // the rest in their order.
-            self.mount_singly = changes.len();
-            let mut changes = changes.into_iter();
-            let first = changes.next().expect("more than one change");
-            // The queue is the core's: it puts them back at its front, in
-            // their order (plan step S2f(1), design §5.3 group E).
-            let rest = changes
+            // Again one at a time, from the next tick on: the first (at
+            // once), then the rest in their order. The queue and the window
+            // are the core's (S3a(3) review B1, item 6): every change goes
+            // back to its front, announced (no `ui.preparing` again), and
+            // the core tries them singly (`Core::batch_retry`).
+            let changes = changes
+                .into_iter()
                 .map(|mut change| {
                     change.announced = true;
                     change
                 })
                 .collect();
-            self.ui_report(UiReport::Input(messages::UiInput::MountRetry(rest)));
-            let due = Instant::now()
-                .checked_sub(Duration::from_millis(32))
-                .unwrap_or_else(Instant::now);
-            self.set_preparing(Some((due, first)));
+            self.ui_report(UiReport::Input(messages::UiInput::MountRetry(changes)));
             return;
         }
         let elapsed = started.elapsed().as_secs_f64() * 1000.;
@@ -452,9 +559,13 @@ impl Host {
     /// (`UiReport::Batching`), and reads that record (`Core::handed`)
     /// instead of the window.
     pub(crate) fn set_preparing(&mut self, preparing: Option<(Instant, MountChange)>) {
-        let held = preparing
-            .as_ref()
-            .map(|(_, change)| HandedMount::of(change));
+        // Numbered with the hand-over the window took (plan step S3a(3); a
+        // failed batch's first change, taken again, keeps the last number).
+        let seq = self.handover_seq;
+        let held = preparing.as_ref().map(|(_, change)| HandedMount {
+            seq,
+            ..HandedMount::of(change)
+        });
         self.preparing = preparing;
         self.ui_report(UiReport::Batching(held));
     }
@@ -505,7 +616,8 @@ impl Core {
     /// `ui.preparing` (`ready` or `failed`; none for a placeholder) and its
     /// reply (a change of the host's own, id 0: a failure is announced as
     /// `host.error`), whose activation completes after it (R12, `respond`),
-    /// (3) `window.state` if the facts changed.
+    /// (3) `window.state` if the facts changed, once for the turn's reports
+    /// (`Core::window_state_out`).
     pub(crate) fn mounts_applied(&mut self, applied: MountApplied) {
         let MountApplied {
             batch,
@@ -514,8 +626,12 @@ impl Core {
             handoff,
             placeholders,
         } = applied;
-        let changed = handoff.is_some_and(|facts| self.apply_facts(*facts));
+        if let Some(facts) = handoff {
+            self.apply_facts(*facts);
+        }
         for (reply, key) in batch {
+            // Its outcome: no longer pending (S3a(3) review B2).
+            self.batch_applied(&reply, key);
             let owner = reply.owner;
             if !placeholders.contains(&key) {
                 self.send(owner,json!({"event":"ui.preparing","data":{"phase":if result.is_ok(){"ready"}else{"failed"},"elapsedMs":elapsed_ms,"slot":slot_of(key)}}));
@@ -529,12 +645,44 @@ impl Core {
                 }
             } else {
                 self.respond(reply, result.clone());
+                // Its plugin stopped while the batch was in flight (S3a(3)
+                // re-review F2): its panel gets the end state the stop gave
+                // it when the panel was in place before.
+                if result.is_ok() && !self.plugins.contains_key(&owner) {
+                    self.stopped_owners_mount(owner, key);
+                }
             }
         }
-        if changed {
-            let facts = self.window_facts.clone();
-            self.broadcast("window.state", facts);
+    }
+    /// A mount of `owner`'s panel `key` applied after `owner` stopped (it
+    /// was in the batch in flight when `stop_run` ran, so the stop did not
+    /// see it; the interface's record put it into `Core::mounts` since):
+    /// what `stop_run` does with a panel in place, for this one. Held in
+    /// standby: a placeholder tab (recorded). Otherwise it goes: the record,
+    /// the interface's panel (`PanelsOp::Gone`), and an id 0 unmount at the
+    /// front of the queue, so its slot is free again.
+    pub(crate) fn stopped_owners_mount(&mut self, owner: u64, key: u64) {
+        let Some(mount) = self.mounts.get(&key) else {
+            return;
+        };
+        if mount.plugin != owner || mount.recorded {
+            return;
         }
+        // Held, a tabbed panel stays as a placeholder; a bottom or backdrop
+        // panel goes, as the park removes it (S3a(3) re-review S1).
+        let slot = mount.spec.slot;
+        if self.on_demand.held(owner).is_some() && slot.tabbed() {
+            self.mount_recorded(key);
+            return;
+        }
+        self.mount_remove(key);
+        self.ui_command(UiCommand::Panels(PanelsOp::Gone(vec![(key, slot)])));
+        self.mount_queue.push_front(MountChange {
+            reply: Reply { owner, id: 0 },
+            key,
+            contribution: None,
+            announced: false,
+        });
     }
 }
 impl Host {
@@ -640,9 +788,14 @@ impl Host {
             UiCommand::Ask(ask) => self.ask_command(ask),
             UiCommand::OpenDialog { reply, purpose } => self.open_dialog_command(reply, purpose),
             UiCommand::ReviewOffer => self.review_offer_changed(),
-            _ => unreachable!(
-                "not sent here: the tables go by `sync_tables`; `RekeyOwner` is not sent"
-            ),
+            // Plan step S3a(3): the pushed tables and the batching window's
+            // answers.
+            UiCommand::Snapshot(snapshot @ (UiSnapshot::Registry(_) | UiSnapshot::Bindings(_))) => {
+                self.apply_table(snapshot)
+            }
+            UiCommand::HandOver { seq, change } => self.hand_over(seq, change),
+            UiCommand::Batch(changes) => self.apply_batch(changes),
+            _ => unreachable!("not sent: `Mount` (S3a(3): `HandOver`), `RekeyOwner`"),
         }
     }
     fn log_prepared(&self, changes: usize, started: Instant, ok: bool) {
@@ -1311,6 +1464,7 @@ mod handed_tests {
             key: 28,
             slot,
             call: Value::Null,
+            seq: 0,
         }
     }
 

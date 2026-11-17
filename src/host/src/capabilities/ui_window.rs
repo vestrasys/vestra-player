@@ -45,7 +45,11 @@ impl Capability for UiWindow {
         {
             core.check_settled(&[crate::host::outbox::Fact::Views(owner)]);
         }
-        if core.ui_facts.views.contains(&owner) {
+        // A window opening (issued, not yet applied) counts (S3a(3) review
+        // B3).
+        if core.ui_facts.views.contains(&owner)
+            || core.in_flight(crate::host::outbox::Mark::View(owner))
+        {
             return Recorded::Live("an open window");
         }
         Recorded::Nothing

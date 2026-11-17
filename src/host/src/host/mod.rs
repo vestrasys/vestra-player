@@ -372,6 +372,7 @@ pub(crate) struct OsdActions {
     pub(crate) owner: u64,
     pub(crate) commands: Vec<String>,
 }
+#[derive(Clone)]
 pub(crate) struct MountChange {
     pub(crate) reply: Reply,
     /// The panel it changes (`panel_key`); `reply.owner` is the plugin.
@@ -437,6 +438,12 @@ pub(crate) struct Core {
     pub(crate) window_facts: Value,
     /// The `seq` of the facts last applied (`None`: none yet).
     pub(crate) window_facts_seq: Option<u64>,
+    /// The events the core took from its queue behind the interface's
+    /// reports and handles after them, in their order, within the turn's
+    /// budget (`Host::core_events`; S3a(3) verification).
+    pub(crate) held_events: std::collections::VecDeque<Event>,
+    /// The facts `window.state` last broadcast (`Core::window_state_out`).
+    pub(crate) window_state_sent: Value,
     /// The interface's facts as last reported (`UiReport::UiFacts`; design
     /// §5.3 group A, plan step S2f(1)).
     pub(crate) ui_facts: messages::UiFacts,
@@ -617,9 +624,35 @@ pub(crate) struct Core {
     /// windowed tick).
     pub(crate) binding_revision: u64,
     /// What the core asks of the interface, in order, and the core work
-    /// kept behind it (plan step S2f(3), `outbox.rs`): drained by the
-    /// driver after every event, report and core step.
+    /// kept behind it (plan step S2f(3), `outbox.rs`); plan step S3a(3):
+    /// flushed into the core→UI queue after every event, report and step.
     pub(crate) outbox: outbox::Outbox,
+    /// The number of the interface's facts last applied (`UiReport::UiFacts`;
+    /// plan step S3a(3)).
+    pub(crate) ui_facts_seq: u64,
+    /// The batching window's hand-overs (`UiCommand::HandOver`; plan step
+    /// S3a(3)): the last number given, and the cancelled ones whose late
+    /// report is dropped until the window reports itself closed
+    /// (`Core::batching`).
+    pub(crate) handover_seq: u64,
+    pub(crate) cancelled_handovers: Vec<u64>,
+    /// The batching window as the core keeps it (plan step S3a(3); review
+    /// items 6, B1, B2): the change it holds and since when (the core closes
+    /// it 32 ms later, `Core::close_window`); the batch pushed and not yet
+    /// reported applied (pending, `Core::handed_all`); after a failed batch,
+    /// how many closes take one change each, and the next window is due at
+    /// once.
+    pub(crate) window: Option<(MountChange, Instant)>,
+    pub(crate) batch_in_flight: Vec<mounts::HandedMount>,
+    pub(crate) mount_singly: usize,
+    pub(crate) retry_due: bool,
+    /// The changes a failed batch gave back (owner, request id, panel):
+    /// once none of them waits any more (applied, or dropped with their
+    /// plugin), the single-change retry ends (S3a(3) re-review).
+    pub(crate) retry_changes: Vec<(u64, u64, u64)>,
+    /// The serial clipboard thread (`clipboard.*`; plan step S3a(3), the
+    /// S3a brief's item 7), started at its first call.
+    pub(crate) clipboard: crate::clipboard::Serial,
     /// On-demand start: the Host's side of standby, wake and
     /// classification (`supervisor/`, supervisor.md §4). Moved from `Host`
     /// in plan step S2c as its last field, so it drops after every other
@@ -641,8 +674,21 @@ pub(crate) struct Host {
     /// split.
     pub(crate) link: driver::CoreLink,
     /// The interface's own event sender (`driver::UiEvents`; plan step
-    /// S3a(1)): its callbacks send there.
+    /// S3a(1)): its callbacks send there. Plan step S3a(3): its own queue
+    /// (the S3a brief's item 1), drained at the interface's wake after the
+    /// core→UI queue (R8), its receiver here.
     pub(crate) events: driver::UiEvents,
+    pub(crate) ui_events: mpsc::Receiver<Event>,
+    /// The core's one event queue, where the interface's reports go (plan
+    /// step S3a(3)).
+    pub(crate) to_core: mpsc::Sender<Event>,
+    /// The core→UI queue (plan step S3a(3)), and the number of the last
+    /// command applied from it.
+    pub(crate) queue: outbox::UiQueue,
+    pub(crate) applied_seq: u64,
+    /// The most entries the interface found waiting at one wake (logged at
+    /// quit: the S3a row's measurement of the queue's peak length).
+    pub(crate) queue_peak: usize,
     /// The interface's clock, on the core's epoch (`Host::now_ms` gives
     /// the core's millisecond values; plan S3a brief item 10).
     pub(crate) clock: Instant,
@@ -659,6 +705,9 @@ pub(crate) struct Host {
     /// given whole when the core's registry changed; the values the open
     /// window was given flow back to the core (`UiInput::Stored`).
     pub(crate) pages: Vec<settings_window::Page>,
+    /// The interface's writes of `pages` the core has not handled yet,
+    /// written again into each copy it is given (plan step S3a(3)).
+    pub(crate) stored_in_flight: settings_window::StoredInFlight,
     /// The interface's copies of the core's small values (design §5.3 group
     /// D: the dialog flag, the lead, the run tickets, the origins).
     pub(crate) view: outbox::CoreFacts,
@@ -677,13 +726,11 @@ pub(crate) struct Host {
     /// it and when. The changes the core hands over during the next 32 ms
     /// join it (`prepare_mount_tick`).
     pub(crate) preparing: Option<(Instant, MountChange)>,
-    /// Debug builds: a change is being handed over from the core to the
-    /// batching window (`prepare_mount_tick`; `check_handed` waits).
-    #[cfg(debug_assertions)]
-    pub(crate) handing_over: bool,
-    /// Shell preparations still to run one change each, after a batch of
-    /// changes failed to compile (`prepare_mount_tick`).
-    pub(crate) mount_singly: usize,
+    /// Plan step S3a(3): the number of the hand-over the window holds.
+    pub(crate) handover_seq: u64,
+    /// The interface fitted a video area and reported it (`AreaFitted`);
+    /// the next window tick sends the size (plan step S3a(3)).
+    pub(crate) area_fitted_sent: bool,
     pub(crate) mount_events: mpsc::SyncSender<composition::JsonCallback>,
     pub(crate) mount_input: mpsc::Receiver<composition::JsonCallback>,
     pub(crate) last_image: Option<slint::Image>,

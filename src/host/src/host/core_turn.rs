@@ -50,6 +50,8 @@ fn core(root: &Path) -> (Core, mpsc::Receiver<Event>, mpsc::Receiver<Command>) {
         file_types: json!([]),
         window_facts: Value::Null,
         window_facts_seq: None,
+        window_state_sent: Value::Null,
+        held_events: Default::default(),
         ui_facts: Default::default(),
         restarts: Default::default(),
         restart_lines_sent: BTreeMap::new(),
@@ -111,6 +113,15 @@ fn core(root: &Path) -> (Core, mpsc::Receiver<Event>, mpsc::Receiver<Command>) {
         },
         binding_revision: u64::MAX,
         outbox: Default::default(),
+        ui_facts_seq: 0,
+        handover_seq: 0,
+        cancelled_handovers: Vec::new(),
+        window: None,
+        batch_in_flight: Vec::new(),
+        mount_singly: 0,
+        retry_due: false,
+        retry_changes: Vec::new(),
+        clipboard: Default::default(),
         on_demand: supervisor::OnDemand::from_env(),
     };
     (core, received, commands)
@@ -147,10 +158,13 @@ fn a_core_turn_runs_on_a_core_without_a_host() {
     assert_eq!(kinds, ["LastSource", "Source"]);
     // A report of the interface reaches the core alone: the interface's
     // facts.
-    core.report(messages::UiReport::UiFacts(Box::new(messages::UiFacts {
-        options_open: true,
-        ..Default::default()
-    })));
+    core.report(messages::UiReport::UiFacts(
+        1,
+        Box::new(messages::UiFacts {
+            options_open: true,
+            ..Default::default()
+        }),
+    ));
     assert!(core.ui_facts.options_open);
     // The periodic steps, a headless run's: on the core alone.
     for step in Core::STEPS.iter().filter(|step| !step.windowed) {
@@ -294,39 +308,547 @@ fn a_skipped_tick_report_changes_nothing_in_the_core() {
     );
 }
 
-/// Plan step S3a(2) keeps today's record of the batching window on one
-/// thread (zero difference): a cancel takes the record and tells the
-/// interface; a report of the window holding a change records it as
-/// reported, a cancelled one too (a cancel drained while the interface
-/// prepares a hand-over, `prepare_mount_tick`), until the window closes.
-/// Dropping such a late report (the S3a brief's risk 3) is plan step
-/// S3a(3)'s, with the core's thread; this test changes with it.
+/// Plan step S3a(3), the S3a brief's risk 3 (the rule moved here from
+/// S3a(2), where on one thread today's re-record stayed): a cancel takes
+/// the record and tells the interface; the window's report of that change,
+/// sent before the cancel reached the interface, is dropped by its
+/// hand-over number; a closed window ends the wait, and a change handed
+/// over again is recorded.
 #[test]
-fn the_batching_record_follows_the_interfaces_reports_on_one_thread() {
-    use messages::MountCancel;
+fn a_cancelled_changes_late_report_does_not_bring_it_back() {
+    use messages::{MountCancel, UiCommand};
+    let root = tempfile::tempdir().unwrap();
+    let (mut core, _events, _commands) = core(root.path());
+    core.headless = false;
+    let key = panel_key(7, composition::Slot::Bottom);
+    core.mount_queue.push_back(unmount(7, 3, key));
+    core.turn_end();
+    let seq = core.handed.as_ref().map(|h| h.seq).expect("handed over");
+    let held = super::mounts::HandedMount {
+        seq,
+        ..core.handed.clone().unwrap()
+    };
+    core.outbox.clear();
+    core.cancel_handed(MountCancel::Owner(7));
+    assert!(core.handed.is_none() && core.window.is_none());
+    assert!(matches!(
+        core.outbox.front(),
+        Some(super::outbox::Out::Ui(UiCommand::CancelMount(_)))
+    ));
+    // The window's report of the cancelled hand-over: stale.
+    core.batching(Some(held));
+    assert!(core.handed.is_none());
+    assert!(!core.mount_pending(key));
+    // No hand-over while the cancel waits for the window to report empty.
+    core.mount_queue.push_back(unmount(7, 4, key));
+    core.outbox.clear();
+    core.turn_end();
+    assert!(!handed_over(&core));
+    // The window reported itself empty: the next change is handed over.
+    core.batching(None);
+    core.turn_end();
+    assert!(handed_over(&core) && core.handed.is_some());
+}
+
+/// A queued unmount of panel `key` of plugin `owner` (request `id`).
+fn unmount(owner: u64, id: u64, key: u64) -> MountChange {
+    MountChange {
+        reply: Reply { owner, id },
+        key,
+        contribution: None,
+        announced: false,
+    }
+}
+
+/// The outbox holds a hand-over.
+fn handed_over(core: &Core) -> bool {
+    core.outbox.iter().any(|out| {
+        matches!(
+            out,
+            super::outbox::Out::Ui(messages::UiCommand::HandOver { .. })
+        )
+    })
+}
+
+/// The outbox's batches, by their number of changes.
+fn batches(core: &Core) -> Vec<usize> {
+    core.outbox
+        .iter()
+        .filter_map(|out| match out {
+            super::outbox::Out::Ui(messages::UiCommand::Batch(changes)) => Some(changes.len()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// S3a(3) review B1 and B2, and item 6: the core closes the batching window
+/// itself 32 ms after the hand-over, joining what was accepted meanwhile;
+/// the batch stays pending until its outcome, and no change is handed over
+/// while it is in flight. A failed batch's changes come back and are tried
+/// one at a time, the first at once.
+#[test]
+fn a_batch_in_flight_is_pending_and_blocks_the_next_hand_over() {
+    let root = tempfile::tempdir().unwrap();
+    let (mut core, _events, _commands) = core(root.path());
+    core.headless = false;
+    let (a, b, c) = (
+        panel_key(7, composition::Slot::Bottom),
+        panel_key(8, composition::Slot::Bottom),
+        panel_key(9, composition::Slot::Bottom),
+    );
+    core.mount_queue.push_back(unmount(7, 1, a));
+    core.turn_end();
+    assert!(handed_over(&core));
+    // Accepted while the window is open: joins at the close.
+    core.mount_queue.push_back(unmount(8, 2, b));
+    core.outbox.clear();
+    core.turn_end();
+    assert!(batches(&core).is_empty(), "not due yet");
+    // Due: the window closes on the core's clock.
+    core.window.as_mut().unwrap().1 = Instant::now() - Duration::from_millis(40);
+    core.outbox.clear();
+    core.turn_end();
+    assert_eq!(batches(&core), [2]);
+    assert!(
+        core.mount_pending(a) && core.mount_pending(b),
+        "B2: pending in flight"
+    );
+    assert!(!core.mounts_idle());
+    // B1: a change accepted now is not handed over while the batch flies.
+    core.mount_queue.push_back(unmount(9, 3, c));
+    core.outbox.clear();
+    core.turn_end();
+    assert!(!handed_over(&core));
+    // The batch failed: its changes come back, tried singly, first at once.
+    let back = vec![unmount(7, 1, a), unmount(8, 2, b)];
+    core.batch_retry(back);
+    assert!(core.batch_in_flight.is_empty());
+    core.outbox.clear();
+    core.turn_end();
+    assert!(handed_over(&core));
+    core.outbox.clear();
+    core.turn_end();
+    assert_eq!(batches(&core), [1], "the first alone, due at once");
+    // Its outcome: pending no longer, and the next is handed over.
+    core.batch_applied(&Reply { owner: 7, id: 1 }, a);
+    assert!(!core.mount_pending(a));
+    core.outbox.clear();
+    core.turn_end();
+    assert!(handed_over(&core));
+}
+
+/// S3a(3) review B3: a confirmation issued and not yet applied by the
+/// interface counts as waiting, so a second one is refused `busy`, as when
+/// the sheet's fact had already arrived; the interface's `Applied` ends it.
+#[test]
+fn an_ask_in_flight_keeps_the_next_one_waiting() {
+    use messages::{AskRequest, UiCommand, UiReport};
+    let root = tempfile::tempdir().unwrap();
+    let (mut core, _events, _commands) = core(root.path());
+    assert!(!core.sheet_waiting() && !core.confirm_waiting());
+    let options =
+        crate::ui::confirm::parse(&json!({"message":"Go?","confirm":"Go","cancel":"Stop"}))
+            .unwrap();
+    core.ui_command(UiCommand::Ask(AskRequest {
+        reply: Reply { owner: 7, id: 1 },
+        options,
+        request: None,
+    }));
+    assert!(
+        core.sheet_waiting() && core.confirm_waiting(),
+        "in the outbox"
+    );
+    core.flush();
+    assert!(core.sheet_waiting(), "in flight");
+    let seq = core.outbox.pushed;
+    core.report(UiReport::Applied(seq));
+    assert!(
+        !core.sheet_waiting(),
+        "applied: the interface's facts say it now"
+    );
+}
+
+/// Plan step S3a(3): the core→UI queue. A newer snapshot replaces a waiting
+/// one of its kind in place (keeping its number); a command is never
+/// coalesced; the numbers have no gaps; a reply kept behind a command whose
+/// interface part writes lines (`Then::Respond`) waits for the interface's
+/// `Applied` of that command, then goes.
+#[test]
+fn the_core_to_ui_queue_coalesces_snapshots_and_keeps_replies_behind() {
+    use super::outbox::ToUi;
+    use messages::{UiCommand, UiReport, UiSnapshot};
+    let root = tempfile::tempdir().unwrap();
+    let (mut core, _events, _commands) = core(root.path());
+    let theme = |name: &str| UiCommand::Snapshot(UiSnapshot::Theme(name.into()));
+    core.ui_command(theme("a"));
+    core.ui_command(UiCommand::Activity);
+    core.ui_command(theme("b"));
+    core.flush();
+    let entries = core.outbox.to_ui.take_all();
+    let commands = entries
+        .into_iter()
+        .filter_map(|entry| match entry {
+            ToUi::Command(seq, command) => Some((seq, command)),
+            ToUi::Copies(_) => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(commands.len(), 2, "the second theme replaced the first");
+    assert!(
+        matches!(&commands[0], (1, UiCommand::Snapshot(UiSnapshot::Theme(name))) if name == "b")
+    );
+    assert!(matches!(commands[1], (2, UiCommand::Activity)));
+    assert_eq!(core.outbox.pushed, 2);
+    // A reply behind a command whose interface part writes lines.
+    core.ui_command(UiCommand::Layout(messages::LayoutOp::Toggle(
+        crate::ui::sidebar_tabs::Column::Sidebar,
+    )));
+    let reply = Reply { owner: 9, id: 4 };
+    core.respond_in_order(reply, Ok(Value::Null));
+    core.flush();
+    assert_eq!(core.outbox.waiting.len(), 1, "the reply waits");
+    assert!(core.lines_pending());
+    core.report(UiReport::Applied(2));
+    assert_eq!(core.outbox.waiting.len(), 1, "not applied that far yet");
+    core.report(UiReport::Applied(3));
+    assert!(core.outbox.waiting.is_empty(), "the reply went");
+    assert!(!core.lines_pending());
+}
+
+/// A mounted bottom panel of plugin `plugin` at `key`.
+fn bottom_mount(plugin: u64, key: u64) -> Mount {
+    Mount {
+        spec: composition::CompileSpec {
+            owner: key,
+            file: PathBuf::from("bar.slint"),
+            component: "Bar".into(),
+            global: None,
+            slot: composition::Slot::Bottom,
+        },
+        plugin,
+        properties: BTreeMap::new(),
+        visible: true,
+        title: "Bar".into(),
+        manifest: "test.bar".into(),
+        builtin: false,
+        recorded: false,
+        call: Value::Null,
+    }
+}
+
+/// S3a(3) re-review F1: a host removal of a panel (an id 0 unmount) in the
+/// batch in flight does not block its plugin's mount (it queues behind),
+/// any other change of the panel in flight does.
+#[test]
+fn a_host_removal_in_flight_does_not_block_the_plugins_mount() {
     let root = tempfile::tempdir().unwrap();
     let (mut core, _events, _commands) = core(root.path());
     let key = panel_key(7, composition::Slot::Bottom);
-    let held = super::mounts::HandedMount {
-        reply: Reply { owner: 7, id: 3 },
-        key,
-        slot: Some(composition::Slot::Bottom),
-        call: Value::Null,
+    let removal = super::mounts::HandedMount::of(&unmount(7, 0, key));
+    assert!(removal.removes(key));
+    core.batch_in_flight = vec![removal];
+    assert!(core.mount_pending(key), "pending for every other check");
+    assert!(!core.mount_blocked(key), "not for the plugin's mount");
+    core.batch_in_flight = vec![super::mounts::HandedMount::of(&unmount(7, 3, key))];
+    assert!(
+        core.mount_blocked(key),
+        "the plugin's own unmount in flight blocks"
+    );
+}
+
+/// S3a(3) re-review F2: a mount applied after its plugin stopped (it was
+/// in flight when the stop ran) gets the stop's end state: removed, the
+/// interface told, and an id 0 unmount queued; held in standby, a
+/// placeholder.
+#[test]
+fn a_mount_applied_after_its_plugin_stopped_goes_as_the_stop_would_have_it() {
+    use messages::{PanelsOp, UiCommand};
+    let root = tempfile::tempdir().unwrap();
+    let (mut core, _events, _commands) = core(root.path());
+    let key = panel_key(7, composition::Slot::Bottom);
+    core.mounts.insert(key, bottom_mount(7, key));
+    core.outbox.clear();
+    core.stopped_owners_mount(7, key);
+    assert!(!core.mounts.contains_key(&key), "the slot is free");
+    assert!(
+        core.mount_queue
+            .front()
+            .is_some_and(|c| c.key == key && c.reply.id == 0 && c.contribution.is_none()),
+        "an id 0 unmount at the front"
+    );
+    assert!(core.outbox.iter().any(|out| matches!(
+        out,
+        super::outbox::Out::Ui(UiCommand::Panels(PanelsOp::Gone(panels))) if panels[0].0 == key
+    )));
+    // Another plugin's panel, or one already a placeholder: untouched.
+    core.mount_queue.clear();
+    core.mounts.insert(key, bottom_mount(8, key));
+    core.stopped_owners_mount(7, key);
+    assert!(core.mounts.contains_key(&key) && core.mount_queue.is_empty());
+}
+
+/// S3a(3) review B3 and re-review F3: what each in-flight mark makes the
+/// core's checks read. A confirmation counts as a waiting confirmation and
+/// sheet; a `commands.run` sheet only as a waiting sheet; a tool window
+/// opening, a picture-in-picture request and the options window opening
+/// for their checks; `Applied` ends each.
+#[test]
+fn the_in_flight_marks_reach_their_checks() {
+    use super::outbox::Mark;
+    use messages::{
+        ReviewKind, ReviewRequest, RunSheet, SettingsOp, UiCommand, UiReport, ViewKind, ViewOp,
+        WindowOp,
     };
-    core.batching(Some(held.clone()));
-    assert!(core.handed.is_some());
-    core.cancel_handed(MountCancel::Owner(7));
-    assert!(core.handed.is_none());
-    assert!(matches!(
-        core.outbox.front(),
-        Some(super::outbox::Out::Ui(messages::UiCommand::CancelMount(_)))
-    ));
-    // The window's report of the change after the cancel: recorded, as
-    // before plan step S3a (the slot stays taken until the window closes).
-    core.batching(Some(held));
-    assert!(core.handed.is_some());
-    assert!(core.mount_pending(key));
-    // The window closed.
-    core.batching(None);
-    assert!(core.handed.is_none());
+    let root = tempfile::tempdir().unwrap();
+    let (mut core, _events, _commands) = core(root.path());
+    core.ui_command(UiCommand::Review(ReviewRequest {
+        reply: Reply { owner: 7, id: 1 },
+        kind: ReviewKind::CommandRun(RunSheet {
+            ticket: "t".into(),
+            query: "q".into(),
+            steps: Vec::new(),
+            remember: String::new(),
+        }),
+    }));
+    assert!(core.sheet_waiting() && !core.confirm_waiting(), "F3");
+    core.ui_command(UiCommand::View(ViewOp {
+        reply: Reply { owner: 8, id: 2 },
+        id: "w".into(),
+        kind: ViewKind::Open {
+            file: PathBuf::from("w.slint"),
+            properties: BTreeMap::new(),
+            callbacks: Vec::new(),
+        },
+    }));
+    core.ui_command(UiCommand::Window(WindowOp::Pip {
+        reply: Reply { owner: 9, id: 3 },
+        on: true,
+    }));
+    core.ui_command(UiCommand::Settings(SettingsOp::Show {
+        reply: Reply { owner: 9, id: 4 },
+        params: json!({}),
+    }));
+    core.flush();
+    assert!(core.in_flight(Mark::View(8)) && !core.in_flight(Mark::View(9)));
+    assert!(core.in_flight(Mark::Pip(9)) && !core.in_flight(Mark::Pip(8)));
+    assert!(core.in_flight(Mark::Options));
+    let seq = core.outbox.pushed;
+    core.report(UiReport::Applied(seq));
+    for mark in [Mark::Review, Mark::View(8), Mark::Pip(9), Mark::Options] {
+        assert!(!core.in_flight(mark), "{mark:?} ended");
+    }
+    assert!(!core.sheet_waiting());
+}
+
+/// S3a(3) re-review: the single-change retry of a failed batch ends when
+/// none of the changes it gave back waits any more (here: dropped with
+/// their plugin), so the next batch joins as usual.
+#[test]
+fn the_retry_ends_when_its_changes_are_gone() {
+    let root = tempfile::tempdir().unwrap();
+    let (mut core, _events, _commands) = core(root.path());
+    let (a, b) = (
+        panel_key(7, composition::Slot::Bottom),
+        panel_key(7, composition::Slot::Sidebar),
+    );
+    core.batch_retry(vec![unmount(7, 1, a), unmount(7, 2, b)]);
+    assert!(core.retry_due && core.mount_singly == 2);
+    core.mount_queue.retain(|c| c.reply.owner != 7);
+    core.turn_end();
+    assert!(!core.retry_due && core.mount_singly == 0);
+}
+
+/// S3a(3) verification: `vestra.hotkeys` writes two lists of one page
+/// (`rows`, `source-model`). The interface writes its copy of the page and
+/// reports each write; a copy of the pages the core gives before it handled
+/// a report (another page changed meanwhile) lacked that write, so the
+/// interface's `rows` went back to the older value and the next row patch
+/// was refused "insert at N is past the end of the list". The interface now
+/// writes the writes not handled yet again into each copy it is given.
+#[test]
+fn a_copy_of_the_pages_given_before_a_write_is_handled_keeps_the_write() {
+    use crate::ui::settings_window::{Page, StoredInFlight};
+    use crate::ui::ui_patch;
+    use messages::StoredWrite;
+    let root = tempfile::tempdir().unwrap();
+    let (mut core, _events, _commands) = core(root.path());
+    let page = |id: &str, serial: u64| Page {
+        owner: 4,
+        manifest: "vestra.hotkeys".into(),
+        id: id.into(),
+        category: 0,
+        title: id.into(),
+        order: 0,
+        serial,
+        file: PathBuf::from("page.slint"),
+        component: "Page".into(),
+        global: "Bridge".into(),
+        properties: [
+            ("rows".into(), json!([])),
+            ("source-model".into(), json!([])),
+        ]
+        .into_iter()
+        .collect(),
+    };
+    let len = |pages: &[Page], property: &str| {
+        pages
+            .iter()
+            .find(|p| p.id == "keyboard")
+            .unwrap()
+            .properties[property]
+            .as_array()
+            .unwrap()
+            .len()
+    };
+    core.settings.add_page(page("keyboard", 1));
+    let (mut mine, mut in_flight) = (Vec::new(), StoredInFlight::default());
+    let copies = core.copies();
+    in_flight.take(&mut mine, copies.stored, copies.pages);
+
+    // The interface stores the whole `rows` (349) and reports it.
+    let rows = json!((0..349).collect::<Vec<_>>());
+    let whole = StoredWrite::Whole(rows.clone());
+    mine[0].properties.insert("rows".into(), rows);
+    in_flight.reported(4, "keyboard", "rows", &whole);
+    // Before the core handles that report, another page changes: the
+    // copy the core gives lacks the write.
+    core.settings.add_page(page("mouse", 2));
+    let copies = core.copies();
+    assert_eq!(len(copies.pages.as_ref().unwrap(), "rows"), 0);
+    assert_eq!(copies.stored, Some(0));
+    in_flight.take(&mut mine, copies.stored, copies.pages);
+    assert_eq!(len(&mine, "rows"), 349, "the interface keeps its write");
+
+    // A patch of the other list, applied and reported.
+    let ops = json!([{"op": "insert", "at": 0, "rows": [1, 2]}]);
+    let patch = ui_patch::parse(&ops, len(&mine, "source-model")).unwrap();
+    let patch = StoredWrite::Rows {
+        shapes: patch.shapes.clone(),
+        rows: patch.rows.iter().map(|row| (*row).clone()).collect(),
+    };
+    if let (Some(serde_json::Value::Array(stored)), StoredWrite::Rows { shapes, rows }) =
+        (mine[0].properties.get_mut("source-model"), &patch)
+    {
+        ui_patch::apply_vec(stored, shapes, rows.clone());
+    }
+    in_flight.reported(4, "keyboard", "source-model", &patch);
+
+    // The core handles the first report: its copies say so, and the
+    // interface's echo needs no pages.
+    core.settings_stored(4, "keyboard", "rows".into(), whole);
+    let copies = core.copies();
+    assert!(copies.pages.is_none());
+    assert_eq!(copies.stored, Some(1));
+    in_flight.take(&mut mine, copies.stored, copies.pages);
+    assert_eq!(in_flight.pending(), 1);
+    // Another page change before the second report: the copy has `rows`
+    // and lacks the `source-model` patch, which the interface writes again.
+    core.settings.add_page(page("wheel", 3));
+    let copies = core.copies();
+    assert_eq!(len(copies.pages.as_ref().unwrap(), "source-model"), 0);
+    in_flight.take(&mut mine, copies.stored, copies.pages);
+    assert_eq!(len(&mine, "source-model"), 2);
+    // The next `rows` patch fits (it was refused before the fix).
+    let next = json!([{"op": "insert", "at": 209, "rows": [0, 0]}]);
+    assert!(ui_patch::parse(&next, len(&mine, "rows")).is_ok());
+
+    // Once the core has handled both, both copies are the same.
+    core.settings_stored(4, "keyboard", "source-model".into(), patch);
+    let copies = core.copies();
+    assert_eq!(copies.stored, Some(2));
+    in_flight.take(&mut mine, copies.stored, copies.pages);
+    assert_eq!(in_flight.pending(), 0);
+    let core_page = core.settings.page(4, "keyboard").unwrap();
+    assert_eq!(core_page.properties, mine[0].properties);
+}
+
+/// S3a(3) verification: the window facts of several reports one turn
+/// handles (in-between states: backdrop null, 1280x720, then 960x720)
+/// broadcast `window.state` once, with the final state, as the one facts
+/// value per tick before S3a(3) did; the end of the turn sends what the
+/// drain did not.
+#[test]
+fn the_reports_of_one_turn_broadcast_one_window_state() {
+    use messages::{UiReport, WindowFacts};
+    let root = tempfile::tempdir().unwrap();
+    let (mut core, _events, _commands) = core(root.path());
+    let facts = |seq: u64, facts: Value| {
+        UiReport::WindowFacts(Box::new(WindowFacts {
+            seq,
+            facts,
+            shell: Some(1),
+            menu_origin: true,
+            pip_supported: true,
+            pip_active: false,
+            sidebar_panels: vec![],
+            adjust_panels: vec![],
+            bottom_panel: None,
+        }))
+    };
+    core.report(facts(1, json!({"backdrop": null})));
+    core.report(facts(2, json!({"size": [1280, 720]})));
+    core.report(facts(3, json!({"size": [960, 720]})));
+    assert_eq!(core.window_state_sent, Value::Null, "nothing per report");
+    core.window_state_out();
+    assert_eq!(core.window_state_sent, json!({"size": [960, 720]}));
+    core.report(facts(4, json!({"size": [1280, 720]})));
+    core.turn_end();
+    assert_eq!(core.window_state_sent, json!({"size": [1280, 720]}));
+    // Re-review B1: a report that writes a line (a reply) first sends the
+    // facts the reports before it left (R13's `layout.set` exception: its
+    // facts report, then its reply); an `Applied` with no reply waiting
+    // does not.
+    core.report(facts(5, json!({"size": [960, 658]})));
+    core.report(UiReport::Applied(core.outbox.applied));
+    assert_eq!(core.window_state_sent, json!({"size": [1280, 720]}));
+    core.report(UiReport::Answered {
+        reply: Reply { owner: 7, id: 1 },
+        result: Ok(Value::Null),
+        handoff: None,
+        confirm_failed: false,
+    });
+    assert_eq!(core.window_state_sent, json!({"size": [960, 658]}));
+}
+
+/// S3a(3) re-review S1: a mount applied after its plugin was held (parked
+/// while its batch was in flight) gets what the park gives a panel in
+/// place: a tabbed panel stays as a placeholder (recorded), a bottom or
+/// backdrop panel goes with an id 0 unmount.
+#[test]
+fn a_mount_applied_after_its_plugin_was_held_goes_as_the_park_would_have_it() {
+    use super::supervisor::{Held, Origin};
+    let root = tempfile::tempdir().unwrap();
+    let (mut core, _events, _commands) = core(root.path());
+    let origin = Origin {
+        id: "test.bar".into(),
+        directory: root.path().to_path_buf(),
+        catalog: None,
+        data_directory: None,
+    };
+    core.hold(7, Held::new("test.bar".into(), origin, "Bar".into()));
+    // A bottom panel: removed, its slot freed.
+    let bottom = panel_key(7, composition::Slot::Bottom);
+    core.mounts.insert(bottom, bottom_mount(7, bottom));
+    core.stopped_owners_mount(7, bottom);
+    assert!(
+        !core.mounts.contains_key(&bottom),
+        "not kept as a placeholder"
+    );
+    assert!(
+        core.mount_queue
+            .front()
+            .is_some_and(|c| c.key == bottom && c.reply.id == 0 && c.contribution.is_none()),
+        "an id 0 unmount at the front"
+    );
+    // A sidebar panel (tabbed): a placeholder.
+    core.mount_queue.clear();
+    let sidebar = panel_key(7, composition::Slot::Sidebar);
+    let mut mount = bottom_mount(7, sidebar);
+    mount.spec.slot = composition::Slot::Sidebar;
+    core.mounts.insert(sidebar, mount);
+    core.stopped_owners_mount(7, sidebar);
+    assert!(
+        core.mounts.get(&sidebar).is_some_and(|m| m.recorded),
+        "recorded"
+    );
+    assert!(core.mount_queue.is_empty());
 }

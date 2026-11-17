@@ -24,13 +24,18 @@ impl Capability for Clipboard {
         Recorded::Nothing
     }
     fn rekey(&self, _: &mut Core, _: u64, _: u64) {}
-    fn handle(&self, core: &mut Core, _: &Reply, method: &str, params: &Value) -> Handled {
+    fn handle(&self, core: &mut Core, reply: &Reply, method: &str, params: &Value) -> Handled {
         if core.headless {
             return Err(RpcError::new(
                 "unavailable",
                 "the clipboard is unavailable in headless mode",
             ));
         }
-        crate::clipboard::dispatch(method, params).map(Some)
+        // On the serial clipboard thread (plan step S3a(3)); answered from
+        // its reply event.
+        let events = core.events.clone();
+        core.clipboard
+            .call(&events, reply.clone(), method, params.clone())?;
+        Ok(None)
     }
 }

@@ -439,7 +439,10 @@ fn mount(
     if core.handed.as_ref().is_some_and(|h| h.removes(key)) {
         core.cancel_handed(MountCancel::Removal { key });
     }
-    if pending_change(core, key) {
+    // A host removal of this panel already in the batch in flight is not
+    // a pending change here (S3a(3) re-review F1): the mount queues behind
+    // it, as it did behind the removal applied in place on main.
+    if core.mount_blocked(key) {
         return Err(RpcError::new(
             "busy",
             "this panel already has a pending UI preparation",
@@ -472,7 +475,9 @@ fn mount(
             .mount_queue
             .iter()
             .map(|c| (c.reply.owner, c.contribution.as_ref().map(|m| m.spec.slot)))
-            .chain(core.handed.as_ref().map(|h| (h.reply.owner, h.slot)))
+            // The window's change and a batch in flight count (S3a(3) review
+            // B2).
+            .chain(core.handed_all().map(|h| (h.reply.owner, h.slot)))
             .collect::<Vec<_>>();
         let mounted = core.mounts.values().map(|m| (m.plugin, m.spec.slot));
         if let Some(holder) = slot_claims::occupant(slot, reply.owner, mounted, &pending) {
@@ -533,12 +538,11 @@ fn waiting_mounts(core: &Core, owner: u64) -> Vec<(u64, Option<composition::Slot
         .get(&owner)
         .and_then(|plugin| plugin.manifest.name.clone())
         .unwrap_or_default();
+    // The window's change and a batch in flight (S3a(3) review B2).
     let mut waiting = core
-        .handed
-        .as_ref()
+        .handed_all()
         .filter(|held| held.reply.owner == owner)
         .map(|held| (held.key, held.slot, held.call.clone()))
-        .into_iter()
         .chain(
             core.mount_queue
                 .iter()

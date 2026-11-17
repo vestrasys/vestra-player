@@ -238,6 +238,15 @@ fn test_keys(value: &str) -> Option<Vec<(bindings::Input, u64)>> {
         .collect()
 }
 
+/// `VESTRA_TEST_QUEUE_PEAK=1`, a test switch (plan step S3a(3), the S3a
+/// row's measurement): at quit, the most entries the interface found
+/// waiting in the core→UI queue at one wake.
+fn queue_peak_line(peak: usize) {
+    if std::env::var_os("VESTRA_TEST_QUEUE_PEAK").is_some_and(|v| v == "1") {
+        diag!("test: core→UI queue peak {peak} entries at one wake");
+    }
+}
+
 /// How the UI thread judges a key `VESTRA_TEST_KEY` posted.
 type KeyJudge = Box<dyn Fn(&bindings::Input)>;
 
@@ -606,6 +615,8 @@ fn player() -> Result<()> {
         file_types: json!([]),
         window_facts: Value::Null,
         window_facts_seq: None,
+        window_state_sent: Value::Null,
+        held_events: Default::default(),
         ui_facts: Default::default(),
         restarts: Default::default(),
         restart_lines_sent: BTreeMap::new(),
@@ -668,6 +679,15 @@ fn player() -> Result<()> {
         },
         binding_revision: u64::MAX,
         outbox: Default::default(),
+        ui_facts_seq: 0,
+        handover_seq: 0,
+        cancelled_handovers: Vec::new(),
+        window: None,
+        batch_in_flight: Vec::new(),
+        mount_singly: 0,
+        retry_due: false,
+        retry_changes: Vec::new(),
+        clipboard: Default::default(),
         // Made above, before the clock, as before plan step S2c moved it
         // from `Host`.
         on_demand,
@@ -679,17 +699,28 @@ fn player() -> Result<()> {
     // What the interface takes of the core once, at start (plan step
     // S3a(1)): its own event sender, the clock's epoch, the playback
     // handles. Its copies of the core's data come with the first drain.
-    let ui_events = host::driver::UiEvents::new(core.events.clone());
+    // Plan step S3a(3): the interface's events have a queue of their own
+    // (the S3a brief's item 1); its reports go into the core's queue; the
+    // core→UI queue is shared.
+    let (ui_sender, ui_events) = mpsc::channel();
+    let to_core = core.events.clone();
+    let queue = core.outbox.to_ui.clone();
     let clock = core.clock;
     let playback = host::driver::Playback::of(&core.backend);
     let mut host = Host {
         link: host::driver::CoreLink::new(core),
-        events: ui_events,
+        events: host::driver::UiEvents::new(ui_sender),
+        ui_events,
+        to_core,
+        queue,
+        applied_seq: 0,
+        queue_peak: 0,
         clock,
         headless,
         playback,
         mounts: BTreeMap::new(),
         pages: Vec::new(),
+        stored_in_flight: Default::default(),
         view: Default::default(),
         plugins: Default::default(),
         tick_facts: Default::default(),
@@ -698,9 +729,8 @@ fn player() -> Result<()> {
         views: BTreeMap::new(),
         shell: None,
         preparing: None,
-        #[cfg(debug_assertions)]
-        handing_over: false,
-        mount_singly: 0,
+        handover_seq: 0,
+        area_fitted_sent: false,
         mount_events,
         mount_input,
         last_image: None,
@@ -805,7 +835,7 @@ fn player() -> Result<()> {
     host.starting(|core| core.register_host_commands())?;
     // What the core asked of the interface is carried out after each of
     // the start's core calls (plan step S2f(3), `host/outbox.rs`).
-    host.drain_outbox();
+    host.sync();
     {
         // Commands whose full id changed (`command_renames`): keys and
         // recent palette entries saved under the old id follow, once.
@@ -853,7 +883,7 @@ fn player() -> Result<()> {
     }
     for directory in &directories {
         host.starting(|core| core.load(directory, 120_000))?;
-        host.drain_outbox();
+        host.sync();
     }
     // A restart continues its first file where the replaced player was.
     if let (Some(resume), Some(file)) = (resume, files.first()) {
@@ -869,14 +899,21 @@ fn player() -> Result<()> {
     // only once its first picture was shown (the crash guard, below).
     let opened_at_start = !files.is_empty();
     host.starting(|core| core.open_files(files, false));
-    host.drain_outbox();
+    host.sync();
     let start = Instant::now();
     if headless {
         loop {
             if seconds.is_some_and(|seconds| start.elapsed().as_secs_f64() >= seconds) {
                 break;
             }
-            let received = receiver.recv_timeout(Duration::from_millis(10));
+            // No wait while events the last turn held are left
+            // (`Core::held_events`).
+            let wait = if !host.events_held() {
+                Duration::from_millis(10)
+            } else {
+                Duration::ZERO
+            };
+            let received = receiver.recv_timeout(wait);
             // A tick is the work after the wait (`VESTRA_FRAME_LOG=1`).
             let began = Instant::now();
             let first = match received {
@@ -898,6 +935,10 @@ fn player() -> Result<()> {
                 }
             });
             host.core_steps(None);
+            // What the turn issued, applied (plan step S3a(3): the headless
+            // run's interface part, e.g. a mount refused before it reaches a
+            // window).
+            host.apply_queue();
             if let Some(log) = host.frame_log.as_mut() {
                 log.tick_took(began.elapsed());
                 let presentation = &host.playback.render.presentation;
@@ -920,10 +961,14 @@ fn player() -> Result<()> {
         // Every plugin process stops within one deadline (supervisor.md
         // T31), each running plugin recorded first.
         // What the last tick changed of the interface's facts first (plan
-        // step S2f(1)).
+        // step S2f(1)). What the core issued before is applied first (its
+        // replies go out before the plugins stop, as in place before S3a(3)).
+        host.apply_queue();
         host.report_ui_facts();
+        host.quit_reports(&receiver);
+        queue_peak_line(host.queue_peak);
         host.quitting(|core| core.shutdown_plugins(host::QUIT_BUDGET));
-        host.drain_outbox();
+        host.sync();
         stop_handoffs();
         host.quitting(|core| core.shader_guard.quit());
         logged!("exit: normal");
@@ -1082,6 +1127,10 @@ fn player() -> Result<()> {
         let mut first_draws = (!render.is_gpu() && render.windows == render_mode::WindowKind::Wgpu)
             .then(|| guard.clone());
         let tick_host = host.clone();
+        // Shared with the quit (S3a(3) review item 9: the last reports are
+        // handled before the quit calls).
+        let receiver = Rc::new(receiver);
+        let tick_receiver = receiver.clone();
         let timer = slint::Timer::default();
         let mut menu_revision = u64::MAX;
         // Busy: a post from Windows' move/size loop runs no tick then
@@ -1105,11 +1154,24 @@ fn player() -> Result<()> {
                     // the other runs.
                     let mut core_turn = host::stall::Turn::core(began);
                     let mut host = tick_host.borrow_mut();
-                    // The core's turn, first half (plan step S2e): the events.
-                    host.core_events(&receiver, began, None, Some(&mut core_turn), |_| ());
+                    // The core's turn (plan step S3a(3): whole, on the UI
+                    // thread's timer, the arrangement `VESTRA_CORE_ON_UI=1`
+                    // keeps from S3a(4) on): the events (the interface's
+                    // reports among them), the panel-restart step, the
+                    // periodic steps, the end-of-turn pushes. What it issues
+                    // waits in the core→UI queue.
+                    host.core_events(&tick_receiver, began, None, Some(&mut core_turn), |_| ());
                     core_turn.step("events");
-                    core_turn.pause();
+                    host.core_steps(Some(&mut core_turn));
+                    host::stall::turn_ended(&core_turn, |owner| host.plugins.plugin_id(owner));
                     let mut turn = host::stall::Turn::new(Instant::now());
+                    // The interface's wake: the core→UI queue in order, then
+                    // its own events (R8: the tables pushed before a key are
+                    // applied before it is judged).
+                    host.apply_queue();
+                    turn.step("core→UI queue");
+                    host.ui_events_tick();
+                    turn.step("UI events");
                     // The UI part of the turn starts here. The UI stall test
                     // switch holds it once (`ui_stall_switch`).
                     if let Some((due, length)) = ui_stall
@@ -1135,28 +1197,17 @@ fn player() -> Result<()> {
                     host.mount_callbacks();
                     host.prepare_mount_tick();
                     turn.step("mounts");
-                    turn.pause();
-                    core_turn.resume();
-                    host.panel_restart_tick();
-                    core_turn.step("panel restarts");
-                    core_turn.pause();
-                    turn.resume();
                     host.window_tick();
                     turn.step("window tick");
                     platform::tool_windows_tick();
                     turn.step("tool windows");
-                    // The displays, once a second (plan step S3a(2)).
-                    host.displays_tick();
-                    turn.step("displays");
-                    // The core's turn, second half (plan step S2e): its periodic
-                    // steps, with the binding table's disabled set and the state
-                    // file's write.
-                    turn.pause();
-                    core_turn.resume();
-                    host.core_steps(Some(&mut core_turn));
-                    host::stall::turn_ended(&core_turn, |owner| host.plugins.plugin_id(owner));
-                    turn.resume();
-                    // The interface's steps after it: a complete file drop goes
+                    // The displays, once a second (plan step S3a(2)); macOS
+                    // only, so the step is named only there.
+                    if cfg!(target_os = "macos") {
+                        host.displays_tick();
+                        turn.step("displays");
+                    }
+                    // The interface's steps after: a complete file drop goes
                     // to the core (`UiReport::Drop`), the options window, the
                     // palette, the tables, the menu, the frame.
                     host.drops_tick();
@@ -1198,6 +1249,10 @@ fn player() -> Result<()> {
                     // The key and mouse callbacks that Slint runs before the
                     // next tick read the tables as this tick left them (R8).
                     host.sync_tables();
+                    // The interface's facts as this tick left them, for the
+                    // core's next turn (plan step S3a(3): they went with
+                    // every hand-over before).
+                    host.report_ui_facts();
                     if let Some(log) = host.frame_log.as_mut() {
                         log.tick_took(began.elapsed());
                     }
@@ -1260,17 +1315,23 @@ fn player() -> Result<()> {
         // §9: 1 s at quit, 300 ms after a device loss), each running
         // plugin recorded first.
         teardown_step("stopping the plugins");
+        queue_peak_line(host.borrow().queue_peak);
         let budget = if platform::window_device_lost() {
             host::DEVICE_LOSS_BUDGET
         } else {
             host::QUIT_BUDGET
         };
+        // What the core issued before the quit is applied first, as it was
+        // in place before S3a(3): its replies go out before the plugins
+        // stop (`quit_reports` handles the interface's reports of it).
+        host.borrow_mut().apply_queue();
         // What the last tick (drops, the options window) changed of the
         // interface's facts reaches the core first (plan step S2f(1)).
         host.borrow_mut().report_ui_facts();
+        host.borrow_mut().quit_reports(&receiver);
         host.borrow_mut()
             .quitting(|core| core.shutdown_plugins(budget));
-        host.borrow_mut().drain_outbox();
+        host.borrow_mut().sync();
         stop_handoffs();
         // Read now: only a loss that ended the loop restarts the player.
         if platform::window_device_lost() {

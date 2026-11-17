@@ -225,10 +225,6 @@ pub(crate) struct OnDemand {
     /// as the next step (`on_demand_check`), after what the step before
     /// asked of the interface was carried out (plan step S2f(3)).
     check_due: Option<u64>,
-    /// Debug builds: a busy check of `QueryResources` runs, which may read
-    /// the column facts as of the last drain (`query_resources`).
-    #[cfg(debug_assertions)]
-    pub(crate) batch_columns: bool,
     tests: Vec<probe::TestExecute>,
     /// Test switches for the registry diff (tests/lazy_activation.rs):
     /// see [`probe::Probe`].
@@ -844,7 +840,7 @@ impl Core {
         self.on_demand.settled || self.startup_settled()
     }
     /// `owner` is held in standby now (its registrations kept under it).
-    fn hold(&mut self, owner: u64, held: Held) {
+    pub(super) fn hold(&mut self, owner: u64, held: Held) {
         self.on_demand
             .names
             .insert(held.id.clone(), held.name.clone());
@@ -1178,12 +1174,9 @@ impl Core {
         #[cfg(debug_assertions)]
         {
             use crate::host::outbox::Fact;
-            self.check_settled(&[Fact::Sheet, Fact::Options]);
-            // Inside a supervisor batch the columns may be as of the last
-            // drain (plan step S2f(3)'s named exception, `batch_columns`).
-            if !self.on_demand.batch_columns {
-                self.check_settled(&[Fact::Columns]);
-            }
+            // Plan step S3a(3): a stale read is recorded, not asserted, so
+            // the supervisor batch needs no allowance (`batch_columns`).
+            self.check_settled(&[Fact::Sheet, Fact::Options, Fact::Columns]);
         }
         // A confirmation on the sheet counts as a dialog open (H5).
         if self.dialog_busy || self.confirm_waiting() {
@@ -1195,7 +1188,11 @@ impl Core {
         if self.commands.busy(owner) {
             busy.insert(Busy::Command);
         }
-        if self.settings.busy(owner, self.ui_facts.options_open) {
+        // The options window opening (issued, not yet applied) counts as open
+        // (S3a(3) review B3).
+        let options_open =
+            self.ui_facts.options_open || self.in_flight(crate::host::outbox::Mark::Options);
+        if self.settings.busy(owner, options_open) {
             busy.insert(Busy::Settings);
         }
         if self.source_state_replies.iter().any(|(o, _)| *o == owner) {
@@ -1626,15 +1623,7 @@ impl Core {
         // after panel or layout commands queued earlier in the same turn
         // (plan step S2f(3), a named exception: core code cannot drain in
         // the middle of a turn).
-        #[cfg(debug_assertions)]
-        {
-            self.on_demand.batch_columns = true;
-        }
         let busy = self.plugins.contains_key(&owner) && self.sync_work(owner, false);
-        #[cfg(debug_assertions)]
-        {
-            self.on_demand.batch_columns = false;
-        }
         if self.plugins.contains_key(&owner) && !busy {
             let asked = self.backend.commands.send(Command {
                 reply: Reply { owner, id: 0 },

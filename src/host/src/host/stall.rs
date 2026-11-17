@@ -39,18 +39,15 @@ pub(crate) type Label = (&'static str, Option<u64>);
 /// The timing of one turn: its steps and its events. Plan step S3a(2):
 /// one per thread's part, the core's turn (events, the panel-restart step,
 /// the periodic steps: [`Turn::core`]) and the interface's tick (the rest:
-/// [`Turn::new`]); on one thread they interleave in the windowed tick, so
-/// each is paused while the other runs and counts only its own time.
+/// [`Turn::new`]). Plan step S3a(3): the windowed tick runs the core's
+/// whole turn first, then the interface's part, so the two no longer
+/// interleave (the pause of S3a(2) is gone).
 #[derive(Debug)]
 pub(crate) struct Turn {
     /// The line's start: `"ui stall: a tick"` or `"core stall: a turn"`.
     what: &'static str,
     began: Instant,
     mark: Instant,
-    /// Paused since then (the other part runs), and how long it was paused
-    /// before.
-    paused: Option<Instant>,
-    away: Duration,
     slowest_step: Option<(&'static str, Duration)>,
     events: usize,
     slowest_event: Option<(Label, Duration)>,
@@ -69,24 +66,9 @@ impl Turn {
             what,
             began,
             mark: began,
-            paused: None,
-            away: Duration::ZERO,
             slowest_step: None,
             events: 0,
             slowest_event: None,
-        }
-    }
-    /// The other part of the windowed tick runs from now: this turn's time
-    /// stops (its next step starts at [`Turn::resume`]).
-    pub(crate) fn pause(&mut self) {
-        self.paused.get_or_insert_with(Instant::now);
-    }
-    /// This turn's part runs again.
-    pub(crate) fn resume(&mut self) {
-        if let Some(paused) = self.paused.take() {
-            let now = Instant::now();
-            self.away += now.saturating_duration_since(paused);
-            self.mark = now;
         }
     }
     /// The time since the last step (or the start) went to `what`.
@@ -107,13 +89,9 @@ impl Turn {
             self.slowest_event = Some((label, took));
         }
     }
-    /// Its own time at `now`: since it began, less the time it was paused.
+    /// Its time at `now`: since it began.
     fn took(&self, now: Instant) -> Duration {
-        let paused = self.paused.map_or(Duration::ZERO, |paused| {
-            now.saturating_duration_since(paused)
-        });
         now.saturating_duration_since(self.began)
-            .saturating_sub(self.away + paused)
     }
     /// The turn's line when it took [`STALL`] or more; `name` gives a
     /// plugin's id.
@@ -304,18 +282,12 @@ mod tests {
 
     const MS: Duration = Duration::from_millis(1);
 
-    /// Plan step S3a(2): a turn paused while the other part of the tick
-    /// runs counts only its own time, and the core's says so.
+    /// Plan step S3a(2): the core's turn and the interface's tick each name
+    /// themselves in their line.
     #[test]
-    fn a_paused_turn_counts_only_its_own_time() {
+    fn each_part_names_itself() {
         let now = Instant::now();
-        let mut turn = Turn::core(now - 300 * MS);
-        turn.paused = Some(now - 250 * MS);
-        assert_eq!(turn.took(now), 50 * MS);
-        assert!(turn.finish(now, |_| String::new()).is_none());
-        turn.paused = None;
-        turn.away = 100 * MS;
-        assert_eq!(turn.took(now), 200 * MS);
+        let turn = Turn::core(now - 200 * MS);
         let line = turn.finish(now, |_| String::new()).unwrap();
         assert!(line.starts_with("core stall: a turn took 200 ms"), "{line}");
         assert!(Turn::new(now).what.starts_with("ui stall: a tick"));

@@ -91,6 +91,14 @@ pub(crate) enum UiCommand {
     /// [`UiReport::MountApplied`]. The start-up gate (held mounts, note 6)
     /// stays on the core, before this is sent.
     Mount(MountChange),
+    /// The core hands its oldest accepted change to the empty batching
+    /// window at the end of its turn (plan step S3a(3); the interface took
+    /// it, `Take::Mount`, before): numbered (`HandedMount::seq`, carried by
+    /// the window's `UiReport::Batching`).
+    HandOver { seq: u64, change: MountChange },
+    /// The core's answer to `Take::Close` (plan step S3a(3)): the batch to
+    /// apply, in order (empty: nothing left).
+    Batch(Vec<MountChange>),
     /// `ui.setMount` (row 41; stream B). Applies to the mount that is ready
     /// when it arrives at the UI, else `missing` (design §5.1, the
     /// `ui.setMount` note).
@@ -625,6 +633,11 @@ pub(crate) enum UiReport {
     /// cancelled. The core replaces its record (`Core::handed`), which it
     /// also sets itself when it hands a change over. Last value wins.
     Batching(Option<super::mounts::HandedMount>),
+    /// The interface applied the core→UI queue's commands up to this
+    /// number (plan step S3a(3)): what waited for their interface part
+    /// ([`super::outbox::Then`]) runs now. Sent once per wake, after the
+    /// reports those commands' parts sent.
+    Applied(u64),
     /// Mount changes left the batching queue: the core sends their
     /// `ui.preparing` (`phase: preparing`) lines, in this order. Only
     /// changes not announced before (a failed batch's changes are put back
@@ -662,8 +675,10 @@ pub(crate) enum UiReport {
     /// work. Ordered.
     Input(UiInput),
     /// The interface's facts core code reads (design §5.3, group A; plan
-    /// step S2f(1)): last value wins.
-    UiFacts(Box<UiFacts>),
+    /// step S2f(1)): last value wins, numbered from the interface's one
+    /// counter (R13, plan step S3a(3)): the core applies a value only if
+    /// it is newer than the one it has.
+    UiFacts(u64, Box<UiFacts>),
 }
 
 /// The interface's own state that core code reads (design §5.3, group A;
@@ -713,8 +728,8 @@ pub(crate) struct UiFacts {
     /// plan step S3a(2)): read by the interface at start and once a second
     /// after, on macOS only (`NSScreen` is main-thread only; elsewhere the
     /// core reads them itself). The core answers from it where it cannot
-    /// read them itself. Null before the first read (always, but on
-    /// macOS). Shared, so copying the facts at every hand-over copies no
+    /// read them itself. Always Null except on macOS (there, Null before
+    /// the first read). Shared, so copying the facts at every hand-over copies no
     /// list; a new read is a new `Arc` only when the list changed.
     pub(crate) displays: Arc<Value>,
 }
@@ -850,6 +865,7 @@ pub(crate) enum UiInput {
 /// a row patch the core applies to its copy of the stored array as the
 /// interface did to its own (`ui_patch::apply_vec`), so a patch costs the
 /// rows it carries, not the whole array.
+#[derive(Clone)]
 pub(crate) enum StoredWrite {
     Whole(Value),
     Rows {
@@ -874,25 +890,6 @@ impl UiInput {
             _ => false,
         }
     }
-}
-
-/// What the interface asks the core for (plan step S3a(1)): its pulls of
-/// core data before, answered in place on one thread
-/// (`Host::take`, `Core::take`), each as the commands the pull returned.
-pub(crate) enum Take {
-    /// The oldest accepted mount change (`UiCommand::Mount`), for the
-    /// batching window.
-    Mount,
-    /// Every accepted mount change, for the closing batch.
-    Mounts,
-    /// The changes of a batch whose plugin still runs or is held.
-    Live(Vec<MountChange>),
-    /// The table snapshots that changed (`UiSnapshot::Registry`,
-    /// `UiSnapshot::Bindings`).
-    Tables,
-    /// The window settings in effect that changed (`WindowOp::OnTop`,
-    /// `UiSnapshot::CursorAutoHide`).
-    WindowSettings,
 }
 
 /// See [`UiInput::Line`]: what the interface tells, and to whom.
@@ -1050,7 +1047,9 @@ fn from_ui(event: &Event) -> bool {
         | Event::RuntimeFault(..)
         | Event::OwnerResources(..)
         | Event::Position(..)
-        | Event::SubtitleTrack(..) => false,
+        | Event::SubtitleTrack(..)
+        // Plan step S3a(3): the interface's reports, the core's to handle.
+        | Event::Report(_) => false,
     }
 }
 
@@ -1088,8 +1087,30 @@ impl UiReport {
                 | (Self::Remembered { .. }, Self::Remembered { .. })
                 | (Self::VideoArea { .. }, Self::VideoArea { .. })
                 | (Self::Batching(_), Self::Batching(_))
-                | (Self::UiFacts(_), Self::UiFacts(_))
+                | (Self::UiFacts(..), Self::UiFacts(..))
         )
+    }
+    /// Its kind, for the slow turn line (`stall.rs`; plan step S3a(3):
+    /// reports are events of the core's queue).
+    pub(crate) fn label(&self) -> &'static str {
+        match self {
+            Self::WindowFacts(_) => "Report.WindowFacts",
+            Self::Displays(_) => "Report.Displays",
+            Self::FrameShown(_) => "Report.FrameShown",
+            Self::Answered { .. } => "Report.Answered",
+            Self::AreaFitted { .. } => "Report.AreaFitted",
+            Self::VideoArea { .. } => "Report.VideoArea",
+            Self::Batching(_) => "Report.Batching",
+            Self::Applied(_) => "Report.Applied",
+            Self::MountPreparing(_) => "Report.MountPreparing",
+            Self::MountApplied(_) => "Report.MountApplied",
+            Self::Acted { .. } => "Report.Acted",
+            Self::Remembered { .. } => "Report.Remembered",
+            Self::Drop(_) => "Report.Drop",
+            Self::Event(_) => "Report.Event",
+            Self::Input(_) => "Report.Input",
+            Self::UiFacts(..) => "Report.UiFacts",
+        }
     }
 }
 
@@ -1464,6 +1485,8 @@ mod tests {
                 ViewKind::Refused(_) => "View.Refused",
             },
             UiCommand::Mount(_) => "Mount",
+            UiCommand::HandOver { .. } => "HandOver",
+            UiCommand::Batch(_) => "Batch",
             UiCommand::SetMount(_) => "SetMount",
             UiCommand::Settings(op) => match op {
                 SettingsOp::Added(_) => "Settings.Added",
@@ -1580,7 +1603,8 @@ mod tests {
             UiReport::Batching(_) => "Batching",
             UiReport::Event(event) => event.0.label().0,
             UiReport::Input(_) => "Input",
-            UiReport::UiFacts(_) => "UiFacts",
+            UiReport::UiFacts(..) => "UiFacts",
+            UiReport::Applied(_) => "Applied",
         }
     }
 
@@ -1612,10 +1636,13 @@ mod tests {
     #[test]
     fn the_ui_facts_coalesce() {
         let facts = |open| {
-            UiReport::UiFacts(Box::new(UiFacts {
-                options_open: open,
-                ..UiFacts::default()
-            }))
+            UiReport::UiFacts(
+                1,
+                Box::new(UiFacts {
+                    options_open: open,
+                    ..UiFacts::default()
+                }),
+            )
         };
         assert_eq!(report_name(&facts(true)), "UiFacts");
         assert!(facts(true).replaces(&facts(false)));
@@ -1804,6 +1831,7 @@ mod tests {
                 key: 28,
                 slot: Some(composition::Slot::Sidebar),
                 call: json!({}),
+                seq: 0,
             }))
         };
         assert_eq!(report_name(&held(3)), "Batching");
