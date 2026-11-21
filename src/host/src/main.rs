@@ -932,14 +932,14 @@ fn player() -> Result<()> {
             // one a tick fell behind while the start-up queue held each tick
             // (`START_BUDGET`), and the shared runner's answered pings waited
             // past its heartbeat limit.
-            host.core_events(&receiver, began, first, None, |event| {
+            host.core_events(&receiver, began, first, |event| {
                 if let Event::Broadcast(name, data) = event
                     && name == "source.state"
                 {
                     observed_source = data.clone();
                 }
             });
-            host.core_steps(None);
+            host.core_steps();
             // What the turn issued, applied (plan step S3a(3): the headless
             // run's interface part, e.g. a mount refused before it reaches a
             // window), then the interface's own events (plan step S3a(4):
@@ -1181,9 +1181,9 @@ fn player() -> Result<()> {
                     // A slow turn, or a gap before it, goes to the host log
                     // (`host/stall.rs`).
                     host::stall::tick_began(began);
-                    // One record per thread's part (plan step S3a(2)): the
-                    // core's turn and the interface's tick, each paused while
-                    // the other runs.
+                    // The interface's tick has a record of its own (plan
+                    // step S3a(2)); the core's turns are recorded on its
+                    // thread.
                     let mut host = tick_host.borrow_mut();
                     // The core is on its own thread: the queue is applied at
                     // its wake, not on this timer (R10); a wake the busy
@@ -1351,7 +1351,8 @@ fn player() -> Result<()> {
         };
         // What the core issued before the quit is applied first, as it was
         // in place before S3a(3): its replies go out before the plugins
-        // stop (`quit_reports` handles the interface's reports of it).
+        // stop (the core's thread handles the interface's reports of it,
+        // which reach its queue ahead of the quit, `Event::CoreQuit`).
         host.borrow_mut().apply_queue();
         // What the last tick (drops, the options window) changed of the
         // interface's facts reaches the core first (plan step S2f(1)).

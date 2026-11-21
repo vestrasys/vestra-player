@@ -614,14 +614,13 @@ impl Host {
         self.stored_in_flight
             .take(&mut self.pages, copies.stored, copies.pages);
     }
-    /// The core's turn's first half, here (the headless driver;
-    /// [`core_events`]).
+    /// The core's turn's first half, here (the headless driver, which
+    /// keeps no turn record; [`core_events`]).
     pub(crate) fn core_events(
         &mut self,
         receiver: &mpsc::Receiver<Event>,
         began: Instant,
         first: Option<Event>,
-        turn: Option<&mut super::stall::Turn>,
         observe: impl FnMut(&Event),
     ) {
         let to_ui = self.events.sender();
@@ -630,7 +629,7 @@ impl Host {
             receiver,
             began,
             first,
-            turn,
+            None,
             observe,
             &to_ui,
         );
@@ -640,9 +639,10 @@ impl Host {
     pub(crate) fn events_held(&mut self) -> bool {
         !self.link.here().held_events.is_empty()
     }
-    /// The core's turn's second half, here ([`core_steps`]).
-    pub(crate) fn core_steps(&mut self, turn: Option<&mut super::stall::Turn>) {
-        core_steps(self.link.here(), turn);
+    /// The core's turn's second half, here (the headless driver;
+    /// [`core_steps`]).
+    pub(crate) fn core_steps(&mut self) {
+        core_steps(self.link.here(), None);
     }
     /// At quit, before the core's quit calls, with the core here (S3a(3)
     /// review item 9): the interface's reports waiting in the core's queue
