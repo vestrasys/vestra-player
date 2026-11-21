@@ -4,7 +4,7 @@
 //!
 //! The core pushes; it never carries a request out itself. The driver
 //! drains the outbox after every handled event, after every report the
-//! interface sends, and after every core step ([`Host::drain_outbox`]):
+//! interface sends, and after every core step ([`Core::flush`]):
 //! each request is carried out by the interface, whose reports the core
 //! handles at once (their own requests drained right after, before the
 //! next entry), and each [`Then`] is run by the core in its place. So on
