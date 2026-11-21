@@ -342,9 +342,8 @@ test("the built-in-only requests are TestHost's (capabilities/commands_run.rs, p
       "palette.lead.set",
       "palette.lead.clear",
       "palette.lead.done",
-      // Player 0.10.3, guest windows (doc/architecture/guest-windows.md §7): a wire method only
-      // (the playlist sends it through `plugin.wire.request`); TestHost learns it with the SDK
-      // member a later SDK release adds.
+      // Player 0.10.3, guest windows (doc/architecture/guest-windows.md §7): `App.openWindow`
+      // (SDK 1.10.1).
       "app.openWindow",
     ],
   );

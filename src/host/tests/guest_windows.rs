@@ -63,12 +63,12 @@ fn write(directory: &Path, files: &[(&str, String)]) -> String {
 /// sets a secret when `VESTRA_TEST_GUEST_SECRET` is set (guest runs only:
 /// a main run would write the system keychain), and asks for a new window
 /// on `VESTRA_TEST_GUEST_OPEN` when that is set, unless it runs in a guest
-/// (`temporary` in `VESTRA_APP_INFO`: a guest would start another guest).
+/// (`plugin.app.temporary`, SDK 1.10.1: a guest would start another guest).
 /// Each outcome on stderr as `GUEST|…`.
 const FIXTURE_MAIN: &str = r#"import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 export default async function activate(plugin) {
-  const temporary = JSON.parse(process.env.VESTRA_APP_INFO ?? "null")?.temporary === true;
+  const temporary = plugin.app.temporary === true;
   console.error(`GUEST|temporary ${temporary}`);
   console.error(`GUEST|data ${plugin.dataDirectory}`);
   mkdirSync(plugin.dataDirectory, { recursive: true });

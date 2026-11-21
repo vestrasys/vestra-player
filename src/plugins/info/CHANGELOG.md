@@ -2,7 +2,7 @@
 
 ## 0.1.16
 
-- No automatic update check in a temporary window (guest windows, "Play in New Window", player 0.10.3): the player marks such a window `temporary: true` in `VESTRA_APP_INFO`, the source of `plugin.app`; the plugin reads it there (`temporaryWindow`) until an SDK release names it. Check for Updates… still works there. A main window is unchanged. Who must change: nobody.
+- No automatic update check in a temporary window (guest windows, "Play in New Window", player 0.10.3): the plugin reads `plugin.app.temporary` (SDK 1.10.1). Check for Updates… still works there. A main window is unchanged. Who must change: nobody.
 
 ## 0.1.15
 

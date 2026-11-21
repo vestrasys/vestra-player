@@ -6,7 +6,7 @@ import { join } from "node:path";
 import test, { afterEach, beforeEach } from "node:test";
 import { HostError, startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
-import { compareVersions, deps, downloadUrl, installerExtension, isInstallerFor, LATEST_URL, numberedName, parseLatest, platformKey, releasePage, temporaryWindow, timing, UpdateError } from "../updates.ts";
+import { compareVersions, deps, downloadUrl, installerExtension, isInstallerFor, LATEST_URL, numberedName, parseLatest, platformKey, releasePage, timing, UpdateError } from "../updates.ts";
 
 const directory = new URL("..", import.meta.url);
 const tick = () => new Promise((done) => setTimeout(done, 5));
@@ -72,9 +72,14 @@ afterEach(async () => {
   await rm(downloads, { recursive: true, force: true });
 });
 
-async function start(options: { version?: string; dataDirectory?: string; locale?: "zh-Hans"; os?: "windows" | "macos"; arch?: string } = {}) {
+async function start(options: { version?: string; dataDirectory?: string; locale?: "zh-Hans"; os?: "windows" | "macos"; arch?: string; temporary?: boolean } = {}) {
   const host = new TestHost();
-  host.app = { version: options.version ?? "0.6.2", build: "abc1234", components: { mpv: "mpv v0.41.0", libav: { ffmpeg: "9.0.2" }, slint: "1.16.1" } };
+  host.app = {
+    version: options.version ?? "0.6.2",
+    build: "abc1234",
+    components: { mpv: "mpv v0.41.0", libav: { ffmpeg: "9.0.2" }, slint: "1.16.1" },
+    ...(options.temporary ? { temporary: true } : {}),
+  };
   host.systemInfo = { ...host.systemInfo, os: options.os ?? "windows", arch: options.arch ?? "x86_64" };
   host.packages = [];
   const started = await startPlugin(activate, {
@@ -761,14 +766,9 @@ test("J10: a player version that is not a version is logged and never called up 
 });
 
 test("Guest windows (player 0.10.3): no automatic check in a temporary window; Check for Updates… still works", async () => {
-  assert.equal(temporaryWindow({ VESTRA_APP_INFO: JSON.stringify({ version: "0.10.3", temporary: true }) }), true);
-  for (const info of [undefined, "null", "{}", '{"temporary":"yes"}', "not json"]) {
-    assert.equal(temporaryWindow(info === undefined ? {} : { VESTRA_APP_INFO: info }), false, String(info));
-  }
   Object.assign(timing, { firstCheck: 20 });
-  Object.assign(deps, { temporary: () => true });
   net.routes.set(LATEST_URL, { body: latest("0.6.3") });
-  const run = await start();
+  const run = await start({ temporary: true });
   try {
     await new Promise((done) => setTimeout(done, 100));
     assert.equal(net.count(LATEST_URL), 0, "no automatic check");

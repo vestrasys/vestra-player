@@ -261,6 +261,7 @@ export function createWire(transport) {
         },
         app: {
             system: () => transport.request("app.system"),
+            openWindow: (paths) => transport.request("app.openWindow", { paths }),
         },
         /**
          * The rendering choice: `state`, `setPreference` and `restart`.

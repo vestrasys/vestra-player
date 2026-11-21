@@ -3,7 +3,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { temporaryWindow, timing } from "../store.ts";
+import { TestHost } from "@vestra-player/sdk/testing";
+import { timing } from "../store.ts";
 import { actions, ALL, banners, BUILTIN, choose, FakeNet, info, INSTALLED, OFFICIAL, openStore, props, publish, rows, showBuiltins, start, tab, THIRD, until, UPDATES, yes } from "./helpers.ts";
 
 const path = (host: Awaited<ReturnType<typeof start>>["host"]) => host.command("open").declaration.path;
@@ -148,19 +149,15 @@ test("automatic check: once after activation, then daily; off means no network",
   }
 });
 
-test("Guest windows (player 0.10.3): no automatic check in a temporary window", async () => {
-  assert.equal(temporaryWindow({ VESTRA_APP_INFO: JSON.stringify({ version: "0.10.3", temporary: true }) }), true);
-  for (const info of [undefined, "null", "{}", '{"temporary":1}', "not json"]) {
-    assert.equal(temporaryWindow(info === undefined ? {} : { VESTRA_APP_INFO: info }), false, String(info));
-  }
+test("Guest windows (player 0.10.3): no automatic check in a temporary window (AppInfo.temporary)", async () => {
   const defaults = { ...timing };
-  const before = process.env.VESTRA_APP_INFO;
   const net = new FakeNet();
   publish(net, OFFICIAL, []);
   Object.assign(timing, { firstCheck: 20, tick: 10, interval: 86_400_000 });
-  process.env.VESTRA_APP_INFO = JSON.stringify({ version: "0.10.3", temporary: true });
+  const host = new TestHost();
+  host.app = { ...host.app, temporary: true };
   try {
-    const run = await start({ net, now: () => 10 * 86_400_000 });
+    const run = await start({ net, host, now: () => 10 * 86_400_000 });
     try {
       await run.host.settle(200);
       assert.equal(net.count(OFFICIAL), 0, "no automatic check");
@@ -168,8 +165,6 @@ test("Guest windows (player 0.10.3): no automatic check in a temporary window", 
       await run.stop();
     }
   } finally {
-    if (before === undefined) delete process.env.VESTRA_APP_INFO;
-    else process.env.VESTRA_APP_INFO = before;
     Object.assign(timing, defaults);
   }
 });

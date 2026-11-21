@@ -69,21 +69,6 @@ const validSettings = (value: unknown): value is Settings => {
   );
 };
 
-/**
- * A temporary window (the player's guest window, "Play in New Window", player 0.10.3): the player
- * marks it `temporary: true` in `VESTRA_APP_INFO`, the source of `plugin.app`, which keeps only the
- * fields it knows until an SDK release names this one. No automatic checks run there.
- * TODO(SDK 1.10.1, AppInfo.temporary): read `plugin.app.temporary` instead and drop this
- * environment read (and its `env` parameter in the tests).
- */
-export function temporaryWindow(env: NodeJS.ProcessEnv = process.env): boolean {
-  try {
-    return (JSON.parse(env.VESTRA_APP_INFO ?? "null") as { temporary?: unknown } | null)?.temporary === true;
-  } catch {
-    return false;
-  }
-}
-
 /** Delays of the automatic check (design §3.6, decision 2.2-6); tests shorten them. */
 export const timing = {
   /** After activation, once. */
@@ -369,8 +354,9 @@ export class Store {
   async start() {
     await this.reread();
     await this.updateMenu();
-    // A temporary window installs nothing: no automatic check there (a check the user starts still runs).
-    if (temporaryWindow()) return;
+    // A temporary window ("Play in New Window", player 0.10.3, SDK 1.10.1 `AppInfo.temporary`) installs nothing: no
+    // automatic check there (a check the user starts still runs).
+    if (this.plugin.app.temporary) return;
     const first = setTimeout(() => void this.autoCheck(), timing.firstCheck);
     const tick = setInterval(() => {
       if (this.deps.now() - this.settings.value.lastCheck >= timing.interval) void this.autoCheck();

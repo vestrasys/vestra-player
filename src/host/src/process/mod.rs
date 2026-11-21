@@ -137,10 +137,6 @@ static APP_INFO: std::sync::OnceLock<Value> = std::sync::OnceLock::new();
 pub fn set_app_info(info: &Value) {
     let _ = APP_INFO.set(info.clone());
 }
-/// `plugin.app` as `set_app_info` set it.
-pub fn app_info() -> Option<&'static Value> {
-    APP_INFO.get()
-}
 /// Where a plugin runs.
 pub enum Placement<'a> {
     /// Its own Node process, its JavaScript heap capped at `heap_mib` MiB

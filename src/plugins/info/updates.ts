@@ -52,26 +52,10 @@ export type Fetch = (input: string, init: RequestInit) => Promise<Response>;
 export const deps = {
   fetch: ((input, init) => fetch(input, init)) as Fetch,
   now: () => Date.now(),
-  /** No automatic check in a temporary window (`temporaryWindow`). */
-  temporary: () => temporaryWindow(),
   /** The folder installers are saved to: the user's Downloads folder. */
   downloads: () => join(homedir(), "Downloads"),
 };
 
-/**
- * A temporary window (the player's guest window, "Play in New Window", player 0.10.3): the player
- * marks it `temporary: true` in `VESTRA_APP_INFO`, the source of `plugin.app`, which keeps only the
- * fields it knows until an SDK release names this one. No automatic checks run there.
- * TODO(SDK 1.10.1, AppInfo.temporary): read `plugin.app.temporary` instead and drop this
- * environment read (and its `env` parameter in the tests).
- */
-export function temporaryWindow(env: NodeJS.ProcessEnv = process.env): boolean {
-  try {
-    return (JSON.parse(env.VESTRA_APP_INFO ?? "null") as { temporary?: unknown } | null)?.temporary === true;
-  } catch {
-    return false;
-  }
-}
 
 /**
  * Why a check or a download failed: a code about.slint words. `detail` is the
@@ -590,7 +574,9 @@ export class Updater {
   schedule() {
     clearTimeout(this.#timer);
     this.#timer = undefined;
-    if (this.#disposed || !this.#st.settings.auto || deps.temporary()) return;
+    // A temporary window ("Play in New Window", player 0.10.3, SDK 1.10.1 `AppInfo.temporary`): no automatic check;
+    // Check for Updates… still works there.
+    if (this.#disposed || !this.#st.settings.auto || this.plugin.app.temporary) return;
     const due = this.#due() - deps.now();
     const delay = Math.min(2 ** 31 - 1, Math.max(timing.firstCheck, due));
     this.#timer = setTimeout(() => void this.autoCheck(), delay);

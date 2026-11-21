@@ -2,7 +2,7 @@
 
 ## 0.3.2
 
-- No automatic repository check in a temporary window (guest windows, "Play in New Window", player 0.10.3): the player marks such a window `temporary: true` in `VESTRA_APP_INFO`, the source of `plugin.app`; the plugin reads it there (`temporaryWindow`) until an SDK release names it. A temporary window runs the main window's plugins read-only: the player refuses installs, updates, uninstalls and enabling or disabling there (`unavailable`), and the store shows that error. Refresh still works. A main window is unchanged. Who must change: nobody.
+- No automatic repository check in a temporary window (guest windows, "Play in New Window", player 0.10.3): the plugin reads `plugin.app.temporary` (SDK 1.10.1). A temporary window runs the main window's plugins read-only: the player refuses installs, updates, uninstalls and enabling or disabling there (`unavailable`), and the store shows that error. Refresh still works. A main window is unchanged. Who must change: nobody.
 
 ## 0.3.1
 

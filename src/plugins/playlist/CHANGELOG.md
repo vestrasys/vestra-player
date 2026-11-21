@@ -2,7 +2,7 @@
 
 ## 0.2.10
 
-- **Play in New Window** (user ruling 2026-11-21, player 0.10.3): a new item in the list's right-click menu, right after Play. The selected local files (the first 64, in list order) play in a new temporary window: a separate player with its own temporary profile, whose title says "(Temporary Window)" (doc/architecture/guest-windows.md in the player repository). Disabled, with the reasons Show in Folder gives, when no selected row is a local file. The right-click menu is its only entry: the command (`playlist.play-new-window`) has `focus: "panel"` and no key, so the command palette does not list it. Not on macOS yet (left out of the menu there). It sends the player's built-in-only request `app.openWindow` through `plugin.wire.request` (no SDK member yet); a player before 0.10.3 answers `unsupported`, shown on the OSD. Translations in all six languages. Who must change: nobody.
+- **Play in New Window** (user ruling 2026-11-21, player 0.10.3): a new item in the list's right-click menu, right after Play. The selected local files (the first 64, in list order) play in a new temporary window: a separate player with its own temporary profile, whose title says "(Temporary Window)" (doc/architecture/guest-windows.md in the player repository). Disabled, with the reasons Show in Folder gives, when no selected row is a local file. The right-click menu is its only entry: the command (`playlist.play-new-window`) has `focus: "panel"` and no key, so the command palette does not list it. Not on macOS yet (left out of the menu there). It calls `plugin.app.openWindow` (SDK 1.10.1, built-in plugins only); a player before 0.10.3 refuses it, shown on the OSD. Translations in all six languages. Who must change: nobody.
 
 ## 0.2.9
 

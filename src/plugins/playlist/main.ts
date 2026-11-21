@@ -488,7 +488,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
       .filter((row) => row.kind === "file")
       .map((row) => row.source)
       .slice(0, NEW_WINDOW_FILES);
-    if (paths.length) await plugin.wire.request("app.openWindow", { paths });
+    if (paths.length) await plugin.app.openWindow(paths);
   });
   const revealSelected = guard(async () => {
     const paths = queue.marked().filter((row) => row.kind === "file").map((row) => row.source);
