@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.14
+
+- The description's last line, starting with `→ `, says where to open the plugin; Store 0.3.1 shows it on the plugin's card, also before install. Description text and its translations only. Who must change: nobody.
+
 ## 0.1.13
 
 - Manifest capabilities are gone (SDK 1.9.0, player 0.9.0): `capabilities` is removed from manifest.json. Nothing replaces them: none of its declarations changed how it ran (its command keys start on first use). Behaviour is unchanged. Who must change: nobody.

@@ -1,6 +1,6 @@
 {
   "id": "vestra.capture",
-  "version": "1.0.15",
+  "version": "1.0.16",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "name": "Snapshot",

@@ -1,6 +1,6 @@
 {
   "id": "vestra.hotkeys",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "name": "Shortcut Settings",

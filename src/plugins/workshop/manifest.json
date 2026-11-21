@@ -1,6 +1,6 @@
 {
   "id": "vestra.workshop",
-  "version": "2.2.44",
+  "version": "2.2.45",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "name": "Vestra Player AI",
