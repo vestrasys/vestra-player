@@ -14,18 +14,373 @@
 //! turn is still called from the UI thread's timer (the arrangement
 //! `VESTRA_CORE_ON_UI=1` keeps from plan step S3a(4) on, when the core
 //! gets its own thread).
-use super::messages::UiReport;
+//!
+//! Plan step S3a(4), the thread: the core runs its turn on its own thread
+//! (`vestra-core`, [`run_core`]) on a fixed 16 ms deadline; it wakes the
+//! interface with `invoke_from_event_loop`, at most one wake pending at a
+//! time ([`Waker`]); at quit the interface asks it to end and joins it with
+//! a bound ([`Host::join_core`]), and it ends on its own too (the run's
+//! end, its own quit, a lost device). `VESTRA_CORE_ON_UI=1` keeps the
+//! arrangement of S3a(3): the same queues and messages, the core's turn
+//! called from the UI thread's timer. Start-up and headless runs keep the
+//! core here.
+use super::messages::{UiEvent, UiReport};
 use super::outbox::{Copies, ToUi};
 use super::*;
+use std::sync::atomic::{AtomicBool, Ordering};
 
-/// The core, as the interface holds it until plan step S3a(2).
+/// The core as the interface holds it: here (start-up, headless runs, the
+/// arrangement `VESTRA_CORE_ON_UI=1`, and back again after its thread
+/// ended at quit), or on its own thread (plan step S3a(4)).
 pub(crate) struct CoreLink {
-    core: Core,
+    core: Option<Core>,
+    thread: Option<CoreThread>,
+}
+
+/// The core's thread: its handle, and where it hands the core back when it
+/// ends ([`run_core`]).
+struct CoreThread {
+    handle: std::thread::JoinHandle<()>,
+    done: mpsc::Receiver<Core>,
 }
 
 impl CoreLink {
     pub(crate) fn new(core: Core) -> Self {
-        Self { core }
+        Self {
+            core: Some(core),
+            thread: None,
+        }
+    }
+    /// The core, here. Only where the core is here: the start-up and quit
+    /// calls, headless runs, the arrangement `VESTRA_CORE_ON_UI=1`.
+    fn here(&mut self) -> &mut Core {
+        self.core
+            .as_mut()
+            .expect("the core runs on its own thread (plan step S3a(4))")
+    }
+    fn here_ref(&self) -> &Core {
+        self.core
+            .as_ref()
+            .expect("the core runs on its own thread (plan step S3a(4))")
+    }
+}
+
+/// The core's period (R10, plan step S3a(4): a fixed deadline; an arriving
+/// event does not wake it, which is plan step S3b).
+pub(crate) const CORE_PERIOD: Duration = Duration::from_millis(16);
+
+/// How long the core waits for the interface's quit after it ended the run
+/// itself (its `quit` command, the run's end, a lost device), before it
+/// writes the state file and ends without it (the S3a brief's risk 5: also
+/// when the interface never asks). The interface's last report (its part of
+/// the state file) arrives before its quit in the same queue.
+const UI_QUIT_WAIT: Duration = Duration::from_secs(5);
+
+/// The margin of the interface's bounded join over the plugins' shutdown
+/// budget (the S3a brief's risk 5; the implementer names it): the core
+/// writes the state file and ends its turn after the shutdown, well inside
+/// it.
+pub(crate) const JOIN_MARGIN: Duration = Duration::from_secs(2);
+/// The exit code when the core's thread panicked: what a panic that
+/// unwound out of the UI thread's loop gave before plan step S3a(4).
+pub(crate) const CORE_PANIC_EXIT: u32 = 101;
+/// How long the unwind of a panicked core may take before the process is
+/// ended anyway (`PanicWatchdog`): dropping the core stops its plugins and
+/// joins its playback worker, either of which can block.
+const PANIC_EXIT_WAIT: Duration = Duration::from_secs(2);
+
+/// Ends the process [`PANIC_EXIT_WAIT`] after the core's thread began to
+/// unwind from a panic (S3a(4) re-review): its drop runs before the core's
+/// own (a local of `run_core`, dropped before its `core` argument), so a
+/// `Plugin::drop` or `Backend::drop` that blocks cannot keep the player
+/// alive with a dead core. On a normal return it does nothing.
+struct PanicWatchdog;
+
+impl Drop for PanicWatchdog {
+    fn drop(&mut self) {
+        if std::thread::panicking() {
+            let _ = std::thread::Builder::new()
+                .name("core-panic-watchdog".into())
+                .spawn(|| {
+                    std::thread::sleep(PANIC_EXIT_WAIT);
+                    logged!("exit: the core's unwind did not end; ending the player");
+                    platform::exit_now(CORE_PANIC_EXIT);
+                });
+        }
+    }
+}
+
+/// The interface's wake (plan step S3a(4), the S3a brief's "Queues"): at
+/// most one `invoke_from_event_loop` pending at a time. The core sets the
+/// flag when it posts; the interface clears it before it drains.
+#[derive(Clone, Default)]
+pub(crate) struct Waker(Arc<AtomicBool>);
+
+impl Waker {
+    /// Posts the interface's wake unless one is pending.
+    pub(crate) fn wake(&self) {
+        if !self.0.swap(true, Ordering::AcqRel) && slint::invoke_from_event_loop(wake_ui).is_err() {
+            // No event loop (it ended): nothing to wake.
+            self.0.store(false, Ordering::Release);
+        }
+    }
+    /// The interface takes the wake (before it drains).
+    pub(crate) fn taken(&self) {
+        self.0.store(false, Ordering::Release);
+    }
+    /// A wake is posted and not taken yet: also one the interface missed
+    /// while a callback held it (review N1), which its next tick takes.
+    pub(crate) fn pending(&self) -> bool {
+        self.0.load(Ordering::Acquire)
+    }
+}
+
+thread_local! {
+    /// The interface's side of the core's wake (UI thread; set in `main.rs`).
+    static CORE_WAKE: RefCell<Option<Box<dyn Fn()>>> = const { RefCell::new(None) };
+}
+
+/// The interface's wake handler, set once its loop exists (`main.rs`).
+pub(crate) fn set_core_wake(wake: Option<Box<dyn Fn()>>) {
+    CORE_WAKE.with(|sink| *sink.borrow_mut() = wake);
+}
+
+/// Runs on the UI thread, posted by [`Waker::wake`].
+fn wake_ui() {
+    CORE_WAKE.with(|sink| {
+        if let Some(wake) = &*sink.borrow() {
+            wake();
+        }
+    });
+}
+
+/// The first half of the core's turn, which began at `began` (plan step
+/// S2e): `first` (an event the headless driver already waited for), then
+/// the queued ones ([`super::events::drain`]), each handled and followed by
+/// what it issued (`Core::flush`). Plan step S3a(4): on whichever thread
+/// runs the core; an interface event that reaches the core's queue goes on
+/// to the interface's own queue (`to_ui`). `observe` sees each event before
+/// it is handled (the headless evidence); `turn`, the turn's record, gets
+/// each event's handling time (`host/stall.rs`).
+pub(crate) fn core_events(
+    core: &mut Core,
+    receiver: &mpsc::Receiver<Event>,
+    began: Instant,
+    first: Option<Event>,
+    mut turn: Option<&mut super::stall::Turn>,
+    mut observe: impl FnMut(&Event),
+    to_ui: &mpsc::Sender<Event>,
+) {
+    let mut handle = |core: &mut Core, event: Event| {
+        observe(&event);
+        let (label, at) = (event.label(), Instant::now());
+        match UiEvent::new(event) {
+            Ok(event) => {
+                let _ = to_ui.send(event.into_event());
+            }
+            Err(event) => {
+                core.handle(event);
+                core.flush();
+            }
+        }
+        if let Some(turn) = turn.as_deref_mut() {
+            turn.event(label, at.elapsed());
+        }
+    };
+    // The interface's reports first (`window.state` goes at its
+    // `FactsSettled` among them), then the other events in their order
+    // (S3a(3) verification, re-review B2: `events::turn_events`); a
+    // subscription that came in meanwhile is answered after that state,
+    // as on main.
+    super::events::turn_events(receiver, first, began, |step| {
+        use super::events::TurnStep;
+        match step {
+            TurnStep::Event(event) => handle(core, event),
+            TurnStep::Hold(event) => core.held_events.push_back(event),
+            TurnStep::ReportsDone => core.flush(),
+            TurnStep::NextHeld => return core.held_events.pop_front(),
+        }
+        None
+    });
+}
+
+/// The second half of the core's turn: plan step S3a(3) runs the
+/// panel-restart step first, in the core turn right after the event drain
+/// (the S3a brief's item 3), then the periodic steps ([`Core::STEPS`]), in
+/// their order, each followed by what it issued (`Core::flush`), then the
+/// end of the turn's pushes (`Core::turn_end`). A headless run never ran
+/// the windowed steps and still does not. `turn` names the steps for the
+/// turn's record.
+pub(crate) fn core_steps(core: &mut Core, mut turn: Option<&mut super::stall::Turn>) {
+    if !core.headless && !core.restarts.plugins.is_empty() {
+        core.panel_restart_tick();
+        core.flush();
+        if let Some(turn) = turn.as_deref_mut() {
+            turn.step("panel restarts");
+        }
+    }
+    for step in Core::STEPS {
+        if step.windowed && core.headless {
+            break;
+        }
+        (step.run)(core);
+        core.flush();
+        if let (Some(what), Some(turn)) = (step.ends, turn.as_deref_mut()) {
+            turn.step(what);
+        }
+    }
+    core.turn_end();
+    core.flush();
+}
+
+/// What the core's thread is started with ([`run_core`]).
+pub(crate) struct CoreStart {
+    /// The core's one event queue.
+    pub(crate) receiver: mpsc::Receiver<Event>,
+    /// The interface's own queue, for an interface event that reaches the
+    /// core's.
+    pub(crate) to_ui: mpsc::Sender<Event>,
+    pub(crate) waker: Waker,
+    /// The run's end (`--seconds`): a quit the core acts on itself (K9).
+    pub(crate) ends_at: Option<Instant>,
+    /// What a restart after a lost window device needs: the core starts it
+    /// (the S3a brief's risk 5).
+    pub(crate) lost: Option<LostDevice>,
+}
+
+/// The core's thread (plan step S3a(4), the S3a brief's loop form): a fixed
+/// 16 ms period on a deadline (sleep to the next deadline; a turn that ran
+/// late starts the next a full period after it began, without a burst;
+/// review N3), each turn the events
+/// (at least 128, then the time budget), the panel-restart step, the
+/// periodic steps; then the interface is woken if the core→UI queue holds
+/// anything. Its quit (the S3a brief's risk 5): it ends when the interface
+/// asks (`Event::CoreQuit`: the plugins stop within the budget asked, the
+/// state file is written, and after a lost device the player is restarted
+/// from here); it also ends the run on its own at the run's end, after its
+/// own `quit` command and on a lost device: the plugins stop at once, and
+/// it waits for the interface's quit at most [`UI_QUIT_WAIT`] before it
+/// writes the state file and ends. The core goes back to the interface,
+/// which drops it before its windows, as before.
+pub(crate) fn run_core(mut core: Core, start: CoreStart, done: mpsc::Sender<Core>) {
+    let _watchdog = PanicWatchdog;
+    let CoreStart {
+        receiver,
+        to_ui,
+        waker,
+        ends_at,
+        lost,
+    } = start;
+    let mut next = Instant::now();
+    // `VESTRA_TEST_CORE_PANIC=<ms>`, a test switch: the core panics that
+    // long after its thread started (S3a(4) review F1's test).
+    let panic_at = std::env::var("VESTRA_TEST_CORE_PANIC")
+        .ok()
+        .filter(|_| std::env::var_os("VESTRA_TEST_OFFSCREEN").is_some_and(|v| v == "1"))
+        .and_then(|ms| ms.trim().parse::<u64>().ok())
+        .map(|ms| next + Duration::from_millis(ms));
+    // The core ended the run itself, since then; the plugins were stopped.
+    let mut own_quit: Option<Instant> = None;
+    let mut stopped = false;
+    loop {
+        let now = Instant::now();
+        if next > now {
+            std::thread::sleep(next - now);
+        }
+        next += CORE_PERIOD;
+        let began = Instant::now();
+        // A late turn: the next one a whole period after this one began
+        // (review N3), not at once.
+        if next < began {
+            next = began + CORE_PERIOD;
+        }
+        if panic_at.is_some_and(|at| began >= at) {
+            panic!("test: the core panics (VESTRA_TEST_CORE_PANIC)");
+        }
+        let mut turn = super::stall::Turn::core(began);
+        core_events(
+            &mut core,
+            &receiver,
+            began,
+            None,
+            Some(&mut turn),
+            |_| (),
+            &to_ui,
+        );
+        turn.step("events");
+        // What came in during the events (S3a(4) verification): the
+        // interface's reports are handled now, the rest waits for the next
+        // turn in `Core::held_events`, where the supervisor sees a plugin's
+        // request still unanswered (`Busy::Request`) and does not stop it
+        // for idleness meanwhile.
+        while let Ok(event) = receiver.try_recv() {
+            if matches!(event, Event::Report(_)) {
+                core.handle(event);
+                core.flush();
+            } else {
+                core.held_events.push_back(event);
+            }
+        }
+        core_steps(&mut core, Some(&mut turn));
+        super::stall::turn_ended(&turn, |owner| core.plugin_id(owner));
+        let asked = core.quit_asked.take();
+        let device_lost = lost.is_some() && platform::window_device_lost();
+        if own_quit.is_none()
+            && (core.quitting || device_lost || ends_at.is_some_and(|end| Instant::now() >= end))
+        {
+            own_quit = Some(Instant::now());
+            // The interface applies what is queued before the plugins stop
+            // (review N5).
+            waker.wake();
+            let budget = if device_lost {
+                DEVICE_LOSS_BUDGET
+            } else {
+                QUIT_BUDGET
+            };
+            core.shutdown_plugins(budget);
+            core.flush();
+            stopped = true;
+            if device_lost {
+                restart_from_core(&mut core, lost.as_ref());
+            }
+        }
+        if let Some(quit) = asked {
+            if !stopped {
+                core.shutdown_plugins(quit.budget);
+                core.flush();
+            }
+            if quit.device_lost {
+                restart_from_core(&mut core, lost.as_ref());
+            }
+            core.ui_state.flush();
+            waker.wake();
+            let _ = done.send(core);
+            return;
+        }
+        if own_quit.is_some_and(|at| at.elapsed() >= UI_QUIT_WAIT) {
+            diag!(
+                "core: the interface did not ask for the quit within {} s; ending without it",
+                UI_QUIT_WAIT.as_secs()
+            );
+            core.ui_state.flush();
+            waker.wake();
+            let _ = done.send(core);
+            return;
+        }
+        if !core.outbox.to_ui.is_empty() {
+            waker.wake();
+        }
+    }
+}
+
+/// After a lost window device, from the core (the S3a brief's risk 5): the
+/// state file first, then the restart on what was playing
+/// (`restart::restart_player`, once per process).
+fn restart_from_core(core: &mut Core, lost: Option<&LostDevice>) {
+    core.ui_state.flush();
+    if let Some(lost) = lost {
+        let source = core.last_source.clone();
+        super::restart::restart_player(lost, &source);
     }
 }
 
@@ -95,8 +450,75 @@ impl Host {
     /// S3a(3), `Core::flush`). The interface's facts are not reported here
     /// any more: they reach the core's queue with each report, numbered.
     pub(crate) fn deliver_event(&mut self, event: Event) {
-        self.link.core.handle(event);
-        self.link.core.flush();
+        let core = self.link.here();
+        core.handle(event);
+        core.flush();
+    }
+    /// Moves the core to its own thread (plan step S3a(4)): once the
+    /// interface's windows exist, before its timer starts; the start-up
+    /// calls ran here before (the S3a brief's item 9).
+    pub(crate) fn start_core_thread(&mut self, start: CoreStart) -> std::io::Result<()> {
+        let core = self
+            .link
+            .core
+            .take()
+            .expect("the core is here until its thread starts");
+        let (done, back) = mpsc::channel();
+        let handle = std::thread::Builder::new()
+            .name("vestra-core".into())
+            .spawn(move || {
+                // A panic of the core ends the player, as it did on the UI
+                // thread before (S3a(4) review F1): the panic hook has
+                // logged it; a live window with a dead core answers nothing.
+                let ran = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    run_core(core, start, done)
+                }));
+                if ran.is_err() {
+                    logged!("exit: the core's thread panicked; ending the player");
+                    platform::exit_now(CORE_PANIC_EXIT);
+                }
+            })?;
+        self.link.thread = Some(CoreThread { handle, done: back });
+        Ok(())
+    }
+    /// The interface's side of the quit (plan step S3a(4), the S3a brief's
+    /// risk 5): asks the core's thread to end (`Event::CoreQuit`, behind
+    /// the interface's last reports), and joins it with a bound, the
+    /// shutdown `budget` plus [`JOIN_MARGIN`], before any window is
+    /// dropped; the core comes back here. On a timeout the process is ended
+    /// at once (`platform::exit_now`), as a stuck teardown after a device
+    /// loss is. False where the core is here (nothing to join).
+    pub(crate) fn join_core(&mut self, budget: Duration, device_lost: bool) -> bool {
+        let Some(thread) = self.link.thread.take() else {
+            return false;
+        };
+        let _ = self.to_core.send(Event::CoreQuit(CoreQuit {
+            budget,
+            device_lost,
+        }));
+        let bound = budget + JOIN_MARGIN;
+        match thread.done.recv_timeout(bound) {
+            Ok(core) => {
+                let _ = thread.handle.join();
+                self.link.core = Some(core);
+                true
+            }
+            // The thread ended without giving the core back: a panic its
+            // wrapper did not get to end the process for (S3a(4) review F1).
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                logged!(
+                    "exit: the core's thread ended without its core (a panic); ending the player"
+                );
+                platform::exit_now(CORE_PANIC_EXIT);
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                logged!(
+                    "exit: the core did not end within {} ms of the quit; ending the player",
+                    bound.as_millis()
+                );
+                platform::exit_now(3);
+            }
+        }
     }
     /// A report of the interface, into the core's one event queue (plan
     /// step S3a(3), the S3a brief's "Queues"): handled in the core's next
@@ -143,7 +565,7 @@ impl Host {
     /// Reports the interface's part sends are handled in the core's next
     /// turn (at start-up: the first turn of the loop).
     pub(crate) fn sync(&mut self) {
-        self.link.core.flush();
+        self.link.here().flush();
         self.apply_queue();
     }
     /// The interface's copies of the core's data follow the core (plan step
@@ -164,92 +586,52 @@ impl Host {
         self.stored_in_flight
             .take(&mut self.pages, copies.stored, copies.pages);
     }
-    /// The first half of the core's turn, which began at `began` (plan step
-    /// S2e): `first` (an event the headless driver already waited for),
-    /// then the queued ones ([`super::events::drain`]), each handled.
-    /// `observe` sees each event before it is handled (the headless
-    /// evidence); `turn`, the windowed tick's record, gets each event's
-    /// handling time (`host/stall.rs`). Plan step S3a(3): the interface's
-    /// reports are events of this queue too.
+    /// The core's turn's first half, here (the headless driver and the
+    /// arrangement `VESTRA_CORE_ON_UI=1`; [`core_events`]).
     pub(crate) fn core_events(
         &mut self,
         receiver: &mpsc::Receiver<Event>,
         began: Instant,
         first: Option<Event>,
-        mut turn: Option<&mut super::stall::Turn>,
-        mut observe: impl FnMut(&Event),
+        turn: Option<&mut super::stall::Turn>,
+        observe: impl FnMut(&Event),
     ) {
-        let mut handle = |host: &mut Host, event: Event| {
-            observe(&event);
-            let (label, at) = (event.label(), Instant::now());
-            host.handle(event);
-            if let Some(turn) = turn.as_deref_mut() {
-                turn.event(label, at.elapsed());
-            }
-        };
-        // The interface's reports first, then `window.state` from the facts
-        // they left, then the other events in their order (S3a(3)
-        // verification, re-review B2: `events::turn_events`); a subscription
-        // that came in meanwhile is answered after that state, as on main.
-        let mut held = std::mem::take(&mut self.link.core.held_events);
-        super::events::turn_events(receiver, &mut held, first, began, |step| match step {
-            super::events::TurnStep::Event(event) => handle(self, event),
-            super::events::TurnStep::ReportsDone => {
-                self.link.core.window_state_out();
-                self.link.core.flush();
-            }
-        });
-        self.link.core.held_events = held;
+        let to_ui = self.events.sender();
+        core_events(
+            self.link.here(),
+            receiver,
+            began,
+            first,
+            turn,
+            observe,
+            &to_ui,
+        );
     }
     /// Events the core's last turn left behind the reports
     /// (`Core::held_events`): the headless driver does not wait for more.
-    pub(crate) fn events_held(&self) -> bool {
-        !self.link.core.held_events.is_empty()
+    pub(crate) fn events_held(&mut self) -> bool {
+        !self.link.here().held_events.is_empty()
     }
-    /// The second half of the core's turn: plan step S3a(3) runs the
-    /// panel-restart step first, in the core turn right after the event
-    /// drain (the S3a brief's item 3; it ran from the windowed tick between
-    /// the interface's mount step and window tick before), then its
-    /// periodic steps ([`Core::STEPS`]), in their order, each followed by
-    /// what it issued (`Core::flush`), then the end of the turn's pushes
-    /// (the tables and window settings that changed, `Core::turn_end`). A
-    /// headless run never ran the windowed steps and still does not. `turn`
-    /// names the steps for the windowed tick's record.
-    pub(crate) fn core_steps(&mut self, mut turn: Option<&mut super::stall::Turn>) {
-        let core = &mut self.link.core;
-        if !core.headless && !core.restarts.plugins.is_empty() {
-            core.panel_restart_tick();
-            core.flush();
-            if let Some(turn) = turn.as_deref_mut() {
-                turn.step("panel restarts");
-            }
-        }
-        for step in Core::STEPS {
-            if step.windowed && core.headless {
-                break;
-            }
-            (step.run)(core);
-            core.flush();
-            if let (Some(what), Some(turn)) = (step.ends, turn.as_deref_mut()) {
-                turn.step(what);
-            }
-        }
-        core.turn_end();
-        core.flush();
+    /// The core's turn's second half, here ([`core_steps`]).
+    pub(crate) fn core_steps(&mut self, turn: Option<&mut super::stall::Turn>) {
+        core_steps(self.link.here(), turn);
     }
-    /// At quit, before the core's quit calls (S3a(3) review item 9): the
-    /// interface's reports waiting in the core's queue are handled (its
-    /// last facts, a final `Remembered` for the state file), as each was
-    /// handled in place before; the other events waiting are left, as they
-    /// were at quit before.
+    /// At quit, before the core's quit calls, with the core here (S3a(3)
+    /// review item 9): the interface's reports waiting in the core's queue
+    /// are handled (its last facts, a final `Remembered` for the state
+    /// file), as each was handled in place before; the other events waiting
+    /// are left, as they were at quit before. (On its thread the core
+    /// handles them before the interface's quit, which follows them in the
+    /// same queue.)
     pub(crate) fn quit_reports(&mut self, receiver: &mpsc::Receiver<Event>) {
         while let Ok(event) = receiver.try_recv() {
             if matches!(event, Event::Report(_)) {
                 self.deliver_event(event);
             }
         }
-        self.link.core.window_state_out();
-        self.link.core.flush();
+        let core = self.link.here();
+        core.window_state_out();
+        core.flush();
     }
     /// The core's start-up calls (plan S3a brief, item 9): they run on the
     /// main thread, on the core before the interface's loop starts, at
@@ -257,15 +639,16 @@ impl Host {
     /// they ask of the interface is applied where the start drained before
     /// ([`Host::sync`]).
     pub(crate) fn starting<R>(&mut self, start: impl FnOnce(&mut Core) -> R) -> R {
-        start(&mut self.link.core)
+        start(self.link.here())
     }
     /// The core's calls at quit (design §5.3 group F), after the interface's
-    /// loop ended; plan step S3a(4) gives the core its own deadline and exit.
+    /// loop ended, on the core here (plan step S3a(4): back from its thread,
+    /// [`Host::join_core`]).
     pub(crate) fn quitting<R>(&mut self, quit: impl FnOnce(&mut Core) -> R) -> R {
-        quit(&mut self.link.core)
+        quit(self.link.here())
     }
     /// The playback backend, for the headless driver's evidence.
     pub(crate) fn backend(&self) -> &Backend {
-        &self.link.core.backend
+        &self.link.here_ref().backend
     }
 }

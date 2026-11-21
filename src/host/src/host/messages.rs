@@ -679,6 +679,13 @@ pub(crate) enum UiReport {
     /// counter (R13, plan step S3a(3)): the core applies a value only if
     /// it is newer than the one it has.
     UiFacts(u64, Box<UiFacts>),
+    /// The interface's window facts of this tick are complete (S3a(4)
+    /// review F2): sent at the end of its tick, after the window tick, when
+    /// a facts value or a handoff went out since the last one. The core
+    /// broadcasts `window.state` here (or before a report that writes a
+    /// line, R13), so a batch's handoff in a wake and the next tick's facts
+    /// fold into one broadcast, as on one thread.
+    FactsSettled,
 }
 
 /// The interface's own state that core code reads (design §5.3, group A;
@@ -1049,7 +1056,9 @@ fn from_ui(event: &Event) -> bool {
         | Event::Position(..)
         | Event::SubtitleTrack(..)
         // Plan step S3a(3): the interface's reports, the core's to handle.
-        | Event::Report(_) => false,
+        | Event::Report(_)
+        // Plan step S3a(4): the interface's quit, the core's to act on.
+        | Event::CoreQuit(_) => false,
     }
 }
 
@@ -1110,6 +1119,7 @@ impl UiReport {
             Self::Event(_) => "Report.Event",
             Self::Input(_) => "Report.Input",
             Self::UiFacts(..) => "Report.UiFacts",
+            Self::FactsSettled => "Report.FactsSettled",
         }
     }
 }
@@ -1592,6 +1602,7 @@ mod tests {
             UiReport::WindowFacts(_) => "WindowFacts",
             UiReport::Displays(_) => "Displays",
             UiReport::FrameShown(_) => "FrameShown",
+            UiReport::FactsSettled => "FactsSettled",
             UiReport::Answered { .. } => "Answered",
             UiReport::AreaFitted { .. } => "AreaFitted",
             UiReport::MountPreparing(_) => "MountPreparing",

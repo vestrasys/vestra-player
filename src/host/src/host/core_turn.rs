@@ -122,6 +122,8 @@ fn core(root: &Path) -> (Core, mpsc::Receiver<Event>, mpsc::Receiver<Command>) {
         retry_due: false,
         retry_changes: Vec::new(),
         clipboard: Default::default(),
+        quit_asked: None,
+        quitting: false,
         on_demand: supervisor::OnDemand::from_env(),
     };
     (core, received, commands)
@@ -764,8 +766,9 @@ fn a_copy_of_the_pages_given_before_a_write_is_handled_keeps_the_write() {
 /// S3a(3) verification: the window facts of several reports one turn
 /// handles (in-between states: backdrop null, 1280x720, then 960x720)
 /// broadcast `window.state` once, with the final state, as the one facts
-/// value per tick before S3a(3) did; the end of the turn sends what the
-/// drain did not.
+/// value per tick before S3a(3) did. It goes when the interface says its
+/// tick's facts are in (`FactsSettled`, S3a(4) review F2), not at the end
+/// of a turn: on two threads a turn can fall inside the interface's tick.
 #[test]
 fn the_reports_of_one_turn_broadcast_one_window_state() {
     use messages::{UiReport, WindowFacts};
@@ -788,10 +791,13 @@ fn the_reports_of_one_turn_broadcast_one_window_state() {
     core.report(facts(2, json!({"size": [1280, 720]})));
     core.report(facts(3, json!({"size": [960, 720]})));
     assert_eq!(core.window_state_sent, Value::Null, "nothing per report");
-    core.window_state_out();
+    core.report(UiReport::FactsSettled);
     assert_eq!(core.window_state_sent, json!({"size": [960, 720]}));
+    // A turn that ends inside the interface's tick broadcasts nothing.
     core.report(facts(4, json!({"size": [1280, 720]})));
     core.turn_end();
+    assert_eq!(core.window_state_sent, json!({"size": [960, 720]}));
+    core.report(UiReport::FactsSettled);
     assert_eq!(core.window_state_sent, json!({"size": [1280, 720]}));
     // Re-review B1: a report that writes a line (a reply) first sends the
     // facts the reports before it left (R13's `layout.set` exception: its
@@ -851,4 +857,71 @@ fn a_mount_applied_after_its_plugin_was_held_goes_as_the_park_would_have_it() {
         "recorded"
     );
     assert!(core.mount_queue.is_empty());
+}
+
+/// S3a(3) round-4 nit N1: an `Applied` that releases a waiting reply (one
+/// `outbox.waiting` entry, a `commands.run` reply behind a column toggle)
+/// sends the pending `window.state` first, then the reply; one that
+/// releases nothing leaves it pending.
+#[test]
+fn an_applied_that_releases_a_reply_sends_the_pending_window_state_first() {
+    use super::outbox::Then;
+    use messages::{UiReport, WindowFacts};
+    let root = tempfile::tempdir().unwrap();
+    let (mut core, _events, _commands) = core(root.path());
+    core.outbox.pushed = 2;
+    core.outbox.waiting.push_back((
+        2,
+        Then::Respond {
+            reply: Reply { owner: 7, id: 1 },
+            result: Ok(Value::Null),
+        },
+    ));
+    core.report(UiReport::WindowFacts(Box::new(WindowFacts {
+        seq: 1,
+        facts: json!({"slots": {"sidebar": {"effective": false}}}),
+        shell: Some(1),
+        menu_origin: true,
+        pip_supported: true,
+        pip_active: false,
+        sidebar_panels: vec![],
+        adjust_panels: vec![],
+        bottom_panel: None,
+    })));
+    // Command 1 applied: the reply waits for command 2, nothing goes.
+    core.report(UiReport::Applied(1));
+    assert_eq!(core.window_state_sent, Value::Null);
+    assert_eq!(core.outbox.waiting.len(), 1);
+    // Command 2 applied: the broadcast goes, then the reply is released.
+    core.report(UiReport::Applied(2));
+    assert_eq!(
+        core.window_state_sent,
+        json!({"slots": {"sidebar": {"effective": false}}})
+    );
+    assert!(core.outbox.waiting.is_empty(), "the reply went");
+}
+
+/// S3a(4) re-review: `Busy::Request`'s source. A request of a plugin read
+/// into the core's held events keeps it busy until it is taken to be
+/// handled; another plugin's request does not. (`host_busy` itself needs a
+/// running plugin process in `Core::plugins`, which a unit test cannot
+/// build; it inserts `Busy::Request` exactly when this holds.)
+#[test]
+fn a_held_request_keeps_its_plugin_busy_until_it_is_taken() {
+    let root = tempfile::tempdir().unwrap();
+    let (mut core, _events, _commands) = core(root.path());
+    assert!(!core.request_waiting(7));
+    core.held_events.push_back(Event::Request(
+        7,
+        json!({"id": 1, "method": "bindings.list"}),
+    ));
+    core.held_events.push_back(Event::MainClosed);
+    assert!(core.request_waiting(7), "its request waits");
+    assert!(!core.request_waiting(8), "not another plugin's");
+    let taken = core.held_events.pop_front();
+    assert!(matches!(taken, Some(Event::Request(7, _))));
+    assert!(
+        !core.request_waiting(7),
+        "taken to be handled: no longer busy"
+    );
 }

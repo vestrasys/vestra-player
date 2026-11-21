@@ -671,8 +671,11 @@ fn woken(due: i64, ui: &str) -> String {
              .enter(() => log(\"fired\", Date.now()));\n\
            const n = ((await plugin.storage.session.get(\"starts\")) ?? 0) + 1;\n\
            await plugin.storage.session.set(\"starts\", n);\n\
-           if (n > 1) plugin.wire.request({ui}).then(\n\
-             () => log(\"answered\", Date.now()), (error) => log(\"refused\", error?.code ?? String(error)));\n\
+           if (n > 1) {{\n\
+             log(\"asking\", Date.now());\n\
+             plugin.wire.request({ui}).then(\n\
+               () => log(\"answered\", Date.now()), (error) => log(\"refused\", error?.code ?? String(error)));\n\
+           }}\n\
          }}\n"
     )
 }
@@ -817,8 +820,14 @@ const STALL_MS: u64 = 4_000;
 ///
 /// Only possible with the core on its own thread: on one thread the wake
 /// itself waits for the stall to end.
+///
+/// Added for S3a (spec set of plan S3a): the woken run starts inside the
+/// stall, not before it, and its activation's UI-independent requests
+/// (`storage.session.get`/`set`, awaited before it asks for its view) are
+/// answered during the stall (R7), so the run is held only by its
+/// interface request (R12), not by the core.
 #[test]
-#[ignore = "after S3a: on one thread the wake waits for the stall (the core runs on the UI thread); needs Node 26 and libmpv"]
+#[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]
 fn r12_a_run_that_starts_during_a_ui_stall_is_ready_after_it() {
     let (run, started) = woken_run(
         STALL_AT_MS as i64 + 1_000,
@@ -831,9 +840,18 @@ fn r12_a_run_that_starts_during_a_ui_stall_is_ready_after_it() {
     for id in [WOKEN_MOUNT, WOKEN_OPEN] {
         let woken_start = run.plugin_spec(id, "start")[1];
         assert!(
-            woken_start < stall_ends - 1_000,
+            woken_start >= stall_begins && woken_start < stall_ends - 1_000,
             "{id}: the woken run started during the stall ({} ms after it began): {}",
             woken_start - stall_begins,
+            run.log
+        );
+        let asking = run.plugin_spec(id, "asking");
+        assert_eq!(asking.len(), 1, "{id} asked for its view once: {}", run.log);
+        assert!(
+            asking[0] < stall_ends - 500,
+            "R7: {id}'s activation got its storage replies during the stall \
+             (asked for its view {} ms before the stall ended): {}",
+            stall_ends - asking[0],
             run.log
         );
         let answered = run.plugin_spec(id, "answered")[0];

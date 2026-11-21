@@ -40,7 +40,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 /// **Expected to change in S3a** (core thread plan): `false` while the
 /// core runs on the UI thread, so the stall assertions are expected to
 /// fail; S3a sets it to `true`, and from then on they must hold.
-const STALL_ASSERTIONS_HOLD: bool = false;
+const STALL_ASSERTIONS_HOLD: bool = true;
 
 /// When the stall begins, after the player process started, and how long
 /// it lasts (`VESTRA_TEST_UI_STALL`).
@@ -112,7 +112,10 @@ fn package(root: &Path, id: &str, main: String) -> Value {
     json!({"id":id,"version":"1.0.0","directory":id,"digest":digest(&files)})
 }
 
-/// Asks `source.state` every 50 ms: `ui-stall poll <sent> <took ms>`.
+/// Asks `source.state` every 50 ms: `ui-stall poll <sent> <took ms>`; and
+/// shows an OSD message as often (plan step S3a(4), the S3a brief's risk 6:
+/// the core→UI queue's peak length while a plugin calls `osd.show` during
+/// the stall; the reply is not awaited).
 fn poller() -> String {
     "export default function activate(plugin) {\n\
        setInterval(() => {\n\
@@ -120,9 +123,19 @@ fn poller() -> String {
          plugin.player.refresh().then(\n\
            () => console.error(`ui-stall poll ${sent} ${Date.now() - sent}`),\n\
            (error) => console.error(`ui-stall poll-error ${sent} ${error}`));\n\
+         plugin.wire.request(\"osd.show\", { text: `poll ${sent}` }).catch(() => {});\n\
        }, 50);\n\
      }\n"
     .to_owned()
+}
+
+/// The core→UI queue's peak length the host printed at quit
+/// (`VESTRA_TEST_QUEUE_PEAK=1`; plan step S3a(4)'s measurement).
+fn queue_peak(lines: &[Line]) -> Option<u64> {
+    lines.iter().find_map(|line| {
+        let rest = line.text.split("core→UI queue peak ").nth(1)?;
+        rest.split_whitespace().next()?.parse().ok()
+    })
 }
 
 /// Two `time` triggers: `ui-stall trigger <name> <due> <fired>`.
@@ -169,6 +182,7 @@ fn run(root: &Path, development: &[PathBuf]) -> Vec<Line> {
         .args(["--silent", "--seconds", &RUN_SECONDS.to_string()])
         .env("VESTRA_TEST_OFFSCREEN", "1")
         .env("VESTRA_TEST_UI_STALL", format!("{STALL_AT_MS},{STALL_MS}"))
+        .env("VESTRA_TEST_QUEUE_PEAK", "1")
         .env("VESTRA_BUILTIN_PLUGINS", root.join("plugins"))
         .env("VESTRA_PACKAGE_STORE", root.join("store"))
         .env("VESTRA_PLUGIN_DATA", root.join("data"))
@@ -393,6 +407,9 @@ fn a_stalled_ui_thread_holds_requests_parks_and_triggers_today() {
         "park_late_ms": {"control": control_park_late, "stall": stall_park_late},
         "trigger_late_ms": {"control": control_trigger_late, "stall": stall_trigger_late},
         "stall_assertions_hold": STALL_ASSERTIONS_HOLD,
+        // Plan step S3a(4): the core→UI queue's peak (risk 6; reported, not
+        // asserted: no command is dropped by a cap without a ruling).
+        "queue_peak": queue_peak(&lines),
     });
     let _ = writeln!(std::io::stderr(), "ui stall baseline: {report:#}");
     if let Some(dir) = std::env::var_os("VESTRA_TEST_LOG_DIR") {

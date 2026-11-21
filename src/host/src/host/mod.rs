@@ -80,7 +80,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-pub(crate) use events::{Event, Injected, MenuAction};
+pub(crate) use events::{CoreQuit, Event, Injected, MenuAction};
 #[cfg(feature = "producer-audio")]
 pub(crate) use input::host_key;
 pub(crate) use input::{
@@ -440,7 +440,7 @@ pub(crate) struct Core {
     pub(crate) window_facts_seq: Option<u64>,
     /// The events the core took from its queue behind the interface's
     /// reports and handles after them, in their order, within the turn's
-    /// budget (`Host::core_events`; S3a(3) verification).
+    /// budget (`core_events`; S3a(3) verification).
     pub(crate) held_events: std::collections::VecDeque<Event>,
     /// The facts `window.state` last broadcast (`Core::window_state_out`).
     pub(crate) window_state_sent: Value,
@@ -653,6 +653,12 @@ pub(crate) struct Core {
     /// The serial clipboard thread (`clipboard.*`; plan step S3a(3), the
     /// S3a brief's item 7), started at its first call.
     pub(crate) clipboard: crate::clipboard::Serial,
+    /// Plan step S3a(4): the interface asked the core on its thread to end
+    /// (`Event::CoreQuit`), and the core ran its own `quit` command (it then
+    /// ends the run itself if the interface does not ask in time;
+    /// `driver::run_core`).
+    pub(crate) quit_asked: Option<CoreQuit>,
+    pub(crate) quitting: bool,
     /// On-demand start: the Host's side of standby, wake and
     /// classification (`supervisor/`, supervisor.md §4). Moved from `Host`
     /// in plan step S2c as its last field, so it drops after every other
@@ -686,6 +692,9 @@ pub(crate) struct Host {
     /// command applied from it.
     pub(crate) queue: outbox::UiQueue,
     pub(crate) applied_seq: u64,
+    /// The core's wake of the interface, at most one pending (plan step
+    /// S3a(4), `driver::Waker`): taken before the queue is drained.
+    pub(crate) waker: driver::Waker,
     /// The most entries the interface found waiting at one wake (logged at
     /// quit: the S3a row's measurement of the queue's peak length).
     pub(crate) queue_peak: usize,
@@ -771,6 +780,9 @@ pub(crate) struct Host {
     pub(crate) window_facts: Value,
     /// The UI's one counter of facts values sent (`WindowFacts.seq`).
     pub(crate) facts_seq: u64,
+    /// A facts value or a handoff went out since the last
+    /// `UiReport::FactsSettled` (`Host::facts_settled`; S3a(4) review F2).
+    pub(crate) facts_unsettled: bool,
     /// The panel tabs the UI last sent the core with its facts
     /// (`report_tabs`; plan step S2c(5)).
     pub(crate) tabs_sent: state::PanelTabs,
