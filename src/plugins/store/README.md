@@ -34,9 +34,10 @@ A card's second line says where the plugin is found once it is installed. It com
 ```
 
 - Write where the user finds the plugin, in the player's words, with ` ▸ ` between menu levels and without a trailing "…": `Menu: Tools ▸ Snapshot`, `Sidebar: Playlist tab (F6)`, `Adjustments and Effects ▸ Picture (Alt+1)`, `Options (F5) ▸ Keys and Mouse`, `Command palette (Ctrl+Shift+P): Window`, `Automatic: album cover and idle logo`. A plugin that is always visible (the control bar) needs none.
+- **Sidebar first.** A plugin with a sidebar tab names the sidebar first, `Sidebar: <tab> tab`, with the tab's key in parentheses when it has one (`Sidebar: Playlist tab (F6)`). Its next way in (a menu, a panel, Options, the command palette) follows after `; ` only while the whole line stays within 48 characters (`Sidebar: VestraTube tab; Menu: Open ▸ VestraTube`); otherwise the sidebar stands alone (`Sidebar: Clip Export tab`). A translation that would pass the limit with the second part drops it.
 - Translations keep the arrow and the 48 characters (the line is read from the description in the interface language, so the repository's index carries it to cards of plugins not yet installed). Up to about 40 characters show in full on the narrowest card.
 - The store shows the line on the card and in full under "Where to find it", and shows the description without it. Anything else (no arrow, a longer line, the arrow not on the last line) leaves the description as it is and the card's line empty.
-- Without the line, an installed plugin's card shows its own menu entry, "Menu: <path>", or else its command palette row, "Command palette: <Category>: <Title>", read from the player's command table (`commands.list`, which only built-in plugins such as the store may read). A plugin not installed shows nothing.
+- Without the line, an installed plugin's card shows its own menu entry, "Menu: <path>", or else its command palette row, "Command palette: <Category>: <Title>", read from the player's command table (`commands.list`, which only built-in plugins such as the store may read). The command table has no sidebar tabs, so this fallback cannot name the sidebar first: a plugin with a tab writes its line. A plugin not installed shows nothing.
 
 ## Security
 
