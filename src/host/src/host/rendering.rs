@@ -384,6 +384,12 @@ impl Core {
 /// GPU device (`restart.rs`).
 pub(crate) static RESTARTING: AtomicBool = AtomicBool::new(false);
 
+/// Whether this player started its restart (`RESTARTING`): a guest keeps
+/// its directory for the new process then (`guest::Session`).
+pub(crate) fn restarting() -> bool {
+    RESTARTING.load(Ordering::Acquire)
+}
+
 /// The new player's command line: `--vestra-restart PID`, this run's
 /// development plugins and `--silent`, and the current local file with
 /// where it is (`--vestra-resume`); not a stream or another kind of source.
@@ -402,6 +408,11 @@ pub(crate) fn relaunch_command(
     }
     if relaunch.silent {
         command.arg("--silent");
+    }
+    // A guest restarts as the same guest, with its profile
+    // (doc/architecture/guest-windows.md §6).
+    if let Some(directory) = crate::guest::directory() {
+        command.arg("--vestra-guest-dir").arg(directory);
     }
     if let Some((file, resume)) = resume_point(source) {
         command.args(["--vestra-resume".to_string(), resume.arg()]);

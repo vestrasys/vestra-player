@@ -333,7 +333,7 @@ impl Host {
         window.set_property("adjust-width", self.policy.adjust_user_width().into())?;
         window.set_property(
             "window-title",
-            SValue::String(self.window_title.as_str().into()),
+            SValue::String(crate::guest::decorate(&self.window_title).into()),
         )?;
         window.set_property(
             "info-panels",

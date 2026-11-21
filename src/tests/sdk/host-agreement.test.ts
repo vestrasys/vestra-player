@@ -331,13 +331,21 @@ test("the built-in-only requests are TestHost's (capabilities/commands_run.rs, p
     return [...methods.matchAll(/"([^"]+)"/g)].map((m) => m[1]!);
   };
   assert.deepEqual(
-    [...only("commands_run.rs"), ...only("palette_lead.rs")],
+    [
+      ...only("commands_run.rs"),
+      ...only("palette_lead.rs"),
+      ...only("app_windows.rs"),
+    ],
     [
       "commands.list",
       "commands.run",
       "palette.lead.set",
       "palette.lead.clear",
       "palette.lead.done",
+      // Player 0.10.3, guest windows (doc/architecture/guest-windows.md §7): a wire method only
+      // (the playlist sends it through `plugin.wire.request`); TestHost learns it with the SDK
+      // member a later SDK release adds.
+      "app.openWindow",
     ],
   );
   const root = new URL("../../host/src/capabilities/", import.meta.url);
@@ -347,7 +355,11 @@ test("the built-in-only requests are TestHost's (capabilities/commands_run.rs, p
       /builtin_only: true/.test(readFileSync(new URL(name, root), "utf8")),
     )
     .sort();
-  assert.deepEqual(marked, ["commands_run.rs", "palette_lead.rs"]);
+  assert.deepEqual(marked, [
+    "app_windows.rs",
+    "commands_run.rs",
+    "palette_lead.rs",
+  ]);
   assert.match(
     host("src/capabilities/mod.rs"),
     /"capability",\s*"this capability is for built-in plugins only"/,

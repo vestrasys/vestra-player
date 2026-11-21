@@ -6,7 +6,7 @@ import { join } from "node:path";
 import test, { afterEach, beforeEach } from "node:test";
 import { HostError, startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
-import { compareVersions, deps, downloadUrl, installerExtension, isInstallerFor, LATEST_URL, numberedName, parseLatest, platformKey, releasePage, timing, UpdateError } from "../updates.ts";
+import { compareVersions, deps, downloadUrl, installerExtension, isInstallerFor, LATEST_URL, numberedName, parseLatest, platformKey, releasePage, temporaryWindow, timing, UpdateError } from "../updates.ts";
 
 const directory = new URL("..", import.meta.url);
 const tick = () => new Promise((done) => setTimeout(done, 5));
@@ -757,5 +757,25 @@ test("J10: a player version that is not a version is logged and never called up 
   } finally {
     console.warn = warn;
     await stop();
+  }
+});
+
+test("Guest windows (player 0.10.3): no automatic check in a temporary window; Check for Updates… still works", async () => {
+  assert.equal(temporaryWindow({ VESTRA_APP_INFO: JSON.stringify({ version: "0.10.3", temporary: true }) }), true);
+  for (const info of [undefined, "null", "{}", '{"temporary":"yes"}', "not json"]) {
+    assert.equal(temporaryWindow(info === undefined ? {} : { VESTRA_APP_INFO: info }), false, String(info));
+  }
+  Object.assign(timing, { firstCheck: 20 });
+  Object.assign(deps, { temporary: () => true });
+  net.routes.set(LATEST_URL, { body: latest("0.6.3") });
+  const run = await start();
+  try {
+    await new Promise((done) => setTimeout(done, 100));
+    assert.equal(net.count(LATEST_URL), 0, "no automatic check");
+    const window = await manualCheck(run.host);
+    assert.equal(window.props["update-state"], "available");
+    assert.equal(net.count(LATEST_URL), 1);
+  } finally {
+    await run.stop();
   }
 });

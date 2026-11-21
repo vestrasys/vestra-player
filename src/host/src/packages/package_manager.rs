@@ -22,6 +22,35 @@ use std::{
     path::{Path, PathBuf},
 };
 
+/// A guest window's library (doc/architecture/guest-windows.md §4): the
+/// main one read-only, with the package versions it refers to leased
+/// (`guest::lease`) before any of them runs. The catalog is read again
+/// after each lease until it names nothing the lease does not: the main
+/// player commits a new catalog before it reads the leases, so a version
+/// it removes is one this guest does not run.
+fn open_leased(root: PathBuf, local: PathBuf) -> Result<Store> {
+    let mut leased = BTreeSet::new();
+    let mut written = false;
+    for _ in 0..8 {
+        let store = Store::open_read_only(root.clone(), local.clone())?;
+        let referenced = store.referenced();
+        if written && referenced.is_subset(&leased) {
+            return Ok(store);
+        }
+        leased.extend(referenced);
+        crate::guest::lease(&leased)?;
+        written = true;
+    }
+    diag!("package library: the catalog kept changing; the guest runs from its last reading");
+    let store = Store::open_read_only(root, local)?;
+    leased.extend(store.referenced());
+    crate::guest::lease(&leased)?;
+    Ok(store)
+}
+
+/// The refusal of a change to the plugins in a guest window.
+pub(crate) const GUEST_PACKAGES: &str = "a temporary window cannot install, update, remove, enable or disable plugins; use the main window";
+
 /// Validated candidates kept at once (each is a staged copy on disk).
 const MAX_CANDIDATES: usize = 32;
 /// At start-up, how long one tick may spend loading installed plugins into
@@ -198,7 +227,15 @@ impl Manager {
     /// unit tests, plan step S2f(3)).
     #[cfg(test)]
     pub(crate) fn at(root: PathBuf) -> Result<Self> {
-        let store = Store::open(root)?;
+        Self::on(Store::open(root)?)
+    }
+    /// Tests: a guest window's manager, the store at `root` read-only.
+    #[cfg(test)]
+    pub(crate) fn at_read_only(root: PathBuf, local: PathBuf) -> Result<Self> {
+        Self::on(Store::open_read_only(root, local)?)
+    }
+    #[cfg(test)]
+    fn on(store: Store) -> Result<Self> {
         let receipts = store.operations();
         Ok(Self {
             store,
@@ -224,18 +261,34 @@ impl Manager {
         })
     }
     pub fn open() -> Result<Self> {
+        let guest = crate::guest::active();
         // Staged copies an earlier run left behind (it quit or crashed
-        // while validating).
-        crate::packages::package_validate::sweep_stale();
+        // while validating). Not by a guest window: the main player does it.
+        if !guest {
+            crate::packages::package_validate::sweep_stale();
+        }
+        // The main profile's library, also in a guest window, which reads it
+        // (doc/architecture/guest-windows.md §4).
         let root = std::env::var_os("VESTRA_PACKAGE_STORE")
             .map(PathBuf::from)
             .unwrap_or_else(|| {
-                crate::platform::app_data_dir()
+                crate::platform::main_app_data_dir()
                     .unwrap_or_default()
                     .join("packages")
             });
-        let secrets = crate::packages::secret_index::Index::new(Some(root.join("secrets")));
-        let mut store = Store::open(root)?;
+        // A guest records no secret names (it writes no secrets).
+        let secrets =
+            crate::packages::secret_index::Index::new((!guest).then(|| root.join("secrets")));
+        let mut store = if guest {
+            open_leased(
+                root,
+                crate::platform::app_data_dir()
+                    .unwrap_or_default()
+                    .join("packages"),
+            )?
+        } else {
+            Store::open(root)?
+        };
         // Reads one small manifest per built-in; copies and hashes nothing.
         let builtins = match builtin::directory().map(|directory| builtin::load(&directory)) {
             Some(Ok(builtins)) => {
@@ -274,6 +327,11 @@ impl Manager {
             verify_results: std::sync::mpsc::channel(),
             validations: Default::default(),
         })
+    }
+    /// A guest window's view of the main library: read-only
+    /// (`Store::open_read_only`, its own state under `local`).
+    pub(crate) fn read_only(&self) -> bool {
+        self.store.read_only()
     }
     /// The package side's sources of `packages.list`: the library's
     /// catalog (`Store::revision`) and this run's operations
@@ -616,6 +674,16 @@ impl Core {
         method: &str,
         params: &Value,
     ) -> std::result::Result<Value, RpcError> {
+        // A guest window runs the main profile's plugins as they are
+        // (doc/architecture/guest-windows.md §4).
+        if self.packages.read_only()
+            && matches!(
+                method,
+                "packages.install" | "packages.uninstall" | "packages.setEnabled"
+            )
+        {
+            return Err(RpcError::new("unavailable", GUEST_PACKAGES));
+        }
         match method {
             "packages.installed" => Ok(serde_json::to_value(
                 self.packages.store.get(string(params, "id")?),
@@ -2162,6 +2230,10 @@ impl Core {
     /// thread, never on the UI thread: on Windows a large package takes
     /// seconds to delete.
     fn collect_garbage(&mut self) {
+        // Never in a guest window: the library is the main player's.
+        if self.packages.read_only() {
+            return;
+        }
         let library = self.packages.store.library();
         let referenced = self.packages.store.referenced();
         match cleanup::spawn(library, cleanup::Work::Unreferenced(referenced)) {
@@ -2174,6 +2246,9 @@ impl Core {
     /// uninstalled package, a failed install's target): remove it on the
     /// cleanup thread, now or after its current run.
     fn discard(&mut self, digest: &str) {
+        if self.packages.read_only() {
+            return;
+        }
         self.packages.cleanup_queue.insert(digest.to_owned());
         self.cleanup_tick();
     }
@@ -2343,11 +2418,18 @@ impl Core {
     /// thread. One that cannot be moved stays whole under its digest (the
     /// next start's `collect` takes it), logged.
     fn hold_freed(&mut self, freed: &BTreeSet<String>) {
-        if freed.is_empty() {
+        if freed.is_empty() || self.packages.read_only() {
             return;
         }
         let library = self.packages.store.library();
+        // A version a running guest window uses stays (guest-windows.md §4);
+        // the next start's `collect` takes it.
+        let leased = crate::guest::leased();
         for digest in freed {
+            if leased.contains(digest) {
+                diag!("package library: {digest} kept while a temporary window uses it");
+                continue;
+            }
             if let Err(error) = library.hold(digest) {
                 diag!("package library: {digest} left in place for the next start: {error:#}");
             }
@@ -2358,6 +2440,11 @@ impl Core {
     /// Deletes the secret store entries recorded for `key` (on a worker
     /// thread: keychain calls block and may prompt).
     fn purge_secrets(&self, key: &DataKey) {
+        // A guest window deletes no keychain entries (they are the main
+        // profile's).
+        if self.packages.read_only() {
+            return;
+        }
         let index = self.packages.secrets.clone();
         let service = key.secret_service();
         let spawned = std::thread::Builder::new()
@@ -2962,9 +3049,17 @@ mod cleanup {
                         );
                     }
                 }
+                // The versions running guest windows use stay, read just
+                // before deleting (guest-windows.md §4); the next start's
+                // `collect` takes them once those guests are gone.
+                let leased = crate::guest::leased();
                 let result = match &work {
-                    Work::Unreferenced(referenced) => library.collect(referenced),
-                    Work::Only(digests) => library.remove(digests),
+                    Work::Unreferenced(referenced) => {
+                        library.collect(&referenced.union(&leased).cloned().collect())
+                    }
+                    Work::Only(digests) => {
+                        library.remove(&digests.difference(&leased).cloned().collect())
+                    }
                     Work::Held => Ok(0),
                 };
                 let ms = started.elapsed().as_millis();

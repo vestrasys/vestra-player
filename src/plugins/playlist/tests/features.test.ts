@@ -794,6 +794,44 @@ test("C23: Ctrl+F reveals the first selected file of each folder; a missing file
   }
 });
 
+test("Play in New Window (0.2.10): the selected local files go to the player's app.openWindow in list order; links disable it; the palette leaves it out", async () => {
+  const app = await start();
+  try {
+    const requests: Json[] = [];
+    app.host.handle("app.openWindow", (params) => {
+      requests.push(params);
+      return { pid: 4242 };
+    });
+    const [a, b, c] = await app.files(["win/a.mp4", "win/b.mp4", "win/c.mp4"]);
+    await app.addFiles([a!, b!, c!]);
+    await app.click(2);
+    await app.click(0, { ctrl: true });
+    await app.run("play-new-window");
+    assert.deepEqual(requests, [{ paths: [a, c] }], "the selection, in list order");
+    const command = app.command("play-new-window");
+    assert.equal(command.declaration.focus, "panel", "not in the command palette");
+    assert.deepEqual(command.declaration.bindings ?? [], [], "no key");
+    assert.equal(command.display.title, "在新窗口播放");
+
+    // The player's refusal is shown, as the other list commands' errors are.
+    app.host.handle("app.openWindow", () => {
+      throw new HostError("unsupported", "new windows are not available here");
+    });
+    await app.run("play-new-window");
+    assert.equal(app.osd(), "new windows are not available here");
+
+    // A link alone: disabled, with Show in Folder's reason.
+    await app.run("link");
+    app.host.window("playlist-link").emit("add-link", "https://example.org/v");
+    await app.host.settle();
+    assert.equal(app.command("play-new-window").state.enabled, false);
+    assert.equal(app.host.translate(app.command("play-new-window").state.reason!), "链接没有本地位置");
+    assert.equal(requests.length, 1);
+  } finally {
+    await app.close();
+  }
+});
+
 test("C23: only the first 20 selected files are shown", async () => {
   const app = await start();
   try {

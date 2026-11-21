@@ -33,7 +33,7 @@ mod rendering;
 mod restart;
 pub(crate) mod review_sheet;
 pub(crate) mod revised;
-pub(crate) use rendering::{Relaunch, Rendering, startup as rendering_startup};
+pub(crate) use rendering::{Relaunch, Rendering, restarting, startup as rendering_startup};
 mod rpc;
 mod shell;
 pub(crate) mod stall;

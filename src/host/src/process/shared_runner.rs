@@ -398,8 +398,17 @@ impl SharedRunner {
     /// `Event::RunnerExited(id)`.
     pub fn spawn(id: RunnerId, events: mpsc::Sender<Event>, now: u64) -> Result<Self> {
         let paths = crate::process::runtime_paths::get();
-        let mut child = paths
-            .node_command()
+        let mut command = paths.node_command();
+        // A guest window (guest-windows.md §4): `plugin.app` with
+        // `temporary` in the runner's environment too, as an own process
+        // has it, where the built-ins read it until the SDK names it. A main
+        // player's runner is started as before.
+        if crate::guest::active()
+            && let Some(info) = crate::process::app_info()
+        {
+            command.env("VESTRA_APP_INFO", info.to_string());
+        }
+        let mut child = command
             .arg(MAX_OLD_SPACE)
             .arg(&paths.shared_runner)
             .stdin(Stdio::piped())

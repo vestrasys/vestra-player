@@ -925,3 +925,35 @@ fn a_held_request_keeps_its_plugin_busy_until_it_is_taken() {
         "taken to be handled: no longer busy"
     );
 }
+
+/// Guest windows (doc/architecture/guest-windows.md §4): a core on a
+/// read-only library refuses the three changes to the plugins with
+/// `unavailable` and still answers the reads.
+#[test]
+fn a_guest_core_refuses_plugin_changes() {
+    let root = tempfile::tempdir().unwrap();
+    let (mut core, _events, _commands) = core(root.path());
+    core.packages = package_manager::Manager::at_read_only(
+        root.path().join("main-packages"),
+        root.path().join("guest-packages"),
+    )
+    .unwrap();
+    assert!(core.packages.read_only());
+    for (method, params) in [
+        (
+            "packages.install",
+            json!({"requestId":"r","token":"t","expectedRevision":0}),
+        ),
+        ("packages.uninstall", json!({"id":"x"})),
+        ("packages.setEnabled", json!({"id":"x","enabled":false})),
+    ] {
+        let refused = core.package_dispatch(1, method, &params).unwrap_err();
+        assert_eq!(refused.code, "unavailable", "{method}");
+        assert_eq!(refused.message, package_manager::GUEST_PACKAGES);
+    }
+    assert!(
+        core.package_dispatch(1, "packages.list", &json!({}))
+            .is_ok()
+    );
+    assert!(!root.path().join("main-packages").exists(), "nothing made");
+}

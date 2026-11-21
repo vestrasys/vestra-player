@@ -215,6 +215,12 @@ pub struct Store {
     /// `set_aside`): `packages.list` is built again only then
     /// (`binding_manager.rs`).
     revision: u64,
+    /// A guest window's view of the main library (`open_read_only`):
+    /// nothing is written; `publish` changes only the copy in memory.
+    read_only: bool,
+    /// Where this player keeps its own state beside the library
+    /// (`activation_dir`, `triggers_dir`): the root, or a guest's profile.
+    local: PathBuf,
 }
 
 /// A catalog record that failed its checks when the library opened: taken
@@ -387,17 +393,47 @@ fn identifier(value: &str) -> Result<()> {
 
 impl Store {
     pub fn open(root: PathBuf) -> Result<Self> {
-        fs::create_dir_all(&root)?;
+        Self::open_as(root, None)
+    }
+
+    /// The library at `root` as a guest window sees it
+    /// (doc/architecture/guest-windows.md §4): read as `open` reads it, the
+    /// records screened the same way, and nothing written, ever: no
+    /// directory, no backup, no `quarantine.json`, no catalog (`publish`
+    /// changes only the copy in memory). Its own state goes to `local`.
+    /// A library that does not exist opens empty.
+    pub fn open_read_only(root: PathBuf, local: PathBuf) -> Result<Self> {
+        Self::open_as(root, Some(local))
+    }
+
+    fn open_as(root: PathBuf, read_only: Option<PathBuf>) -> Result<Self> {
+        if read_only.is_some() && !root.exists() {
+            return Ok(Self {
+                local: read_only.unwrap_or_default(),
+                root,
+                catalog: Catalog::default(),
+                quarantined: Vec::new(),
+                records: Vec::new(),
+                kept: BTreeSet::new(),
+                deferred: BTreeMap::new(),
+                revision: 0,
+                read_only: true,
+            });
+        }
+        if read_only.is_none() {
+            fs::create_dir_all(&root)?;
+        }
         ensure!(
             !fs::symlink_metadata(&root)?.file_type().is_symlink(),
             "store root must not be a symlink"
         );
         let root = dunce::canonicalize(&root)?;
-        fs::create_dir_all(root.join("packages"))?;
+        if read_only.is_none() {
+            fs::create_dir_all(root.join("packages"))?;
+        }
         ensure!(
-            !fs::symlink_metadata(root.join("packages"))?
-                .file_type()
-                .is_symlink(),
+            !fs::symlink_metadata(root.join("packages"))
+                .is_ok_and(|metadata| metadata.file_type().is_symlink()),
             "package library must not be a symlink"
         );
         let path = root.join("catalog.json");
@@ -419,6 +455,8 @@ impl Store {
             (Catalog::default(), Vec::new())
         };
         let mut store = Self {
+            local: read_only.clone().unwrap_or_else(|| root.clone()),
+            read_only: read_only.is_some(),
             root,
             catalog,
             quarantined: Vec::new(),
@@ -442,17 +480,23 @@ impl Store {
             // downgrade): the catalog as it was is kept beside it first.
             // Without that copy nothing is rewritten: the library does not
             // open, as before records were set aside, and nothing is lost.
-            let backup = store.root.join(format!("catalog.json.bak-{}", unix_ms()));
-            File::create(&backup)
-                .and_then(|mut file| {
-                    file.write_all(&original)?;
-                    file.sync_all()
-                })
-                .with_context(|| format!("back up the package catalog to {}", backup.display()))?;
-            diag!(
-                "package library: records set aside; the catalog as it was is in {}",
-                backup.display()
-            );
+            // A guest window writes nothing: the main player backs up and
+            // rewrites at its next start.
+            if !store.read_only {
+                let backup = store.root.join(format!("catalog.json.bak-{}", unix_ms()));
+                File::create(&backup)
+                    .and_then(|mut file| {
+                        file.write_all(&original)?;
+                        file.sync_all()
+                    })
+                    .with_context(|| {
+                        format!("back up the package catalog to {}", backup.display())
+                    })?;
+                diag!(
+                    "package library: records set aside; the catalog as it was is in {}",
+                    backup.display()
+                );
+            }
             store.set_aside(&aside);
         } else {
             store.records = store.quarantine_records();
@@ -1019,6 +1063,9 @@ impl Store {
     /// Replace `quarantine.json` with `records` (compact: what was measured
     /// is what is written).
     fn write_quarantine(&self, records: &[Value]) -> Result<()> {
+        if self.read_only {
+            return Ok(());
+        }
         let bytes = serde_json::to_vec(&serde_json::json!({ "records": records }))?;
         ensure!(bytes.len() <= MAX_CATALOG, "quarantine records too large");
         let mut temporary = tempfile::NamedTempFile::new_in(&self.root)?;
@@ -1176,6 +1223,12 @@ impl Store {
     }
 
     fn publish(&mut self, next: Catalog) -> Result<()> {
+        if self.read_only {
+            // A guest window (`open_read_only`): this run's copy only.
+            self.catalog = next;
+            self.revision += 1;
+            return Ok(());
+        }
         let bytes = serde_json::to_vec(&next)?;
         ensure!(
             bytes
@@ -1238,12 +1291,17 @@ impl Store {
     /// instance (`host/supervisor/checkpoint.rs`): beside the catalog, outside every
     /// plugin's data directory.
     pub fn activation_dir(&self) -> PathBuf {
-        self.root.join("activation")
+        self.local.join("activation")
     }
     /// Where each instance's kept trigger conditions are
     /// (`crate::triggers`).
     pub fn triggers_dir(&self) -> PathBuf {
-        self.root.join("triggers")
+        self.local.join("triggers")
+    }
+
+    /// A guest window's view of the main library (`open_read_only`).
+    pub fn read_only(&self) -> bool {
+        self.read_only
     }
 
     /// The library entries the catalog refers to: every installed current
@@ -3381,5 +3439,89 @@ pub(crate) mod tests {
         for (guid, id) in newest.iter().zip(["p000", "p001"]) {
             assert_eq!(store.dormant()[guid].id, id);
         }
+    }
+
+    /// Every file under `root`, with its bytes (guest windows).
+    fn files_of(root: &std::path::Path) -> Vec<(PathBuf, Vec<u8>)> {
+        let mut files = Vec::new();
+        let mut stack = vec![root.to_path_buf()];
+        while let Some(dir) = stack.pop() {
+            for entry in fs::read_dir(&dir).unwrap() {
+                let path = entry.unwrap().path();
+                if path.is_dir() {
+                    stack.push(path.clone());
+                    files.push((path, Vec::new()));
+                } else {
+                    let bytes = fs::read(&path).unwrap();
+                    files.push((path, bytes));
+                }
+            }
+        }
+        files.sort();
+        files
+    }
+
+    /// Guest windows (doc/architecture/guest-windows.md §4): the main
+    /// library opens read-only as `open` would screen it (a record set
+    /// aside, built-ins added, a pending install recovered), and not one
+    /// byte under it changes; the guest's own state goes to `local`.
+    #[test]
+    fn a_read_only_library_reads_like_open_and_writes_nothing() {
+        let root = tempfile::tempdir().unwrap();
+        let root_path = dunce::canonicalize(root.path()).unwrap();
+        let (counter, other) = two_installed(&root_path);
+        // A record that will be set aside (outside the library) and a
+        // pending update of the other.
+        fs::remove_dir_all(&counter.directory).unwrap();
+        let elsewhere = tempfile::tempdir().unwrap();
+        edit_catalog(&root_path, |catalog| {
+            catalog["installed"]["counter"]["current"]["directory"] =
+                elsewhere.path().to_string_lossy().into();
+            catalog["futureField"] = serde_json::json!(1);
+        });
+        let before = files_of(&root_path);
+        let local = tempfile::tempdir().unwrap();
+        let mut store =
+            Store::open_read_only(root_path.clone(), local.path().join("packages")).unwrap();
+        assert!(store.read_only());
+        assert_eq!(
+            store
+                .quarantined()
+                .iter()
+                .map(|q| q.id.as_str())
+                .collect::<Vec<_>>(),
+            ["futureField", "counter"]
+        );
+        assert!(store.get("counter").current.is_none());
+        assert_eq!(store.get("other").current.unwrap().digest, other.digest);
+        assert!(store.referenced().contains(&other.digest));
+        store
+            .sync_builtins(&BTreeSet::from(["vestra.builtin".to_owned()]))
+            .unwrap();
+        assert!(store.get("vestra.builtin").instance.is_some(), "in memory");
+        store.set_disabled("other", true).unwrap();
+        assert!(store.disabled().contains("other"));
+        assert_eq!(
+            store.activation_dir(),
+            local.path().join("packages").join("activation")
+        );
+        assert_eq!(
+            store.triggers_dir(),
+            local.path().join("packages").join("triggers")
+        );
+        assert_eq!(
+            files_of(&root_path),
+            before,
+            "the main library is unchanged"
+        );
+        // A library that is not there opens empty, and is not made.
+        let missing = root_path.join("nothing-here");
+        let empty = Store::open_read_only(missing.clone(), local.path().into()).unwrap();
+        assert!(empty.installed().is_empty());
+        assert!(!missing.exists());
+        // The main player still opens it as before.
+        let main = Store::open(root_path.clone()).unwrap();
+        assert!(!main.read_only());
+        assert_eq!(main.activation_dir(), root_path.join("activation"));
     }
 }

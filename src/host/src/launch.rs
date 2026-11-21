@@ -33,6 +33,12 @@ pub struct Launch {
     /// Internal: continue the first file at this point
     /// (`--vestra-resume SECONDS:paused|playing`, written by the host only).
     pub resume: Option<Resume>,
+    /// `--guest`: a guest window, with a temporary profile of its own
+    /// (doc/architecture/guest-windows.md).
+    pub guest: bool,
+    /// Internal: the guest directory a restarted guest takes over
+    /// (`--vestra-guest-dir DIR`, written by the host only; implies `guest`).
+    pub guest_dir: Option<PathBuf>,
 }
 
 /// Where a restarted player's first file continues.
@@ -66,7 +72,7 @@ impl Resume {
     }
 }
 
-const USAGE: &str = "use [FILE…] [--plugin DIR] [--headless] [--silent] [--seconds N]";
+const USAGE: &str = "use [FILE…] [--guest] [--plugin DIR] [--headless] [--silent] [--seconds N]";
 
 /// Parse `args` (without the program name); relative paths resolve against `cwd`.
 pub fn parse(args: &[String], cwd: &Path) -> Result<Launch> {
@@ -91,6 +97,11 @@ pub fn parse(args: &[String], cwd: &Path) -> Result<Launch> {
             "--snapshot" => launch.snapshot = Some(PathBuf::from(value("PNG path")?)),
             "--headless" => launch.headless = true,
             "--silent" => launch.silent = true,
+            "--guest" => launch.guest = true,
+            "--vestra-guest-dir" => {
+                launch.guest = true;
+                launch.guest_dir = Some(PathBuf::from(value("directory")?));
+            }
             "--plugin" => launch.directories.push(PathBuf::from(value("directory")?)),
             "--seconds" => launch.seconds = Some(value("number")?.parse::<f64>()?),
             "--vestra-restart" => {
@@ -180,6 +191,20 @@ mod tests {
             assert_eq!(Resume::parse(bad), None, "{bad}");
         }
         assert!(parse(&args(&["--vestra-restart", "nope"]), &base).is_err());
+    }
+
+    #[test]
+    fn guest_flags() {
+        let base = cwd();
+        let launch = parse(&args(&["--guest", "--", "a.mkv"]), &base).unwrap();
+        assert!(launch.guest);
+        assert_eq!(launch.guest_dir, None);
+        assert_eq!(launch.files, [base.join("a.mkv")]);
+        let launch = parse(&args(&["--vestra-guest-dir", "g", "b.mkv"]), &base).unwrap();
+        assert!(launch.guest);
+        assert_eq!(launch.guest_dir, Some(PathBuf::from("g")));
+        assert!(parse(&args(&["--vestra-guest-dir"]), &base).is_err());
+        assert!(!parse(&args(&["x.mkv"]), &base).unwrap().guest);
     }
 
     fn cwd() -> PathBuf {
