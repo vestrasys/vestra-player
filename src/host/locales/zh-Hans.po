@@ -689,3 +689,8 @@ msgstr "运行插件命令前重新询问"
 #: src/capabilities/commands_run.rs
 msgid "Plugin commands will ask again"
 msgstr "插件命令将重新询问"
+
+#. The window title of a guest window ("Play in New Window" in the playlist): {} is the usual title ("<file> - Vestra Player" or "Vestra Player").
+#: src/guest.rs
+msgid "{} (Temporary Window)"
+msgstr "{}（临时窗口）"

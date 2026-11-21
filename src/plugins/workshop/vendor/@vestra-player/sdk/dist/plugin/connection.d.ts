@@ -193,5 +193,5 @@ export declare class Connection {
     raw(event: string, listener: Listener): Disposable;
 }
 /** `plugin.app` from the start-up handshake (the runner's environment). */
-export declare function appInfo(raw: unknown, system?: () => Promise<SystemInfo>): App;
+export declare function appInfo(raw: unknown, system?: () => Promise<SystemInfo>, openWindow?: App["openWindow"]): App;
 export {};

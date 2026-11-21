@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.2
+
+- No automatic repository check in a temporary window (guest windows, "Play in New Window", player 0.10.3): the plugin reads `plugin.app.temporary` (SDK 1.10.1). A temporary window runs the main window's plugins read-only: the player refuses installs, updates, uninstalls and enabling or disabling there (`unavailable`), and the store shows that error. Refresh still works. A main window is unchanged. Who must change: nobody.
+
 ## 0.3.1
 
 - A new tab **Not installed** right after All (as Steam and Synaptic name it): the repositories' plugins that this player can install and that are neither installed, built in nor loaded with `--plugin`, one card per repository as under All, with its count in the title. Entries that cannot be installed (Incompatible, every version revoked, a reserved `vestra.` id) are left out: the tab is what you could still add, and All keeps them with the reason. It follows search, Category, Sort and "Show built-in plugins" like the other tabs; empty, it says "There are no more plugins to install", or, without any index, that the repositories cannot be reached. The tab is remembered by name, so a tab kept by 0.3.0 (Installed, Updates) opens as before.

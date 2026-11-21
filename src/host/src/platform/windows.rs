@@ -2153,7 +2153,6 @@ pub fn windows_name(build: Option<u32>) -> String {
     }
 }
 
-/// `%APPDATA%\Vestra`.
 /// Durability barrier for the entries of `directory` (`platform::sync_dir`).
 ///
 /// A rename (`MoveFileExW` / `SetFileInformationByHandle`, which `std::fs::rename`
@@ -2177,6 +2176,7 @@ pub fn sync_dir(directory: &Path) -> std::io::Result<()> {
         .sync_all()
 }
 
+/// `%APPDATA%\Vestra` (`platform::app_data_dir` replaces it in a guest).
 pub fn app_data_dir() -> Option<PathBuf> {
     std::env::var_os("APPDATA").map(|root| PathBuf::from(root).join("Vestra"))
 }

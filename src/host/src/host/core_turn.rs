@@ -925,3 +925,61 @@ fn a_held_request_keeps_its_plugin_busy_until_it_is_taken() {
         "taken to be handled: no longer busy"
     );
 }
+
+/// Guest windows (doc/architecture/guest-windows.md §4): a core on a
+/// read-only library refuses the three changes to the plugins with
+/// `unavailable` and still answers the reads.
+#[test]
+fn a_guest_core_refuses_plugin_changes() {
+    let root = tempfile::tempdir().unwrap();
+    let (mut core, _events, _commands) = core(root.path());
+    core.packages = package_manager::Manager::at_read_only(
+        root.path().join("main-packages"),
+        root.path().join("guest-packages"),
+    )
+    .unwrap();
+    assert!(core.packages.read_only());
+    for (method, params) in [
+        (
+            "packages.install",
+            json!({"requestId":"r","token":"t","expectedRevision":0}),
+        ),
+        ("packages.uninstall", json!({"id":"x"})),
+        ("packages.setEnabled", json!({"id":"x","enabled":false})),
+    ] {
+        let refused = core.package_dispatch(1, method, &params).unwrap_err();
+        assert_eq!(refused.code, "unavailable", "{method}");
+        assert_eq!(refused.message, package_manager::GUEST_PACKAGES);
+    }
+    assert!(
+        core.package_dispatch(1, "packages.list", &json!({}))
+            .is_ok()
+    );
+    assert!(!root.path().join("main-packages").exists(), "nothing made");
+}
+
+/// Guest windows (guest-windows.md §4): the forced removal of versions a
+/// record set aside no longer keeps (`hold_freed`) leaves a version a
+/// running guest leases where it is; the others leave the library.
+#[test]
+fn hold_freed_keeps_a_version_a_running_guest_leases() {
+    let root = tempfile::tempdir().unwrap();
+    let (mut core, _events, _commands) = core(root.path());
+    let library = root.path().join("packages").join("packages");
+    let (leased, other) = ("a".repeat(64), "b".repeat(64));
+    for digest in [&leased, &other] {
+        std::fs::create_dir_all(library.join(digest)).unwrap();
+        std::fs::write(library.join(digest).join("main.js"), "x").unwrap();
+    }
+    let guests = tempfile::tempdir().unwrap();
+    let directory = guests.path().join("guest");
+    std::fs::create_dir(&directory).unwrap();
+    let lock = std::fs::File::create(directory.join("guest.lock")).unwrap();
+    lock.try_lock().unwrap();
+    std::fs::write(directory.join("packages.json"), format!("[\"{leased}\"]")).unwrap();
+    core.packages.set_guests(Some(guests.path().into()));
+    core.hold_freed(&[leased.clone(), other.clone()].into());
+    assert!(library.join(&leased).is_dir(), "leased: left in place");
+    assert!(!library.join(&other).exists(), "taken out of the library");
+    drop(lock);
+}

@@ -1938,6 +1938,18 @@ export class TestHost {
      */
     paletteLead = null;
     /**
+     * Every temporary window a built-in plugin opened with `app.openWindow`,
+     * oldest first: the files and the process id answered
+     * ({@link "@vestra-player/sdk"!App.openWindow | App.openWindow}). No
+     * process starts. A
+     * plugin that is not built in is refused with `capability`, as in the
+     * player; the files are checked as the player does (`invalid`,
+     * `missing`).
+     *
+     * @since 1.10.1
+     */
+    openedWindows = [];
+    /**
      * Simulate the user activating the palette's lead row: Enter (`keep`:
      * Shift+Enter) with `query` typed, or Enter on the status row
      * (`status`). Mints a ticket, sends the `palette.lead` event, waits until

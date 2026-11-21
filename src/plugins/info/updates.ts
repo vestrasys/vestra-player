@@ -56,6 +56,7 @@ export const deps = {
   downloads: () => join(homedir(), "Downloads"),
 };
 
+
 /**
  * Why a check or a download failed: a code about.slint words. `detail` is the
  * HTTP status for `http`, else `""`.
@@ -573,7 +574,9 @@ export class Updater {
   schedule() {
     clearTimeout(this.#timer);
     this.#timer = undefined;
-    if (this.#disposed || !this.#st.settings.auto) return;
+    // A temporary window ("Play in New Window", player 0.10.3, SDK 1.10.1 `AppInfo.temporary`): no automatic check;
+    // Check for Updates… still works there.
+    if (this.#disposed || !this.#st.settings.auto || this.plugin.app.temporary) return;
     const due = this.#due() - deps.now();
     const delay = Math.min(2 ** 31 - 1, Math.max(timing.firstCheck, due));
     this.#timer = setTimeout(() => void this.autoCheck(), delay);

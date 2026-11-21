@@ -55,6 +55,20 @@ mod imp;
 
 pub use imp::*;
 
+/// The application data directory (the profile): a guest's own
+/// (`guest::profile`, doc/architecture/guest-windows.md), else the
+/// system's for this user (`main_app_data_dir`). Defined here, it takes
+/// the place of the per-system one the glob import above brings in.
+pub fn app_data_dir() -> Option<std::path::PathBuf> {
+    crate::guest::profile().or_else(imp::app_data_dir)
+}
+
+/// The main player's application data directory, also in a guest: what a
+/// guest copies its settings from and whose packages it reads.
+pub fn main_app_data_dir() -> Option<std::path::PathBuf> {
+    imp::app_data_dir()
+}
+
 /// The bytes free for this user on the volume holding `path` (an existing
 /// file or directory) and that volume's identity (its root or mount
 /// point), so two paths on one volume are counted together. `None` when

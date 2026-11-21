@@ -736,8 +736,12 @@ impl Drop for Plugin {
 }
 /// `$VESTRA_PLUGIN_DATA`, else `plugin-data` in the application data
 /// directory (`~/Library/Application Support/Vestra` on macOS,
-/// `%APPDATA%\Vestra` on Windows).
+/// `%APPDATA%\Vestra` on Windows). A guest's starts empty in its own
+/// profile: the variable names the main player's (guest-windows.md §3).
 pub fn data_root() -> Option<PathBuf> {
+    if let Some(profile) = crate::guest::profile() {
+        return Some(profile.join("plugin-data"));
+    }
     std::env::var_os("VESTRA_PLUGIN_DATA")
         .map(PathBuf::from)
         .or_else(|| crate::platform::app_data_dir().map(|root| root.join("plugin-data")))

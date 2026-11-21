@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.46
+
+- The vendored SDK is 1.10.1 as published on npm (`npm run vendor:sdk`), the version the player now uses. 1.10.1 adds `AppInfo.temporary`, `App.openWindow` (built-in plugins only) and `TestHost.openedWindows`, documents `unavailable` in a temporary window, and adds the playlist's Play in New Window to `BUILTIN_COMMANDS`; the documentation tree and `capability-scan.json` follow. The Workshop uses none of them. Who must change: nobody.
+
 ## 2.2.45
 
 - The description's last line, starting with `→ `, says where to open the plugin; Store 0.3.1 shows it on the plugin's card, also before install. Description text and its translations only. Who must change: nobody.

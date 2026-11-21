@@ -72,9 +72,14 @@ afterEach(async () => {
   await rm(downloads, { recursive: true, force: true });
 });
 
-async function start(options: { version?: string; dataDirectory?: string; locale?: "zh-Hans"; os?: "windows" | "macos"; arch?: string } = {}) {
+async function start(options: { version?: string; dataDirectory?: string; locale?: "zh-Hans"; os?: "windows" | "macos"; arch?: string; temporary?: boolean } = {}) {
   const host = new TestHost();
-  host.app = { version: options.version ?? "0.6.2", build: "abc1234", components: { mpv: "mpv v0.41.0", libav: { ffmpeg: "9.0.2" }, slint: "1.16.1" } };
+  host.app = {
+    version: options.version ?? "0.6.2",
+    build: "abc1234",
+    components: { mpv: "mpv v0.41.0", libav: { ffmpeg: "9.0.2" }, slint: "1.16.1" },
+    ...(options.temporary ? { temporary: true } : {}),
+  };
   host.systemInfo = { ...host.systemInfo, os: options.os ?? "windows", arch: options.arch ?? "x86_64" };
   host.packages = [];
   const started = await startPlugin(activate, {
@@ -757,5 +762,20 @@ test("J10: a player version that is not a version is logged and never called up 
   } finally {
     console.warn = warn;
     await stop();
+  }
+});
+
+test("Guest windows (player 0.10.3): no automatic check in a temporary window; Check for Updates… still works", async () => {
+  Object.assign(timing, { firstCheck: 20 });
+  net.routes.set(LATEST_URL, { body: latest("0.6.3") });
+  const run = await start({ temporary: true });
+  try {
+    await new Promise((done) => setTimeout(done, 100));
+    assert.equal(net.count(LATEST_URL), 0, "no automatic check");
+    const window = await manualCheck(run.host);
+    assert.equal(window.props["update-state"], "available");
+    assert.equal(net.count(LATEST_URL), 1);
+  } finally {
+    await run.stop();
   }
 });

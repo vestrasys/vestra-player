@@ -227,6 +227,8 @@ test("menu positions follow the round allocation table; list keys only work with
       ["(移除无效项)", 0, "domain", "", ""],
       ["(移除全部)", 0, "domain", "Alt+Delete", "panel"],
       ["(在文件夹中显示)", 0, "domain", "Ctrl+F", "panel"],
+      // 0.2.10: row menu only (`focus: "panel"` keeps it out of the palette).
+      ["(在新窗口播放)", 0, "domain", "", "panel"],
       ["(置顶)", 0, "domain", "", ""],
       ["(上移)", 0, "domain", "Ctrl+ArrowUp", "panel"],
       ["(下移)", 0, "domain", "Ctrl+ArrowDown", "panel"],
@@ -288,7 +290,7 @@ test("every command has a palette category (its submenu or popup label) and a ho
   const app = await start();
   try {
     const commands = [...app.host.commands.entries()];
-    assert.equal(commands.length, 49);
+    assert.equal(commands.length, 50);
     const ids = new Set(commands.map(([id]) => id));
     const byCategory = new Map<string, string[]>();
     const homes = new Map<string, string[]>();
@@ -306,7 +308,7 @@ test("every command has a palette category (its submenu or popup label) and a ho
     assert.deepEqual(
       [...byCategory].map(([category, list]) => [category, list.length]),
       [
-        ["播放列表", 30],
+        ["播放列表", 31],
         ["循环", 4],
         ["打开文件时", 3],
         ["排序", 12],
@@ -340,7 +342,7 @@ test("every command has a palette category (its submenu or popup label) and a ho
       "remember",
       "confirm-clear",
     ]);
-    assert.equal(homes.get("playlist.visibility")?.length, 36);
+    assert.equal(homes.get("playlist.visibility")?.length, 37);
     assert.equal(app.command("visibility").declaration.home, undefined);
     assert.equal(app.command("open-folder").declaration.home, undefined);
     assert.equal(app.command("sort-size").declaration.home, "playlist.visibility");
@@ -589,10 +591,12 @@ test("the list menu, ADD and SORT popups list this plugin's commands; sorting re
   const app = await start();
   try {
     await app.emit("context-menu", 40, 60);
-    // 17 commands and 7 separators, single level (Panel.showMenu: at most 32).
+    // 18 commands and 7 separators, single level (Panel.showMenu: at most 32); Play in New Window
+    // (0.2.10) not on macOS yet.
     assert.deepEqual(app.host.menus.at(-1), {
       items: [
         "playlist.play",
+        ...(process.platform === "darwin" ? [] : ["playlist.play-new-window"]),
         null,
         "playlist.list-add",
         "playlist.list-add-folder",

@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { TestHost } from "@vestra-player/sdk/testing";
 import { timing } from "../store.ts";
 import { actions, ALL, banners, BUILTIN, choose, FakeNet, info, INSTALLED, OFFICIAL, openStore, props, publish, rows, showBuiltins, start, tab, THIRD, until, UPDATES, yes } from "./helpers.ts";
 
@@ -145,6 +146,26 @@ test("automatic check: once after activation, then daily; off means no network",
   } finally {
     Object.assign(timing, defaults);
     rmSync(data, { recursive: true, force: true });
+  }
+});
+
+test("Guest windows (player 0.10.3): no automatic check in a temporary window (AppInfo.temporary)", async () => {
+  const defaults = { ...timing };
+  const net = new FakeNet();
+  publish(net, OFFICIAL, []);
+  Object.assign(timing, { firstCheck: 20, tick: 10, interval: 86_400_000 });
+  const host = new TestHost();
+  host.app = { ...host.app, temporary: true };
+  try {
+    const run = await start({ net, host, now: () => 10 * 86_400_000 });
+    try {
+      await run.host.settle(200);
+      assert.equal(net.count(OFFICIAL), 0, "no automatic check");
+    } finally {
+      await run.stop();
+    }
+  } finally {
+    Object.assign(timing, defaults);
   }
 });
 

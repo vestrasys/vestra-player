@@ -802,3 +802,9 @@ msgstr "Volver a preguntar antes de los comandos de complementos"
 #, x-machine
 msgid "Plugin commands will ask again"
 msgstr "Los comandos de complementos volverán a preguntar"
+
+#. The window title of a guest window ("Play in New Window" in the playlist): {} is the usual title ("<file> - Vestra Player" or "Vestra Player").
+#: src/guest.rs
+#, x-machine
+msgid "{} (Temporary Window)"
+msgstr "{} (Ventana temporal)"

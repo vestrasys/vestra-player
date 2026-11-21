@@ -7,7 +7,8 @@
 //! since player 0.9.0 (SDK 1.9.0) a manifest declares nothing, and every
 //! plugin may make every request (doc/plugins/README.md). The one refusal
 //! left is by provenance: the built-in-only areas (`commands.run`,
-//! `palette.lead`) answer only built-in plugins (`Route::check_caller`).
+//! `palette.lead`, `app.windows`) answer only built-in plugins
+//! (`Route::check_caller`).
 //! [`ALL`] and `uncapable.rs` are the only lists: the dispatch (`lookup`)
 //! is built from them.
 use crate::{
@@ -17,6 +18,7 @@ use crate::{
 use serde_json::Value;
 use std::{collections::HashMap, sync::OnceLock};
 
+mod app_windows;
 mod bindings_manage;
 mod clipboard;
 mod commands;
@@ -241,6 +243,8 @@ pub static ALL: &[&dyn Capability] = &[
     &mpv::Mpv,
     // Triggers (SDK 1.10.0).
     &triggers::Triggers,
+    // Built-in only: guest windows (player 0.10.3, guest-windows.md).
+    &app_windows::AppWindows,
 ];
 
 /// Where a method goes: its owner (`None`: `uncapable`).
@@ -377,7 +381,7 @@ mod tests {
         }
     }
 
-    /// `commands.run` and `palette.lead` are refused to a plugin that is not
+    /// `commands.run`, `palette.lead` and `app.windows` are refused to a plugin that is not
     /// built-in, live (`Core::dispatch`) and replayed (`replay`); every
     /// other area is open to every plugin.
     #[test]
@@ -388,13 +392,14 @@ mod tests {
             .filter(|info| info.builtin_only)
             .map(|info| info.name)
             .collect();
-        assert_eq!(only, ["commands.run", "palette.lead"]);
+        assert_eq!(only, ["commands.run", "palette.lead", "app.windows"]);
         for method in [
             "commands.list",
             "commands.run",
             "palette.lead.set",
             "palette.lead.clear",
             "palette.lead.done",
+            "app.openWindow",
         ] {
             let route = lookup(method).unwrap();
             assert!(route.builtin_only(), "{method}");

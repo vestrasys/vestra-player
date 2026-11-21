@@ -238,14 +238,15 @@ impl Host {
             let _ = shell.set_property("no-video", next.into());
         }
     }
-    /// C9: the window title the core decided (`source_title`).
+    /// C9: the window title the core decided (`source_title`), with a
+    /// guest window's marker (`guest::decorate`).
     fn update_title(&mut self, title: String) {
         if title != self.window_title {
             self.window_title = title;
             if let Some(shell) = &self.shell {
                 let _ = shell.set_property(
                     "window-title",
-                    SValue::String(self.window_title.as_str().into()),
+                    SValue::String(crate::guest::decorate(&self.window_title).into()),
                 );
             }
         }

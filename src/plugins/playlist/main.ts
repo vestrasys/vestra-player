@@ -69,6 +69,7 @@ const sortKeys = [
 /** The titles of the list commands (context menu, bottom-bar popups, list-focus keys). */
 type ListTitle =
   | "Play"
+  | "Play in New Window"
   | "Add Files…"
   | "Add Folder…"
   | "Add Link…"
@@ -133,6 +134,10 @@ type Question = Omit<ConfirmOptions, "cancel"> &
 export const SETTINGS_PAGE = "playlist";
 /** C23: at most this many selected files are shown in the file manager. */
 export const REVEAL_LIMIT = 20;
+/** "Play in New Window" sends at most this many selected files (the player's `app.openWindow` limit). */
+export const NEW_WINDOW_FILES = 64;
+/** "Play in New Window" is in the row menu where the player opens new windows (not macOS yet). */
+const NEW_WINDOWS = process.platform !== "darwin";
 
 /** Injected in tests: the sort's shuffle source. */
 export type Options = { random: () => number };
@@ -476,6 +481,15 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
    * C23: the selected local files (not links, at most 20), one file manager window per
    * folder showing its first file that still exists; else the folder itself.
    */
+  /** "Play in New Window": the selected local files, in list order, the first `NEW_WINDOW_FILES`. */
+  const playInNewWindow = guard(async () => {
+    const paths = queue
+      .marked()
+      .filter((row) => row.kind === "file")
+      .map((row) => row.source)
+      .slice(0, NEW_WINDOW_FILES);
+    if (paths.length) await plugin.app.openWindow(paths);
+  });
   const revealSelected = guard(async () => {
     const paths = queue.marked().filter((row) => row.kind === "file").map((row) => row.source);
     // One clause each: the limit, then every file not found.
@@ -778,8 +792,16 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   });
   const removeAll = listCommand("clear", "Remove All", hasRows, clearAll, ["Alt+Delete"], DESTRUCTIVE);
   const hasLocal = () => queue.marked().some((row) => row.kind === "file");
+  const localReason = () => (hasLocal() ? null : queue.selection.size ? "Links have no local location" : "Nothing to act on");
   const revealCommand = listCommand("reveal", "Show in Folder", hasLocal, revealSelected, ["Ctrl+F"], {
-    reason: () => (hasLocal() ? null : queue.selection.size ? "Links have no local location" : "Nothing to act on"),
+    reason: localReason,
+  });
+  // Guest windows (user ruling 2026-11-21, player 0.10.3): the selected local files play in a new
+  // temporary window. The row menu is its only entry: `focus: "panel"` without a key keeps it out
+  // of the command palette. Not on macOS yet (the player answers `unsupported` there).
+  const newWindow = listCommand("play-new-window", "Play in New Window", hasLocal, playInNewWindow, undefined, {
+    reason: localReason,
+    focus: "panel",
   });
   const moveReason = (where: Placement) => (): Reason | null =>
     queue.canPlace(where) ? null : queue.filtering ? "The order cannot change while searching" : "Nothing to act on";
@@ -1100,6 +1122,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     list.showMenu(
       [
         play,
+        ...(NEW_WINDOWS ? [newWindow] : []),
         null,
         add,
         addFolderCommand,
