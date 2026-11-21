@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.16
+
+- The description's last line, starting with `→ `, says where to open the plugin; Store 0.3.1 shows it on the plugin's card, also before install. Description text and its translations only. Who must change: nobody.
+
 ## 1.0.15
 
 - Manifest capabilities are gone (SDK 1.9.0, player 0.9.0): `capabilities` is removed from manifest.json. `activate()` now starts with `await plugin.player.read()` (was `playback.read`), the call that replaces the one declaration that changed how it ran; the others need nothing. Behaviour is unchanged, except the ruled start-up order: the player's `window.state` read now comes before the state requests. Who must change: nobody.

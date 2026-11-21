@@ -1,6 +1,6 @@
 {
   "id": "vestra.subtitle-online",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "name": "Online Subtitles",

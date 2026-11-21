@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.45
+
+- The description's last line, starting with `→ `, says where to open the plugin; Store 0.3.1 shows it on the plugin's card, also before install. Description text and its translations only. Who must change: nobody.
+
 ## 2.2.44
 
 - The vendored SDK is 1.10.0 as published on npm (`npm run vendor:sdk`), the version the player now uses. 1.10.0 adds the source events, triggers (`plugin.trigger`), the state stream (`plugin.player.stream`), the grown `when` language, 1000 timeline ranges and the TestHost's trigger model; the documentation tree and `capability-scan.json` (the new members) follow. The Workshop uses none of them; the layout the scan uses is unchanged. Who must change: nobody.
