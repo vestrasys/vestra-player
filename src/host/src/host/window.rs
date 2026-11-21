@@ -341,7 +341,15 @@ impl Host {
                     && facts["slots"]["sidebar"]["detached"] == true;
                 self.sync_floating(detached);
                 let changed = facts != self.window_facts;
-                if changed || self.policy_tabs() != self.tabs_sent {
+                if self.facts_quiet {
+                    // A batch's own layout pass (`apply_batch`, plan step
+                    // S3b): the facts go with its handoff, not as a report of
+                    // their own (R13: the state, the reply, the broadcast).
+                    if changed {
+                        self.measured_shell = Some(self.shell_generation);
+                        self.window_facts = facts;
+                    }
+                } else if changed || self.policy_tabs() != self.tabs_sent {
                     if changed {
                         self.measured_shell = Some(self.shell_generation);
                         self.window_facts = facts.clone();

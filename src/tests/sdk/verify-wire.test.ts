@@ -25,6 +25,8 @@ const {
   noiseSize,
   diffPaths,
   lineClass,
+  workerOf,
+  REVISION_REPLIES,
   normaliseTrace,
   readTrace,
   streamOf,
@@ -81,7 +83,8 @@ const B = { owner: 9, idBase: 50, t0: 380, profile: "D:\\work\\b\\profile" };
 
 /** One plugin's talk: an independent read, a UI-bound mount, a broadcast. */
 const STEPS: Step[] = [
-  ["x.one", "in", { id: 1, method: "source.state", params: {} }],
+  // An independent read answered in the core (not by a worker: S3b).
+  ["x.one", "in", { id: 1, method: "timeline.marks", params: {} }],
   ["x.one", "in", { id: 2, method: "ui.mount", params: { slot: "sidebar" } }],
   [
     "x.one",
@@ -244,17 +247,33 @@ test("allowed reorders, class 3: interface-report lines keep their order and the
   // reply), an independent read, a window.state broadcast, a ui.error, a
   // core broadcast and an interface failure's host.error.
   const steps: Step[] = [
-    ["z.three", "in", { id: 1, method: "ui.mount", params: { slot: "sidebar" } }],
-    ["z.three", "in", { id: 2, method: "source.state", params: {} }],
+    [
+      "z.three",
+      "in",
+      { id: 1, method: "ui.mount", params: { slot: "sidebar" } },
+    ],
+    ["z.three", "in", { id: 2, method: "timeline.marks", params: {} }],
     ["z.three", "out", { id: 2, result: { phase: "idle" } }],
     ["z.three", "out", { event: "source.state", data: { phase: "idle" } }],
     ["z.three", "out", { event: "ui.preparing", data: { phase: "preparing" } }],
     ["z.three", "out", { event: "ui.preparing", data: { phase: "ready" } }],
     ["z.three", "out", { id: 1, result: { ok: true } }],
     ["z.three", "out", { event: "window.state", data: { fullscreen: false } }],
-    ["z.three", "out", { event: "ui.error", data: { code: "ui", message: "m" } }],
-    ["z.three", "out", { event: "host.error", data: { code: "menu-bridge", message: "b" } }],
-    ["z.three", "out", { event: "host.error", data: { code: "decode", message: "c" } }],
+    [
+      "z.three",
+      "out",
+      { event: "ui.error", data: { code: "ui", message: "m" } },
+    ],
+    [
+      "z.three",
+      "out",
+      { event: "host.error", data: { code: "menu-bridge", message: "b" } },
+    ],
+    [
+      "z.three",
+      "out",
+      { event: "host.error", data: { code: "decode", message: "c" } },
+    ],
   ];
   const a = normalise(trace(steps, A), A);
   const at = (list: Step[]) => normalise(trace(list, B), B);
@@ -263,12 +282,20 @@ test("allowed reorders, class 3: interface-report lines keep their order and the
   // The UI side (preparing, preparing, reply, window.state, ui.error,
   // menu-bridge) moved ahead of the core's reply and broadcast, in its
   // order: allowed, six moves (one of class 2, five of class 3).
-  const moved: Step[] = [...steps.slice(0, 2), ...steps.slice(4, 10), ...steps.slice(2, 4), steps[10]];
+  const moved: Step[] = [
+    ...steps.slice(0, 2),
+    ...steps.slice(4, 10),
+    ...steps.slice(2, 4),
+    steps[10],
+  ];
   const allowed = compareTraces(a, at(moved), { allowReorders: true });
   assert.deepEqual(allowed.differences, []);
   assert.deepEqual(allowed.moves, { 2: 1, 3: 5 });
   assert.equal(allowed.reorders.length, 1);
-  assert.match(allowed.reorders[0], /1 moved\) and the interface-report lines \(5 moved\)/);
+  assert.match(
+    allowed.reorders[0],
+    /1 moved\) and the interface-report lines \(5 moved\)/,
+  );
   // Strict mode sees a difference.
   assert.equal(compareTraces(a, at(moved)).differences.length, 1);
   // ui.preparing after its reply: a class-3 line left its place by the
@@ -306,30 +333,232 @@ test("allowed reorders, worker replies: a clipboard reply may move against the c
   const moved: Step[] = [steps[0], steps[1], steps[3], steps[2]];
   const a = normalise(trace(steps, A), A);
   const b = normalise(trace(moved, B), B);
-  assert.equal(compareTraces(a, b).differences.length, 1, "strict: a difference");
+  assert.equal(
+    compareTraces(a, b).differences.length,
+    1,
+    "strict: a difference",
+  );
   const allowed = compareTraces(a, b, { allowReorders: true });
   assert.deepEqual(allowed.differences, []);
-  assert.deepEqual(allowed.moves, { 2: 0, 3: 0 }, "not counted as a class 2 or 3 move");
+  assert.deepEqual(
+    allowed.moves,
+    { 2: 0, 3: 0 },
+    "not counted as a class 2 or 3 move",
+  );
   assert.equal(lineClass(a.plugins["w.one"].out[1]), 4);
+});
+
+test("allowed reorders, worker replies: a playback worker reply may move against a core reply (S3b)", () => {
+  // Plan step S3b (K14 ruling): the reply to source.state waits for the
+  // playback worker; a core-answered request sent at the same time may be
+  // answered before or after it.
+  const steps: Step[] = [
+    ["w.two", "in", { id: 1, method: "source.state", params: {} }],
+    ["w.two", "in", { id: 2, method: "timeline.marks", params: {} }],
+    ["w.two", "out", { id: 2, result: { marks: [], ranges: [] } }],
+    ["w.two", "out", { id: 1, result: { phase: "idle" } }],
+  ];
+  const moved: Step[] = [steps[0], steps[1], steps[3], steps[2]];
+  const a = normalise(trace(steps, A), A);
+  const b = normalise(trace(moved, B), B);
+  assert.equal(
+    compareTraces(a, b).differences.length,
+    1,
+    "strict: a difference",
+  );
+  const allowed = compareTraces(a, b, { allowReorders: true });
+  assert.deepEqual(allowed.differences, []);
+  assert.deepEqual(
+    allowed.moves,
+    { 2: 0, 3: 0 },
+    "not counted as a class 2 or 3 move",
+  );
+  assert.equal(lineClass(a.plugins["w.two"].out[1]), 4);
+  assert.equal(
+    lineClass(a.plugins["w.two"].out[0]),
+    1,
+    "timeline.marks is answered in the core",
+  );
+});
+
+test("allowed reorders, worker replies: one worker's replies keep their order; two workers' may cross", () => {
+  const steps: Step[] = [
+    ["w.three", "in", { id: 1, method: "source.state", params: {} }],
+    ["w.three", "in", { id: 2, method: "player.chapters", params: {} }],
+    ["w.three", "in", { id: 3, method: "clipboard.readText", params: {} }],
+    ["w.three", "out", { id: 1, result: { phase: "idle" } }],
+    ["w.three", "out", { id: 2, result: { chapters: [] } }],
+    ["w.three", "out", { id: 3, result: "text" }],
+  ];
+  const a = normalise(trace(steps, A), A);
+  // The two playback worker replies swapped: a difference.
+  const swapped: Step[] = [
+    steps[0],
+    steps[1],
+    steps[2],
+    steps[4],
+    steps[3],
+    steps[5],
+  ];
+  const own = compareTraces(a, normalise(trace(swapped, B), B), {
+    allowReorders: true,
+  });
+  assert.equal(own.differences.length, 1);
+  assert.match(own.differences[0], /playback worker replies/);
+  // The clipboard reply before both playback replies: allowed.
+  const crossed: Step[] = [
+    steps[0],
+    steps[1],
+    steps[2],
+    steps[5],
+    steps[3],
+    steps[4],
+  ];
+  const cross = compareTraces(a, normalise(trace(crossed, B), B), {
+    allowReorders: true,
+  });
+  assert.deepEqual(cross.differences, []);
+});
+
+test("worker replies: the methods of each worker, from the code", () => {
+  for (const method of [
+    "source.state",
+    "processing.state",
+    "playback.stats",
+    "player.chapters",
+    "player.audioDevices",
+    "playback.set",
+    "source.submit",
+    "source.operation",
+    "audio.addTrack",
+    "audio.selectTrack",
+    "player.setLoop",
+    "player.setAudioDevice",
+    "player.step",
+    "processing.replace",
+    "processing.operation",
+    "video.shaders.set",
+    "video.view.set",
+    "video.render.release",
+    "snapshot.state",
+    "jobs.start",
+    "media.sources.open",
+    "subtitles.state",
+    "producer.prepare",
+    "mpv.get",
+    "video.motion.set",
+    "video.upscaling.state",
+    "sourceResolvers.respond",
+  ])
+    assert.equal(workerOf(method), "playback", method);
+  for (const method of [
+    "player.setStepSeek",
+    "power.preventSleep",
+    "sequence.set",
+    "sequence.step",
+    "timeline.marks",
+    "commands.register",
+    "storage.session.get",
+    "ui.mount",
+  ])
+    assert.equal(workerOf(method), null, method);
+  assert.equal(workerOf("clipboard.writeText"), "clipboard");
+});
+
+test("worker replies: a UI-bound reply is never a worker reply (media.sources.locate stays class 2)", () => {
+  // S3b review: `media.sources.locate` is behind the `media.sources.`
+  // prefix the playback worker answers, but its reply waits for the
+  // user's choice in a file dialog (UI-bound, design row 65c).
+  assert.equal(workerOf("media.sources.locate"), null);
+  assert.equal(workerOf("media.sources.open"), "playback");
+  for (const method of STREAMS.uiBound)
+    assert.equal(workerOf(method), null, `${method} is UI-bound`);
+  const steps: Step[] = [
+    ["l.one", "in", { id: 1, method: "media.sources.locate", params: {} }],
+    ["l.one", "in", { id: 2, method: "timeline.marks", params: {} }],
+    ["l.one", "out", { id: 2, result: { marks: [], ranges: [] } }],
+    ["l.one", "out", { id: 1, result: { path: "x" } }],
+  ];
+  const a = normalise(trace(steps, A), A);
+  assert.equal(a.plugins["l.one"].out[1].stream, "B");
+  assert.equal(lineClass(a.plugins["l.one"].out[1]), 2);
+  // Moved against the core reply: an allowed class 2 move, counted.
+  const moved: Step[] = [steps[0], steps[1], steps[3], steps[2]];
+  const allowed = compareTraces(a, normalise(trace(moved, B), B), {
+    allowReorders: true,
+  });
+  assert.deepEqual(allowed.differences, []);
+  assert.deepEqual(allowed.moves, { 2: 1, 3: 0 });
+});
+
+test("revision noise: only result.revision of the shared counters is not compared (S3b)", () => {
+  assert.deepEqual([...REVISION_REPLIES].sort(), [
+    "commands.keys",
+    "commands.list",
+    "commands.register",
+    "commands.update",
+  ]);
+  const steps = (revision: number, own: number): Step[] => [
+    [
+      "r.one",
+      "in",
+      { id: 1, method: "commands.register", params: { id: "x" } },
+    ],
+    ["r.one", "out", { id: 1, result: { revision } }],
+    ["r.one", "in", { id: 2, method: "processing.operation", params: {} }],
+    ["r.one", "out", { id: 2, result: { revision: own } }],
+  ];
+  const a = normalise(trace(steps(24, 1), A), A);
+  // The registry revision differs: no difference.
+  assert.deepEqual(
+    compareTraces(a, normalise(trace(steps(26, 1), B), B)).differences,
+    [],
+  );
+  // processing.operation's own revision differs: a difference.
+  assert.equal(
+    compareTraces(a, normalise(trace(steps(24, 2), B), B)).differences.length,
+    1,
+  );
 });
 
 test("allowed reorders: the summary totals the reorders and the moves per class", () => {
   // The class-3 case above (one reorder: one class-2 and five class-3
   // moves), written as two V2 run directories.
   const steps: Step[] = [
-    ["z.three", "in", { id: 1, method: "ui.mount", params: { slot: "sidebar" } }],
-    ["z.three", "in", { id: 2, method: "source.state", params: {} }],
+    [
+      "z.three",
+      "in",
+      { id: 1, method: "ui.mount", params: { slot: "sidebar" } },
+    ],
+    ["z.three", "in", { id: 2, method: "timeline.marks", params: {} }],
     ["z.three", "out", { id: 2, result: { phase: "idle" } }],
     ["z.three", "out", { event: "source.state", data: { phase: "idle" } }],
     ["z.three", "out", { event: "ui.preparing", data: { phase: "preparing" } }],
     ["z.three", "out", { event: "ui.preparing", data: { phase: "ready" } }],
     ["z.three", "out", { id: 1, result: { ok: true } }],
     ["z.three", "out", { event: "window.state", data: { fullscreen: false } }],
-    ["z.three", "out", { event: "ui.error", data: { code: "ui", message: "m" } }],
-    ["z.three", "out", { event: "host.error", data: { code: "menu-bridge", message: "b" } }],
-    ["z.three", "out", { event: "host.error", data: { code: "decode", message: "c" } }],
+    [
+      "z.three",
+      "out",
+      { event: "ui.error", data: { code: "ui", message: "m" } },
+    ],
+    [
+      "z.three",
+      "out",
+      { event: "host.error", data: { code: "menu-bridge", message: "b" } },
+    ],
+    [
+      "z.three",
+      "out",
+      { event: "host.error", data: { code: "decode", message: "c" } },
+    ],
   ];
-  const moved: Step[] = [...steps.slice(0, 2), ...steps.slice(4, 10), ...steps.slice(2, 4), steps[10]];
+  const moved: Step[] = [
+    ...steps.slice(0, 2),
+    ...steps.slice(4, 10),
+    ...steps.slice(2, 4),
+    steps[10],
+  ];
   const root = mkdtempSync(join(tmpdir(), "verify-wire-"));
   for (const [side, run, list] of [
     ["a", A, steps],
@@ -398,7 +627,7 @@ test("the command line compares V2 run directories step by step", () => {
 });
 
 test("the noise of two base runs hides their differences, not new ones", () => {
-  // Two base runs: x.one's first source.state reply differs (a timing value
+  // Two base runs: x.one's first timeline.marks reply differs (a timing value
   // the normaliser keeps), and y.two's ready and reply change places.
   const base2 = STEPS.map((step): Step =>
     step[1] === "out" && step[2].id === 1
@@ -411,7 +640,7 @@ test("the noise of two base runs hides their differences, not new ones", () => {
   const noise = noiseOf(a, b);
   assert.deepEqual(Object.keys(noise).sort(), ["x.one", "y.two"]);
   assert.deepEqual(Object.keys(noise["x.one"].out.kinds), [
-    "reply:source.state",
+    "reply:timeline.marks",
   ]);
   assert.equal(noiseSize(noise).plugins, 2);
   // A third run like either base: nothing outside the noise.
@@ -432,13 +661,14 @@ test("the noise of two base runs hides their differences, not new ones", () => {
     noise,
   );
   assert.equal(differences.length, 2, differences.join("\n"));
+  // Listed by kind: storage.session.get before timeline.marks.
   assert.match(
     differences[0],
-    /reply:source.state: a line neither base run had/,
+    /reply:storage.session.get, its line 1 \(not noisy/,
   );
   assert.match(
     differences[1],
-    /reply:storage.session.get, its line 1 \(not noisy/,
+    /reply:timeline.marks: a line neither base run had/,
   );
 });
 

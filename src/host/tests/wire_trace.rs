@@ -271,22 +271,25 @@ fn two_runs_of_controlled_plugins_have_exactly_equal_wire_traces() {
             std::fs::copy(trace, dir.join(name).with_extension("wire.jsonl")).unwrap();
         }
     }
-    for mode in [None, Some("--allow-reorders")] {
-        let mut args: Vec<&std::ffi::OsStr> = vec![
-            "diff".as_ref(),
-            traces[0].as_os_str(),
-            traces[1].as_os_str(),
-        ];
-        for root in &roots {
-            args.push("--root".as_ref());
-            args.push(root.as_ref());
-        }
-        if let Some(mode) = mode {
-            args.push(mode.as_ref());
-        }
-        let (code, text) = verify_wire(&args);
-        assert_eq!(code, 0, "{text}");
-        assert!(text.contains("RESULT: PASS, no difference"), "{text}");
-        assert!(!text.contains("ALLOWED REORDERS"), "{text}");
+    // The two runs compared in the allowed-reorders mode (plan step S3b,
+    // the K14 ruling): with the event-driven core a reply the playback
+    // worker gives may come before or after the reply to a request sent at
+    // the same time, and a shared counter's `result.revision` depends on
+    // timing (`verify-wire.mjs` `WORKERS`, `REVISION_REPLIES`), so the
+    // strict mode no longer holds between two runs of one build. Still no
+    // difference, and no UI-bound or interface-report line moved.
+    let mut args: Vec<&std::ffi::OsStr> = vec![
+        "diff".as_ref(),
+        traces[0].as_os_str(),
+        traces[1].as_os_str(),
+    ];
+    for root in &roots {
+        args.push("--root".as_ref());
+        args.push(root.as_ref());
     }
+    args.push("--allow-reorders".as_ref());
+    let (code, text) = verify_wire(&args);
+    assert_eq!(code, 0, "{text}");
+    assert!(text.contains("RESULT: PASS, no difference"), "{text}");
+    assert!(!text.contains("ALLOWED REORDERS"), "{text}");
 }
