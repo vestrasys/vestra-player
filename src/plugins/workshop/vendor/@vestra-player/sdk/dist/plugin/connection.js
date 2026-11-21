@@ -158,7 +158,7 @@ export class Connection {
             locale: transport.locale,
         });
         const host = this.host;
-        this.app = appInfo(app, () => host.app.system());
+        this.app = appInfo(app, () => host.app.system(), (paths) => host.app.openWindow([...paths]));
         const features = app
             ?.features;
         this.features = new Set(Array.isArray(features)
@@ -542,7 +542,7 @@ function allWhys(group) {
     return [...new Set([...group.whys.values()].map((why) => why()))];
 }
 /** `plugin.app` from the start-up handshake (the runner's environment). */
-export function appInfo(raw, system = () => Promise.reject(failure("unavailable", "no player to ask"))) {
+export function appInfo(raw, system = () => Promise.reject(failure("unavailable", "no player to ask")), openWindow = () => Promise.reject(failure("unavailable", "no player to ask"))) {
     const info = (raw ?? {});
     const parts = (info.components ?? {});
     const text = (value) => (typeof value === "string" ? value : null);
@@ -558,8 +558,14 @@ export function appInfo(raw, system = () => Promise.reject(failure("unavailable"
             libav: Object.freeze(libav),
             slint: text(parts.slint) ?? "",
         }),
+        // Only in a temporary window (player 0.10.3); absent otherwise.
+        ...(info.temporary === true ? { temporary: true } : {}),
     };
-    // A method, not data: kept out of comparisons and JSON of the facts.
+    // Methods, not data: kept out of comparisons and JSON of the facts.
     Object.defineProperty(app, "system", { value: system, enumerable: false });
+    Object.defineProperty(app, "openWindow", {
+        value: openWindow,
+        enumerable: false,
+    });
     return Object.freeze(app);
 }

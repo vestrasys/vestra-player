@@ -354,6 +354,9 @@ export class Store {
   async start() {
     await this.reread();
     await this.updateMenu();
+    // A temporary window ("Play in New Window", player 0.10.3, SDK 1.10.1 `AppInfo.temporary`) installs nothing: no
+    // automatic check there (a check the user starts still runs).
+    if (this.plugin.app.temporary) return;
     const first = setTimeout(() => void this.autoCheck(), timing.firstCheck);
     const tick = setInterval(() => {
       if (this.deps.now() - this.settings.value.lastCheck >= timing.interval) void this.autoCheck();

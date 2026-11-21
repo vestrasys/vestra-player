@@ -182,6 +182,10 @@ pub fn rendering_json(gpu: bool) -> Value {
     json!(if gpu { "gpu" } else { "software" })
 }
 
+/// `secrets.set` and `secrets.delete` in a guest window.
+pub(crate) const GUEST_SECRETS: &str =
+    "a temporary window cannot save or delete sign-in details; use the main window";
+
 /// Computed once per host process, off the UI thread.
 static FACTS: OnceLock<platform::OsFacts> = OnceLock::new();
 
@@ -218,6 +222,11 @@ impl Core {
                     .map(|plugin| plugin.data_key.secret_service())
                     .ok_or_else(|| RpcError::new("disabled", "plugin no longer running"))?;
                 let name = secret_name(params)?.to_owned();
+                // A guest window reads the main profile's entries and
+                // changes none (user ruling 2026-11-21, guest-windows.md §4).
+                if method != "secrets.get" && crate::guest::active() {
+                    return Err(RpcError::new("unavailable", GUEST_SECRETS));
+                }
                 // The host records the names, so uninstalling can delete them.
                 let index = self.packages.secrets.clone();
                 match method {

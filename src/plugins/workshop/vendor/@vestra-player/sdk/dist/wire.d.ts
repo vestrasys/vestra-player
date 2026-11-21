@@ -966,6 +966,9 @@ export declare function createWire(transport: Transport): {
     };
     app: {
         system: () => Promise<WireSystemInfo>;
+        openWindow: (paths: string[]) => Promise<{
+            pid: number;
+        }>;
     };
     /**
      * The rendering choice: `state`, `setPreference` and `restart`.

@@ -805,3 +805,9 @@ msgstr "Vor Plugin-Befehlen wieder fragen"
 #, x-machine
 msgid "Plugin commands will ask again"
 msgstr "Plugin-Befehle fragen wieder nach"
+
+#. The window title of a guest window ("Play in New Window" in the playlist): {} is the usual title ("<file> - Vestra Player" or "Vestra Player").
+#: src/guest.rs
+#, x-machine
+msgid "{} (Temporary Window)"
+msgstr "{} (Temporäres Fenster)"

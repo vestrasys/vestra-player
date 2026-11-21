@@ -16,6 +16,7 @@ mod conditions;
 mod core_actions;
 pub mod font_asset;
 pub mod font_carrier;
+mod guest;
 pub mod host;
 mod i18n;
 mod input_trace;
@@ -291,7 +292,20 @@ fn player() -> Result<()> {
         urls,
         restart,
         resume,
+        guest,
+        guest_dir,
     } = launch::parse(&args, &std::env::current_dir()?)?;
+    // A guest window (doc/architecture/guest-windows.md): its own temporary
+    // profile from here on (`platform::app_data_dir`), deleted when this
+    // function returns (`_guest`). A main player sweeps what guests that
+    // crashed left behind.
+    guest::set_silent(silent);
+    let _guest = if guest {
+        Some(guest::start(guest_dir)?)
+    } else {
+        guest::sweep_later();
+        None
+    };
     for url in &urls {
         diag!("host.warning open: {url} is not a file; open links from a plugin's command");
     }
@@ -299,13 +313,15 @@ fn player() -> Result<()> {
     // hands its files to the running one and exits. Development runs
     // (`--plugin`) and headless ones stay on their own unless
     // `VESTRA_INSTANCE_DIR` names the directory to coordinate in (tests).
+    // A guest takes no part: it never takes the lock nor hands files over.
     let instance_dir = std::env::var_os("VESTRA_INSTANCE_DIR")
         .map(PathBuf::from)
         .or_else(|| {
             (!headless && directories.is_empty())
                 .then(platform::app_data_dir)
                 .flatten()
-        });
+        })
+        .filter(|_| !guest);
     // A restart (`rendering.restart`, or after the windows' GPU device was
     // lost) first waits for the process it replaces to end: that one's
     // crash guard and files are final then (Windows; elsewhere at once).
@@ -337,7 +353,8 @@ fn player() -> Result<()> {
     // lines to `<app data>/logs/host.log`; opened once this process is the
     // player (a launch that handed its files over has returned above).
     if let Some(path) = diag::log_path(
-        std::env::var_os("VESTRA_LOG_FILE"),
+        // A guest's log is its own (the variable names the main player's).
+        std::env::var_os("VESTRA_LOG_FILE").filter(|_| !guest),
         cfg!(not(debug_assertions)),
         headless,
         !directories.is_empty(),
@@ -564,12 +581,18 @@ fn player() -> Result<()> {
     // `features`: protocol additions the SDK detects (not part of the plugin
     // API): row patches of property writes (ui_patch.rs).
     // `version` is the release version (`version.rs`), not the host's.
-    process::set_app_info(&json!({"version":version::player(),
+    let mut app_info = json!({"version":version::player(),
         "build":option_env!("VESTRA_BUILD"),
         "features":[ui::ui_patch::FEATURE],
         "components":{"mpv":backend.versions["mpv"],
             "libav":if ffmpeg.is_string() { json!({"ffmpeg":ffmpeg}) } else { json!({}) },
-            "slint":env!("VESTRA_SLINT_VERSION")}}));
+            "slint":env!("VESTRA_SLINT_VERSION")}});
+    // A guest window (doc/architecture/guest-windows.md §4); absent in a
+    // main player.
+    if guest {
+        app_info["temporary"] = json!(true);
+    }
+    process::set_app_info(&app_info);
     let (mount_events, mount_input) = mpsc::sync_channel(64);
     let reaper = process::reaper::Reaper::spawn(events.clone());
     let on_demand = host::supervisor::OnDemand::from_env();

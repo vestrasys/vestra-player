@@ -11,542 +11,547 @@ msgstr ""
 msgid "Nothing to add: {}"
 msgstr "追加できる項目がありません：{}"
 
-#: main.ts:164
+#: main.ts:171
 #, x-machine
 msgid "Added {count} files from the same folder"
 msgstr "同じフォルダの {count} 個のファイルを追加しました"
 
-#: main.ts:164
+#: main.ts:171
 #, x-machine
 msgid "Added {count} files from the same folder, limit of {limit} reached"
 msgstr "同じフォルダの {count} 個のファイルを追加しました（上限の {limit} 個に達しました）"
 
-#: main.ts:164
+#: main.ts:171
 #, x-machine
 msgid "Nothing to add"
 msgstr "追加できる項目がありません"
 
-#: main.ts:164
+#: main.ts:171
 #, x-machine
 msgid "Link added"
 msgstr "リンクを追加しました"
 
-#: main.ts:164
+#: main.ts:171
 #, x-machine
 msgid "Existing link selected"
 msgstr "既存のリンクを選択しました"
 
-#: main.ts:164
+#: main.ts:171
 #, x-machine
 msgid "Scanning folder…"
 msgstr "フォルダをスキャン中…"
 
-#: main.ts:164
+#: main.ts:171
 #, x-machine
 msgid "No playable files in the folder"
 msgstr "フォルダに再生できるファイルがありません"
 
-#: main.ts:164
+#: main.ts:171
 #, x-machine
 msgid "Cannot read the folder: {}"
 msgstr "フォルダを読み取れません：{}"
 
-#: main.ts:164
+#: main.ts:171
 #, x-machine
 msgid "Removed: {}"
 msgstr "削除しました：{}"
 
-#: main.ts:164
+#: main.ts:171
 #, x-machine
 msgid "Invalid items removed: {}"
 msgstr "無効な項目を削除しました：{}"
 
-#: main.ts:164
+#: main.ts:171
 #, x-machine
 msgid "No invalid items"
 msgstr "無効な項目はありません"
 
-#: main.ts:164
+#: main.ts:171
 #, x-machine
 msgid "The media being opened was removed from the list"
 msgstr "開いている途中のメディアがリストから削除されました"
 
-#: main.ts:164
+#: main.ts:171
 #, x-machine
 msgid "The current media was removed from the list"
 msgstr "現在のメディアがリストから削除されました"
 
-#: main.ts:164
+#: main.ts:171
 #, x-machine
 msgid "List cleared; the current media continues"
 msgstr "リストを消去しました。現在のメディアの再生は続きます"
 
-#: main.ts:164
+#: main.ts:171
 #, x-machine
 msgid "Unsupported list format"
 msgstr "対応していないリスト形式です"
 
-#: main.ts:164
+#: main.ts:171
 #, x-machine
 msgid "Cannot open the list: the file is larger than 16 MB"
 msgstr "リストを開けません：ファイルが 16 MB を超えています"
 
-#: main.ts:164
+#: main.ts:171
 #, x-machine
 msgid "Cannot open the list: {}"
 msgstr "リストを開けません：{}"
 
-#: main.ts:164
+#: main.ts:171
 #, x-machine
 msgid "Opened list: {name} ({count} items)"
 msgstr "リストを開きました：{name}（{count} 項目）"
 
-#: main.ts:164
+#: main.ts:171
 #, x-machine
 msgid "Opened list: {name} ({count} items), skipped: {skipped}"
 msgstr "リストを開きました：{name}（{count} 項目、スキップ：{skipped}）"
 
-#: main.ts:164
+#: main.ts:171
 #, x-machine
 msgid "Cannot save the list: {}"
 msgstr "リストを保存できません：{}"
 
-#: main.ts:164
+#: main.ts:171
 #, x-machine
 msgid "Saved list: {}"
 msgstr "リストを保存しました：{}"
 
-#: main.ts:164
+#: main.ts:171
 #, x-machine
 msgid "Repeat: Off"
 msgstr "リピート：オフ"
 
-#: main.ts:164
+#: main.ts:171
 #, x-machine
 msgid "Repeat: All"
 msgstr "リピート：すべて"
 
-#: main.ts:164
+#: main.ts:171
 #, x-machine
 msgid "Repeat: One"
 msgstr "リピート：1 項目"
 
-#: main.ts:164 ui/sidebar.slint:716
+#: main.ts:171 ui/sidebar.slint:719
 #, x-machine
 msgid "Repeat: Stop After Current"
 msgstr "リピート：現在の項目の後に停止"
 
-#: main.ts:164
+#: main.ts:171
 #, x-machine
 msgid "Shuffle: On"
 msgstr "シャッフル：オン"
 
-#: main.ts:164
+#: main.ts:171
 #, x-machine
 msgid "Shuffle: Off"
 msgstr "シャッフル：オフ"
 
-#: main.ts:164
+#: main.ts:171
 #, x-machine
 msgid "Fast advance to next: On"
 msgstr "次の項目へすばやく切り替え：オン"
 
-#: main.ts:164
+#: main.ts:171
 #, x-machine
 msgid "Fast advance to next: Off"
 msgstr "次の項目へすばやく切り替え：オフ"
 
-#: main.ts:164
+#: main.ts:171
 #, x-machine
 msgid "The list will be remembered"
 msgstr "リストを記憶します"
 
-#: main.ts:164
+#: main.ts:171
 #, x-machine
 msgid "The list will no longer be remembered"
 msgstr "リストを記憶しなくなります"
 
-#: main.ts:164
+#: main.ts:171
 #, x-machine
 msgid "Confirm before removing all: On"
 msgstr "すべて削除する前に確認：オン"
 
-#: main.ts:164
+#: main.ts:171
 #, x-machine
 msgid "Confirm before removing all: Off"
 msgstr "すべて削除する前に確認：オフ"
 
-#: main.ts:164
+#: main.ts:171
 #, x-machine
 msgid "End of the list"
 msgstr "リストの最後です"
 
-#: main.ts:164
+#: main.ts:171
 #, x-machine
 msgid "Cannot replay: {}"
 msgstr "もう一度再生できません：{}"
 
-#: main.ts:164
+#: main.ts:171
 #, x-machine
 msgid "Cannot open {}: the file does not exist"
 msgstr "{} を開けません：ファイルが存在しません"
 
-#: main.ts:164
+#: main.ts:171
 #, x-machine
 msgid "Cannot open {}: cannot open this media"
 msgstr "{} を開けません：このメディアを開けません"
 
-#: main.ts:164
+#: main.ts:171
 #, x-machine
 msgid "Cannot open {}: {}"
 msgstr "{} を開けません：{}"
 
-#: main.ts:164
+#: main.ts:171
 #, x-machine
 msgid "The file's canonical path matches an existing item; that item is selected"
 msgstr "ファイルの正規パスが既存の項目と同じです。その項目を選択しました"
 
-#: main.ts:164
+#: main.ts:171
 #, x-machine
 msgid "Close the other dialog first"
 msgstr "先にもう一方のダイアログを閉じてください"
 
-#: main.ts:196 main.ts:581 main.ts:617 main.ts:821 manifest.json ui/settings.slint:114 ui/sidebar.slint:366
+#: main.ts:203 main.ts:597 main.ts:640 main.ts:854 manifest.json ui/settings.slint:123 ui/sidebar.slint:369
 #, x-machine
 msgid "Playlist"
 msgstr "プレイリスト"
 
-#: main.ts:306
+#: main.ts:313
 #, x-machine
 msgid "Remove all {} items from the playlist?"
 msgstr "プレイリストから {} 個の項目をすべて削除しますか？"
 
-#: main.ts:306
+#: main.ts:313
 #, x-machine
 msgid "Replace the current list with {}?"
 msgstr "現在のリストを {} で置き換えますか？"
 
-#: main.ts:306
+#: main.ts:313
 #, x-machine
 msgid "The media that is playing continues to play."
 msgstr "再生中のメディアはそのまま再生を続けます。"
 
-#: main.ts:306 main.ts:602
+#: main.ts:313 main.ts:625
 #, x-machine
 msgid "Remove All"
 msgstr "すべて削除"
 
-#: main.ts:306
+#: main.ts:313
 #, x-machine
 msgid "Replace"
 msgstr "置き換える"
 
-#: main.ts:306
+#: main.ts:313
 #, x-machine
 msgid "Don't ask again"
 msgstr "今後確認しない"
 
-#: main.ts:335
+#: main.ts:342
 #, x-machine
 msgid "Add to Playlist"
 msgstr "プレイリストに追加"
 
-#: main.ts:349
+#: main.ts:356
 #, x-machine
 msgid "Open Folder"
 msgstr "フォルダを開く"
 
-#: main.ts:349
+#: main.ts:356
 #, x-machine
 msgid "Add Folder to Playlist"
 msgstr "フォルダをプレイリストに追加"
 
-#: main.ts:382
+#: main.ts:389
 #, x-machine
 msgid "another source is opening, only added to the list"
 msgstr "別のソースを開いているため、リストに追加のみしました"
 
-#: main.ts:480
+#: main.ts:496
 #, x-machine
 msgid "Only the first {} files are shown"
 msgstr "最初の {} 個のファイルのみ表示しています"
 
-#: main.ts:502
+#: main.ts:518
 #, x-machine
 msgid "File not found: {}"
 msgstr "ファイルが見つかりません：{}"
 
-#: main.ts:513
+#: main.ts:529
 #, x-machine
 msgid "Open Playlist File"
 msgstr "プレイリストファイルを開く"
 
-#: main.ts:559
+#: main.ts:575
 #, x-machine
 msgid "Save Playlist"
 msgstr "プレイリストを保存"
 
-#: main.ts:561
+#: main.ts:577
 #, x-machine
 msgid "Playlist.m3u8"
 msgstr "プレイリスト.m3u8"
 
-#: main.ts:582 main.ts:640
+#: main.ts:598 main.ts:663
 #, x-machine
 msgid "Repeat"
 msgstr "リピート"
 
-#: main.ts:583 main.ts:640
+#: main.ts:599 main.ts:663
 #, x-machine
 msgid "When Opening a File"
 msgstr "ファイルを開くとき"
 
-#: main.ts:584 ui/sidebar.slint:696
+#: main.ts:600 ui/sidebar.slint:699
 #, x-machine
 msgid "Sort"
 msgstr "並べ替え"
 
-#: main.ts:602
+#: main.ts:625
 #, x-machine
 msgid "Play"
 msgstr "再生"
 
-#: main.ts:602 main.ts:640
+#: main.ts:625
+#, x-machine
+msgid "Play in New Window"
+msgstr "新しいウィンドウで再生"
+
+#: main.ts:625 main.ts:663
 #, x-machine
 msgid "Add Files…"
 msgstr "ファイルを追加…"
 
-#: main.ts:602 main.ts:640
+#: main.ts:625 main.ts:663
 #, x-machine
 msgid "Add Folder…"
 msgstr "フォルダを追加…"
 
-#: main.ts:602 main.ts:640
+#: main.ts:625 main.ts:663
 #, x-machine
 msgid "Add Link…"
 msgstr "リンクを追加…"
 
-#: main.ts:602
+#: main.ts:625
 #, x-machine
 msgid "Remove Selected"
 msgstr "選択項目を削除"
 
-#: main.ts:602
+#: main.ts:625
 #, x-machine
 msgid "Remove Unselected"
 msgstr "選択していない項目を削除"
 
-#: main.ts:602
+#: main.ts:625
 #, x-machine
 msgid "Remove Invalid Items"
 msgstr "無効な項目を削除"
 
-#: main.ts:602
+#: main.ts:625
 #, x-machine
 msgid "Show in Folder"
 msgstr "フォルダーに表示"
 
-#: main.ts:602
+#: main.ts:625
 #, x-machine
 msgid "Move to Top"
 msgstr "先頭へ移動"
 
-#: main.ts:602
+#: main.ts:625
 #, x-machine
 msgid "Move Up"
 msgstr "上へ移動"
 
-#: main.ts:602
+#: main.ts:625
 #, x-machine
 msgid "Move Down"
 msgstr "下へ移動"
 
-#: main.ts:602
+#: main.ts:625
 #, x-machine
 msgid "Move to Bottom"
 msgstr "末尾へ移動"
 
-#: main.ts:602
+#: main.ts:625
 #, x-machine
 msgid "Ascending"
 msgstr "昇順"
 
-#: main.ts:602
+#: main.ts:625
 #, x-machine
 msgid "Descending"
 msgstr "降順"
 
-#: main.ts:602
+#: main.ts:625
 #, x-machine
 msgid "By Title"
 msgstr "タイトル順"
 
-#: main.ts:602
+#: main.ts:625
 #, x-machine
 msgid "By File Name"
 msgstr "ファイル名順"
 
-#: main.ts:602
+#: main.ts:625
 #, x-machine
 msgid "By Extension"
 msgstr "拡張子順"
 
-#: main.ts:602
+#: main.ts:625
 #, x-machine
 msgid "By Size"
 msgstr "サイズ順"
 
-#: main.ts:602
+#: main.ts:625
 #, x-machine
 msgid "By Duration"
 msgstr "長さ順"
 
-#: main.ts:602
+#: main.ts:625
 #, x-machine
 msgid "By Date"
 msgstr "日付順"
 
-#: main.ts:602
+#: main.ts:625
 #, x-machine
 msgid "Random Order"
 msgstr "ランダムな順序"
 
-#: main.ts:602
+#: main.ts:625
 #, x-machine
 msgid "By Folder"
 msgstr "フォルダ順"
 
-#: main.ts:602
+#: main.ts:625
 #, x-machine
 msgid "Sort by Path"
 msgstr "パスで並べ替え"
 
-#: main.ts:602
+#: main.ts:625
 #, x-machine
 msgid "Reverse Current Order"
 msgstr "現在の順序を逆にする"
 
-#: main.ts:602
+#: main.ts:625
 #, x-machine
 msgid "Select All"
 msgstr "すべて選択"
 
-#: main.ts:602 ui/sidebar.slint:787
+#: main.ts:625 ui/sidebar.slint:790
 #, x-machine
 msgid "Search"
 msgstr "検索"
 
-#: main.ts:602 main.ts:640
+#: main.ts:625 main.ts:663
 #, x-machine
 msgid "Open List File…"
 msgstr "リストファイルを開く…"
 
-#: main.ts:602 main.ts:640
+#: main.ts:625 main.ts:663
 #, x-machine
 msgid "Save List…"
 msgstr "リストを保存…"
 
-#: main.ts:602
+#: main.ts:625
 #, x-machine
 msgid "Close List"
 msgstr "リストを閉じる"
 
-#: main.ts:602
+#: main.ts:625
 #, x-machine
 msgid "Playlist Settings…"
 msgstr "プレイリストの設定…"
 
-#: main.ts:606 main.ts:609 main.ts:644 main.ts:645
+#: main.ts:629 main.ts:632 main.ts:667 main.ts:668
 #, x-machine
 msgid "Opening, or the result is not known yet"
 msgstr "開いている途中か、結果がまだわかりません"
 
-#: main.ts:606 main.ts:609 main.ts:644 main.ts:645
+#: main.ts:629 main.ts:632 main.ts:667 main.ts:668
 #, x-machine
 msgid "Nothing to act on"
 msgstr "操作できる項目がありません"
 
-#: main.ts:606 main.ts:609 main.ts:634 main.ts:644 main.ts:645
+#: main.ts:629 main.ts:632 main.ts:657 main.ts:667 main.ts:668
 #, x-machine
 msgid "Scanning folder"
 msgstr "フォルダをスキャン中"
 
-#: main.ts:606 main.ts:609 main.ts:644 main.ts:645
+#: main.ts:629 main.ts:632 main.ts:667 main.ts:668
 #, x-machine
 msgid "Links have no local location"
 msgstr "リンクにはローカルの場所がありません"
 
-#: main.ts:606 main.ts:609 main.ts:644 main.ts:645
+#: main.ts:629 main.ts:632 main.ts:667 main.ts:668
 #, x-machine
 msgid "The order cannot change while searching"
 msgstr "検索中は順序を変更できません"
 
-#: main.ts:623
+#: main.ts:646
 #, x-machine
 msgid "Not enough room; enlarge the window to show it"
 msgstr "スペースが足りません。ウインドウを広げると表示されます"
 
-#: main.ts:628
+#: main.ts:651
 #, x-machine
 msgid "Open Folder…"
 msgstr "フォルダを開く…"
 
-#: main.ts:640 ui/settings.slint:150
+#: main.ts:663 ui/settings.slint:104
 #, x-machine
 msgid "Off"
 msgstr "オフ"
 
-#: main.ts:640 ui/settings.slint:150
+#: main.ts:663 ui/settings.slint:104
 #, x-machine
 msgid "All"
 msgstr "すべて"
 
-#: main.ts:640 ui/settings.slint:150
+#: main.ts:663 ui/settings.slint:104
 #, x-machine
 msgid "One"
 msgstr "1 項目"
 
-#: main.ts:640 ui/settings.slint:150
+#: main.ts:663 ui/settings.slint:104
 #, x-machine
 msgid "Stop After Current"
 msgstr "現在の項目の後に停止"
 
-#: main.ts:640 ui/settings.slint:156
+#: main.ts:663 ui/settings.slint:167
 #, x-machine
 msgid "Shuffle"
 msgstr "シャッフル"
 
-#: main.ts:640
+#: main.ts:663
 #, x-machine
 msgid "Open Only That File"
 msgstr "そのファイルだけを開く"
 
-#: main.ts:640
+#: main.ts:663
 #, x-machine
 msgid "Add Similar Files"
 msgstr "似たファイルを追加"
 
-#: main.ts:640
+#: main.ts:663
 #, x-machine
 msgid "Add All Files in the Folder"
 msgstr "フォルダ内のすべてのファイルを追加"
 
-#: main.ts:640
+#: main.ts:663
 #, x-machine
 msgid "Fast Advance to Next"
 msgstr "次の項目へすばやく切り替え"
 
-#: main.ts:640
+#: main.ts:663
 #, x-machine
 msgid "Remember List"
 msgstr "リストを記憶"
 
-#: main.ts:640
+#: main.ts:663
 #, x-machine
 msgid "Confirm Before Removing All"
 msgstr "すべて削除する前に確認"
 
-#: main.ts:1254
+#: main.ts:1288
 #, x-machine
 msgid "opening, added to the list"
 msgstr "開いている途中のため、リストに追加しました"
@@ -705,92 +710,92 @@ msgstr "プレイリストに追加する Web アドレスを、1 行に 1 つ�
 msgid "Example: {}"
 msgstr "例：{}"
 
-#: ui/link.slint:63 ui/sidebar.slint:680
+#: ui/link.slint:63 ui/sidebar.slint:683
 #, x-machine
 msgid "Add"
 msgstr "追加"
 
-#: ui/settings.slint:105 ui/settings.slint:124
-#, x-machine
-msgid "When opening a file:"
-msgstr "ファイルを開くとき："
-
-#: ui/settings.slint:105 ui/settings.slint:147
-#, x-machine
-msgid "Repeat:"
-msgstr "リピート："
-
-#: ui/settings.slint:120
-#, x-machine
-msgid "Open and drop"
-msgstr "開く・ドロップ"
-
-#: ui/settings.slint:127
+#: ui/settings.slint:103
 #, x-machine
 msgid "Open only that file"
 msgstr "そのファイルだけを開く"
 
-#: ui/settings.slint:127
+#: ui/settings.slint:103
 #, x-machine
 msgid "Add similar files"
 msgstr "似たファイルを追加"
 
-#: ui/settings.slint:127
+#: ui/settings.slint:103
 #, x-machine
 msgid "Add all files in the folder"
 msgstr "フォルダ内のすべてのファイルを追加"
 
-#: ui/settings.slint:133
+#: ui/settings.slint:110 ui/settings.slint:133
+#, x-machine
+msgid "When opening a file:"
+msgstr "ファイルを開くとき："
+
+#: ui/settings.slint:110 ui/settings.slint:157
+#, x-machine
+msgid "Repeat:"
+msgstr "リピート："
+
+#: ui/settings.slint:129
+#, x-machine
+msgid "Open and drop"
+msgstr "開く・ドロップ"
+
+#: ui/settings.slint:143
 #, x-machine
 msgid "Append when opening or dropping; don't clear the list"
 msgstr "開くときやドロップするときは追加し、リストを消去しない"
 
-#: ui/settings.slint:138
+#: ui/settings.slint:148
 #, x-machine
 msgid "Insert at the drop position when dropping on the list"
 msgstr "リストにドロップしたときはドロップ位置に挿入"
 
-#: ui/settings.slint:143
+#: ui/settings.slint:153
 #, x-machine
 msgid "Playback"
 msgstr "再生"
 
-#: ui/settings.slint:161
+#: ui/settings.slint:172
 #, x-machine
 msgid "Fast advance to next"
 msgstr "次の項目へすばやく切り替え"
 
-#: ui/settings.slint:166
+#: ui/settings.slint:177
 #, x-machine
 msgid "List"
 msgstr "リスト"
 
-#: ui/settings.slint:168
+#: ui/settings.slint:179
 #, x-machine
 msgid "Remember list"
 msgstr "リストを記憶"
 
-#: ui/settings.slint:173
+#: ui/settings.slint:184
 #, x-machine
 msgid "Confirm before removing all"
 msgstr "すべて削除する前に確認"
 
-#: ui/sidebar.slint:290
+#: ui/sidebar.slint:293
 #, x-machine
 msgid "Filtered {}"
 msgstr "絞り込み {}"
 
-#: ui/sidebar.slint:375
+#: ui/sidebar.slint:378
 #, x-machine
 msgid "Attach to main window"
 msgstr "メインウインドウに戻す"
 
-#: ui/sidebar.slint:375
+#: ui/sidebar.slint:378
 #, x-machine
 msgid "Detach as floating window"
 msgstr "フローティングウインドウとして切り離す"
 
-#: ui/sidebar.slint:488
+#: ui/sidebar.slint:491
 #, x-machine
 msgid ""
 "{}\n"
@@ -799,7 +804,7 @@ msgstr ""
 "{}\n"
 "ファイルが存在しません"
 
-#: ui/sidebar.slint:489
+#: ui/sidebar.slint:492
 #, x-machine
 msgid ""
 "{}\n"
@@ -808,7 +813,7 @@ msgstr ""
 "{}\n"
 "ファイルが存在しないか、現在読み取れません。再試行できます"
 
-#: ui/sidebar.slint:490
+#: ui/sidebar.slint:493
 #, x-machine
 msgid ""
 "{}\n"
@@ -817,40 +822,40 @@ msgstr ""
 "{}\n"
 "このメディアを開けません"
 
-#: ui/sidebar.slint:652
+#: ui/sidebar.slint:655
 #, x-machine
 msgid "No matches"
 msgstr "一致する項目はありません"
 
-#: ui/sidebar.slint:688
+#: ui/sidebar.slint:691
 #, x-machine
 msgid "Delete"
 msgstr "削除"
 
-#: ui/sidebar.slint:705
+#: ui/sidebar.slint:708
 msgid "Hide Thumbnails"
 msgstr "サムネイルを隠す"
 
-#: ui/sidebar.slint:705
+#: ui/sidebar.slint:708
 msgid "Show Thumbnails"
 msgstr "サムネイルを表示"
 
-#: ui/sidebar.slint:714
+#: ui/sidebar.slint:717
 #, x-machine
 msgid "Repeat: All (loop the list)"
 msgstr "リピート：すべて（リストを繰り返す）"
 
-#: ui/sidebar.slint:715
+#: ui/sidebar.slint:718
 #, x-machine
 msgid "Repeat: One (loop this video)"
 msgstr "リピート：1 項目（この動画を繰り返す）"
 
-#: ui/sidebar.slint:717
+#: ui/sidebar.slint:720
 #, x-machine
 msgid "Repeat: Off (play the list once)"
 msgstr "リピート：オフ（リストを 1 回再生）"
 
-#: ui/sidebar.slint:735
+#: ui/sidebar.slint:738
 #, x-machine
 msgid "Search (Ctrl+S)"
 msgstr "検索（Ctrl+S）"

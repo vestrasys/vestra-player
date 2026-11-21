@@ -497,7 +497,13 @@ pub struct Store {
     due_ms: Option<u64>,
 }
 
+/// `$VESTRA_UI_STATE`, else `ui-state.json` in the application data
+/// directory. A guest's is in its own profile: the variable names the main
+/// player's file, which a guest only copies (`guest::snapshot`).
 pub fn default_path() -> PathBuf {
+    if let Some(profile) = crate::guest::profile() {
+        return profile.join("ui-state.json");
+    }
     std::env::var_os("VESTRA_UI_STATE")
         .map(PathBuf::from)
         .unwrap_or_else(|| {

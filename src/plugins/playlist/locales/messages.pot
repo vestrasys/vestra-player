@@ -1,6 +1,6 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: vestra.playlist 0.2.6\n"
+"Project-Id-Version: vestra.playlist 0.2.9\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
@@ -8,435 +8,439 @@ msgstr ""
 msgid "Nothing to add: {}"
 msgstr ""
 
-#: main.ts:164
+#: main.ts:171
 msgid "Added {count} files from the same folder"
 msgstr ""
 
-#: main.ts:164
+#: main.ts:171
 msgid "Added {count} files from the same folder, limit of {limit} reached"
 msgstr ""
 
-#: main.ts:164
+#: main.ts:171
 msgid "Nothing to add"
 msgstr ""
 
-#: main.ts:164
+#: main.ts:171
 msgid "Link added"
 msgstr ""
 
-#: main.ts:164
+#: main.ts:171
 msgid "Existing link selected"
 msgstr ""
 
-#: main.ts:164
+#: main.ts:171
 msgid "Scanning folder…"
 msgstr ""
 
-#: main.ts:164
+#: main.ts:171
 msgid "No playable files in the folder"
 msgstr ""
 
-#: main.ts:164
+#: main.ts:171
 msgid "Cannot read the folder: {}"
 msgstr ""
 
-#: main.ts:164
+#: main.ts:171
 msgid "Removed: {}"
 msgstr ""
 
-#: main.ts:164
+#: main.ts:171
 msgid "Invalid items removed: {}"
 msgstr ""
 
-#: main.ts:164
+#: main.ts:171
 msgid "No invalid items"
 msgstr ""
 
-#: main.ts:164
+#: main.ts:171
 msgid "The media being opened was removed from the list"
 msgstr ""
 
-#: main.ts:164
+#: main.ts:171
 msgid "The current media was removed from the list"
 msgstr ""
 
-#: main.ts:164
+#: main.ts:171
 msgid "List cleared; the current media continues"
 msgstr ""
 
-#: main.ts:164
+#: main.ts:171
 msgid "Unsupported list format"
 msgstr ""
 
-#: main.ts:164
+#: main.ts:171
 msgid "Cannot open the list: the file is larger than 16 MB"
 msgstr ""
 
-#: main.ts:164
+#: main.ts:171
 msgid "Cannot open the list: {}"
 msgstr ""
 
-#: main.ts:164
+#: main.ts:171
 msgid "Opened list: {name} ({count} items)"
 msgstr ""
 
-#: main.ts:164
+#: main.ts:171
 msgid "Opened list: {name} ({count} items), skipped: {skipped}"
 msgstr ""
 
-#: main.ts:164
+#: main.ts:171
 msgid "Cannot save the list: {}"
 msgstr ""
 
-#: main.ts:164
+#: main.ts:171
 msgid "Saved list: {}"
 msgstr ""
 
-#: main.ts:164
+#: main.ts:171
 msgid "Repeat: Off"
 msgstr ""
 
-#: main.ts:164
+#: main.ts:171
 msgid "Repeat: All"
 msgstr ""
 
-#: main.ts:164
+#: main.ts:171
 msgid "Repeat: One"
 msgstr ""
 
-#: main.ts:164 ui/sidebar.slint:716
+#: main.ts:171 ui/sidebar.slint:719
 msgid "Repeat: Stop After Current"
 msgstr ""
 
-#: main.ts:164
+#: main.ts:171
 msgid "Shuffle: On"
 msgstr ""
 
-#: main.ts:164
+#: main.ts:171
 msgid "Shuffle: Off"
 msgstr ""
 
-#: main.ts:164
+#: main.ts:171
 msgid "Fast advance to next: On"
 msgstr ""
 
-#: main.ts:164
+#: main.ts:171
 msgid "Fast advance to next: Off"
 msgstr ""
 
-#: main.ts:164
+#: main.ts:171
 msgid "The list will be remembered"
 msgstr ""
 
-#: main.ts:164
+#: main.ts:171
 msgid "The list will no longer be remembered"
 msgstr ""
 
-#: main.ts:164
+#: main.ts:171
 msgid "Confirm before removing all: On"
 msgstr ""
 
-#: main.ts:164
+#: main.ts:171
 msgid "Confirm before removing all: Off"
 msgstr ""
 
-#: main.ts:164
+#: main.ts:171
 msgid "End of the list"
 msgstr ""
 
-#: main.ts:164
+#: main.ts:171
 msgid "Cannot replay: {}"
 msgstr ""
 
-#: main.ts:164
+#: main.ts:171
 msgid "Cannot open {}: the file does not exist"
 msgstr ""
 
-#: main.ts:164
+#: main.ts:171
 msgid "Cannot open {}: cannot open this media"
 msgstr ""
 
-#: main.ts:164
+#: main.ts:171
 msgid "Cannot open {}: {}"
 msgstr ""
 
-#: main.ts:164
+#: main.ts:171
 msgid "The file's canonical path matches an existing item; that item is selected"
 msgstr ""
 
-#: main.ts:164
+#: main.ts:171
 msgid "Close the other dialog first"
 msgstr ""
 
-#: main.ts:196 main.ts:581 main.ts:617 main.ts:821 manifest.json ui/settings.slint:114 ui/sidebar.slint:366
+#: main.ts:203 main.ts:597 main.ts:640 main.ts:854 manifest.json ui/settings.slint:123 ui/sidebar.slint:369
 msgid "Playlist"
 msgstr ""
 
-#: main.ts:306
+#: main.ts:313
 msgid "Remove all {} items from the playlist?"
 msgstr ""
 
-#: main.ts:306
+#: main.ts:313
 msgid "Replace the current list with {}?"
 msgstr ""
 
-#: main.ts:306
+#: main.ts:313
 msgid "The media that is playing continues to play."
 msgstr ""
 
-#: main.ts:306 main.ts:602
+#: main.ts:313 main.ts:625
 msgid "Remove All"
 msgstr ""
 
-#: main.ts:306
+#: main.ts:313
 msgid "Replace"
 msgstr ""
 
-#: main.ts:306
+#: main.ts:313
 msgid "Don't ask again"
 msgstr ""
 
-#: main.ts:335
+#: main.ts:342
 msgid "Add to Playlist"
 msgstr ""
 
-#: main.ts:349
+#: main.ts:356
 msgid "Open Folder"
 msgstr ""
 
-#: main.ts:349
+#: main.ts:356
 msgid "Add Folder to Playlist"
 msgstr ""
 
-#: main.ts:382
+#: main.ts:389
 msgid "another source is opening, only added to the list"
 msgstr ""
 
-#: main.ts:480
+#: main.ts:496
 msgid "Only the first {} files are shown"
 msgstr ""
 
-#: main.ts:502
+#: main.ts:518
 msgid "File not found: {}"
 msgstr ""
 
-#: main.ts:513
+#: main.ts:529
 msgid "Open Playlist File"
 msgstr ""
 
-#: main.ts:559
+#: main.ts:575
 msgid "Save Playlist"
 msgstr ""
 
-#: main.ts:561
+#: main.ts:577
 msgid "Playlist.m3u8"
 msgstr ""
 
-#: main.ts:582 main.ts:640
+#: main.ts:598 main.ts:663
 msgid "Repeat"
 msgstr ""
 
-#: main.ts:583 main.ts:640
+#: main.ts:599 main.ts:663
 msgid "When Opening a File"
 msgstr ""
 
-#: main.ts:584 ui/sidebar.slint:696
+#: main.ts:600 ui/sidebar.slint:699
 msgid "Sort"
 msgstr ""
 
-#: main.ts:602
+#: main.ts:625
 msgid "Play"
 msgstr ""
 
-#: main.ts:602 main.ts:640
+#: main.ts:625
+msgid "Play in New Window"
+msgstr ""
+
+#: main.ts:625 main.ts:663
 msgid "Add Files…"
 msgstr ""
 
-#: main.ts:602 main.ts:640
+#: main.ts:625 main.ts:663
 msgid "Add Folder…"
 msgstr ""
 
-#: main.ts:602 main.ts:640
+#: main.ts:625 main.ts:663
 msgid "Add Link…"
 msgstr ""
 
-#: main.ts:602
+#: main.ts:625
 msgid "Remove Selected"
 msgstr ""
 
-#: main.ts:602
+#: main.ts:625
 msgid "Remove Unselected"
 msgstr ""
 
-#: main.ts:602
+#: main.ts:625
 msgid "Remove Invalid Items"
 msgstr ""
 
-#: main.ts:602
+#: main.ts:625
 msgid "Show in Folder"
 msgstr ""
 
-#: main.ts:602
+#: main.ts:625
 msgid "Move to Top"
 msgstr ""
 
-#: main.ts:602
+#: main.ts:625
 msgid "Move Up"
 msgstr ""
 
-#: main.ts:602
+#: main.ts:625
 msgid "Move Down"
 msgstr ""
 
-#: main.ts:602
+#: main.ts:625
 msgid "Move to Bottom"
 msgstr ""
 
-#: main.ts:602
+#: main.ts:625
 msgid "Ascending"
 msgstr ""
 
-#: main.ts:602
+#: main.ts:625
 msgid "Descending"
 msgstr ""
 
-#: main.ts:602
+#: main.ts:625
 msgid "By Title"
 msgstr ""
 
-#: main.ts:602
+#: main.ts:625
 msgid "By File Name"
 msgstr ""
 
-#: main.ts:602
+#: main.ts:625
 msgid "By Extension"
 msgstr ""
 
-#: main.ts:602
+#: main.ts:625
 msgid "By Size"
 msgstr ""
 
-#: main.ts:602
+#: main.ts:625
 msgid "By Duration"
 msgstr ""
 
-#: main.ts:602
+#: main.ts:625
 msgid "By Date"
 msgstr ""
 
-#: main.ts:602
+#: main.ts:625
 msgid "Random Order"
 msgstr ""
 
-#: main.ts:602
+#: main.ts:625
 msgid "By Folder"
 msgstr ""
 
-#: main.ts:602
+#: main.ts:625
 msgid "Sort by Path"
 msgstr ""
 
-#: main.ts:602
+#: main.ts:625
 msgid "Reverse Current Order"
 msgstr ""
 
-#: main.ts:602
+#: main.ts:625
 msgid "Select All"
 msgstr ""
 
-#: main.ts:602 ui/sidebar.slint:787
+#: main.ts:625 ui/sidebar.slint:790
 msgid "Search"
 msgstr ""
 
-#: main.ts:602 main.ts:640
+#: main.ts:625 main.ts:663
 msgid "Open List File…"
 msgstr ""
 
-#: main.ts:602 main.ts:640
+#: main.ts:625 main.ts:663
 msgid "Save List…"
 msgstr ""
 
-#: main.ts:602
+#: main.ts:625
 msgid "Close List"
 msgstr ""
 
-#: main.ts:602
+#: main.ts:625
 msgid "Playlist Settings…"
 msgstr ""
 
-#: main.ts:606 main.ts:609 main.ts:644 main.ts:645
+#: main.ts:629 main.ts:632 main.ts:667 main.ts:668
 msgid "Opening, or the result is not known yet"
 msgstr ""
 
-#: main.ts:606 main.ts:609 main.ts:644 main.ts:645
+#: main.ts:629 main.ts:632 main.ts:667 main.ts:668
 msgid "Nothing to act on"
 msgstr ""
 
-#: main.ts:606 main.ts:609 main.ts:634 main.ts:644 main.ts:645
+#: main.ts:629 main.ts:632 main.ts:657 main.ts:667 main.ts:668
 msgid "Scanning folder"
 msgstr ""
 
-#: main.ts:606 main.ts:609 main.ts:644 main.ts:645
+#: main.ts:629 main.ts:632 main.ts:667 main.ts:668
 msgid "Links have no local location"
 msgstr ""
 
-#: main.ts:606 main.ts:609 main.ts:644 main.ts:645
+#: main.ts:629 main.ts:632 main.ts:667 main.ts:668
 msgid "The order cannot change while searching"
 msgstr ""
 
-#: main.ts:623
+#: main.ts:646
 msgid "Not enough room; enlarge the window to show it"
 msgstr ""
 
-#: main.ts:628
+#: main.ts:651
 msgid "Open Folder…"
 msgstr ""
 
-#: main.ts:640 ui/settings.slint:150
+#: main.ts:663 ui/settings.slint:104
 msgid "Off"
 msgstr ""
 
-#: main.ts:640 ui/settings.slint:150
+#: main.ts:663 ui/settings.slint:104
 msgid "All"
 msgstr ""
 
-#: main.ts:640 ui/settings.slint:150
+#: main.ts:663 ui/settings.slint:104
 msgid "One"
 msgstr ""
 
-#: main.ts:640 ui/settings.slint:150
+#: main.ts:663 ui/settings.slint:104
 msgid "Stop After Current"
 msgstr ""
 
-#: main.ts:640 ui/settings.slint:156
+#: main.ts:663 ui/settings.slint:167
 msgid "Shuffle"
 msgstr ""
 
-#: main.ts:640
+#: main.ts:663
 msgid "Open Only That File"
 msgstr ""
 
-#: main.ts:640
+#: main.ts:663
 msgid "Add Similar Files"
 msgstr ""
 
-#: main.ts:640
+#: main.ts:663
 msgid "Add All Files in the Folder"
 msgstr ""
 
-#: main.ts:640
+#: main.ts:663
 msgid "Fast Advance to Next"
 msgstr ""
 
-#: main.ts:640
+#: main.ts:663
 msgid "Remember List"
 msgstr ""
 
-#: main.ts:640
+#: main.ts:663
 msgid "Confirm Before Removing All"
 msgstr ""
 
-#: main.ts:1254
+#: main.ts:1288
 msgid "opening, added to the list"
 msgstr ""
 
@@ -562,120 +566,120 @@ msgstr ""
 msgid "Example: {}"
 msgstr ""
 
-#: ui/link.slint:63 ui/sidebar.slint:680
+#: ui/link.slint:63 ui/sidebar.slint:683
 msgid "Add"
 msgstr ""
 
-#: ui/settings.slint:105 ui/settings.slint:124
-msgid "When opening a file:"
-msgstr ""
-
-#: ui/settings.slint:105 ui/settings.slint:147
-msgid "Repeat:"
-msgstr ""
-
-#: ui/settings.slint:120
-msgid "Open and drop"
-msgstr ""
-
-#: ui/settings.slint:127
+#: ui/settings.slint:103
 msgid "Open only that file"
 msgstr ""
 
-#: ui/settings.slint:127
+#: ui/settings.slint:103
 msgid "Add similar files"
 msgstr ""
 
-#: ui/settings.slint:127
+#: ui/settings.slint:103
 msgid "Add all files in the folder"
 msgstr ""
 
-#: ui/settings.slint:133
-msgid "Append when opening or dropping; don't clear the list"
+#: ui/settings.slint:110 ui/settings.slint:133
+msgid "When opening a file:"
 msgstr ""
 
-#: ui/settings.slint:138
-msgid "Insert at the drop position when dropping on the list"
+#: ui/settings.slint:110 ui/settings.slint:157
+msgid "Repeat:"
+msgstr ""
+
+#: ui/settings.slint:129
+msgid "Open and drop"
 msgstr ""
 
 #: ui/settings.slint:143
+msgid "Append when opening or dropping; don't clear the list"
+msgstr ""
+
+#: ui/settings.slint:148
+msgid "Insert at the drop position when dropping on the list"
+msgstr ""
+
+#: ui/settings.slint:153
 msgid "Playback"
 msgstr ""
 
-#: ui/settings.slint:161
+#: ui/settings.slint:172
 msgid "Fast advance to next"
 msgstr ""
 
-#: ui/settings.slint:166
+#: ui/settings.slint:177
 msgid "List"
 msgstr ""
 
-#: ui/settings.slint:168
+#: ui/settings.slint:179
 msgid "Remember list"
 msgstr ""
 
-#: ui/settings.slint:173
+#: ui/settings.slint:184
 msgid "Confirm before removing all"
 msgstr ""
 
-#: ui/sidebar.slint:290
+#: ui/sidebar.slint:293
 msgid "Filtered {}"
 msgstr ""
 
-#: ui/sidebar.slint:375
+#: ui/sidebar.slint:378
 msgid "Attach to main window"
 msgstr ""
 
-#: ui/sidebar.slint:375
+#: ui/sidebar.slint:378
 msgid "Detach as floating window"
 msgstr ""
 
-#: ui/sidebar.slint:488
+#: ui/sidebar.slint:491
 msgid ""
 "{}\n"
 "The file does not exist"
 msgstr ""
 
-#: ui/sidebar.slint:489
+#: ui/sidebar.slint:492
 msgid ""
 "{}\n"
 "The file does not exist or cannot be read now; can retry"
 msgstr ""
 
-#: ui/sidebar.slint:490
+#: ui/sidebar.slint:493
 msgid ""
 "{}\n"
 "Cannot open this media"
 msgstr ""
 
-#: ui/sidebar.slint:652
+#: ui/sidebar.slint:655
 msgid "No matches"
 msgstr ""
 
-#: ui/sidebar.slint:688
+#: ui/sidebar.slint:691
 msgid "Delete"
 msgstr ""
 
-#: ui/sidebar.slint:705
+#: ui/sidebar.slint:708
 msgid "Hide Thumbnails"
 msgstr ""
 
-#: ui/sidebar.slint:705
+#: ui/sidebar.slint:708
 msgid "Show Thumbnails"
 msgstr ""
 
-#: ui/sidebar.slint:714
+#: ui/sidebar.slint:717
 msgid "Repeat: All (loop the list)"
 msgstr ""
 
-#: ui/sidebar.slint:715
+#: ui/sidebar.slint:718
 msgid "Repeat: One (loop this video)"
 msgstr ""
 
-#: ui/sidebar.slint:717
+#: ui/sidebar.slint:720
 msgid "Repeat: Off (play the list once)"
 msgstr ""
 
-#: ui/sidebar.slint:735
+#: ui/sidebar.slint:738
 msgid "Search (Ctrl+S)"
 msgstr ""

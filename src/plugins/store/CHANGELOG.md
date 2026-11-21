@@ -3,6 +3,7 @@
 ## 0.3.2
 
 - The "how to open" convention puts the sidebar first (owner request 2026-11-21): a plugin with a sidebar tab writes `Sidebar: <tab> tab` (with its key when it has one), and adds its next way in after `; ` only while the line stays within 48 characters, for example `Sidebar: VestraTube tab; Menu: Open ▸ VestraTube`. README and `open-line.ts` say so; the fallback for a plugin without the line still reads menus and palette rows only, since the command table has no tabs. A test checks that every built-in plugin that mounts a sidebar tab (today the Playlist) names the sidebar first. Nothing the store shows changes.
+- No automatic repository check in a temporary window (guest windows, "Play in New Window", player 0.10.3): the plugin reads `plugin.app.temporary` (SDK 1.10.1). A temporary window runs the main window's plugins read-only: the player refuses installs, updates, uninstalls and enabling or disabling there (`unavailable`), and the store shows that error. Refresh still works. A main window is unchanged. Who must change: nobody.
 
 ## 0.3.1
 
