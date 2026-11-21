@@ -297,7 +297,6 @@ impl Core {
     /// snapshots and the window settings that changed (the interface pulled
     /// them at its points before, `Take::Tables`, `Take::WindowSettings`).
     pub(crate) fn turn_end(&mut self) {
-        self.window_state_out();
         self.retry_ends();
         if !self.headless {
             if self

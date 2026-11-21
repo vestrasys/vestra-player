@@ -376,6 +376,7 @@ impl Host {
         shell: Option<&slint_interpreter::ComponentInstance>,
         facts: Value,
     ) -> WindowFacts {
+        self.facts_unsettled = true;
         self.facts_seq += 1;
         let pip = &facts["pictureInPicture"];
         let tabs = self.policy_tabs();
@@ -393,6 +394,17 @@ impl Host {
             adjust_panels: tabs.adjust,
             bottom_panel: tabs.bottom,
             facts,
+        }
+    }
+    /// The end of the interface's tick, after the window tick (S3a(4) review
+    /// F2): when a facts value or a handoff went out since the last one,
+    /// the core is told the facts are complete (`UiReport::FactsSettled`),
+    /// so it broadcasts `window.state` once for them. On one thread the
+    /// core's turn folded them; on two, a turn can fall between a wake's
+    /// handoff and the next tick's facts.
+    pub(crate) fn facts_settled(&mut self) {
+        if std::mem::take(&mut self.facts_unsettled) {
+            self.ui_report(UiReport::FactsSettled);
         }
     }
     /// The panel policy's tabs (`state::PanelTabs`).
@@ -505,7 +517,12 @@ impl Host {
         // (Nor for what the interface did in place of the core before plan
         // step S3a(1): `UiInput::reads_no_facts`.)
         let quiet = matches!(&report, UiReport::Input(input) if input.reads_no_facts());
-        if !quiet && !matches!(report, UiReport::UiFacts(..) | UiReport::FrameShown(_)) {
+        if !quiet
+            && !matches!(
+                report,
+                UiReport::UiFacts(..) | UiReport::FrameShown(_) | UiReport::FactsSettled
+            )
+        {
             self.report_ui_facts();
         }
         self.send_report(report);
@@ -547,6 +564,8 @@ impl Core {
             UiReport::Applied(seq) => self.applied(seq),
             // Plan step S2f(2): a video frame was shown (`power_tick`).
             UiReport::FrameShown(at) => self.last_frame = Some(at),
+            // S3a(4) review F2: the interface's facts of its tick are in.
+            UiReport::FactsSettled => self.window_state_out(),
             UiReport::WindowFacts(facts) => {
                 // A value older than the one applied is skipped (module
                 // `messages`: a coalesced snapshot can overtake a handoff).
@@ -1278,6 +1297,7 @@ impl Core {
             UiReport::UiFacts(..)
             | UiReport::WindowFacts(_)
             | UiReport::FrameShown(_)
+            | UiReport::FactsSettled
             | UiReport::Remembered { .. } => false,
             UiReport::Applied(seq) => self
                 .outbox

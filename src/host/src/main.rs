@@ -753,6 +753,7 @@ fn player() -> Result<()> {
         policy: window_state::Policy::new(0),
         window_facts: Value::Null,
         facts_seq: 0,
+        facts_unsettled: false,
         tabs_sent: Default::default(),
         measured_shell: None,
         menu_open: false,
@@ -1097,13 +1098,10 @@ fn player() -> Result<()> {
                 let Some(host) = key_host.upgrade() else {
                     return;
                 };
-                let Ok(mut host) = host.try_borrow_mut() else {
+                let Ok(host) = host.try_borrow_mut() else {
                     diag!("test: key {} lost: the host is busy", bindings::text(input));
                     return;
                 };
-                // R8 (plan step S3a(4)): the table snapshots waiting in the
-                // core→UI queue first.
-                host.apply_queue();
                 let (shared, events, generation) = (
                     host.input.clone(),
                     host.events.clone(),
@@ -1151,8 +1149,9 @@ fn player() -> Result<()> {
                     return;
                 };
                 let Ok(mut host) = host.try_borrow_mut() else {
-                    // Busy (a callback holds it): again, still pending.
-                    host::driver::wake_again();
+                    // Busy (a callback holds it): the wake stays pending and
+                    // the next tick takes it (review N1, as a frame the
+                    // busy interface missed); no repost.
                     return;
                 };
                 // The wake is taken before the queue is drained; then the
@@ -1213,8 +1212,15 @@ fn player() -> Result<()> {
                         turn
                     } else {
                         // The core on its own thread: the queue is applied
-                        // at its wake, not on this timer (R10).
-                        host::stall::Turn::new(began)
+                        // at its wake, not on this timer (R10); a wake the
+                        // busy interface missed is taken here (review N1).
+                        let mut turn = host::stall::Turn::new(began);
+                        if host.waker.pending() {
+                            host.waker.taken();
+                            host.apply_queue();
+                            turn.step("core→UI queue");
+                        }
+                        turn
                     };
                     // The interface's own events (R8: the tables pushed
                     // before a key are applied before it is judged).
@@ -1246,6 +1252,8 @@ fn player() -> Result<()> {
                     host.prepare_mount_tick();
                     turn.step("mounts");
                     host.window_tick();
+                    // The tick's facts are in (S3a(4) review F2).
+                    host.facts_settled();
                     turn.step("window tick");
                     platform::tool_windows_tick();
                     turn.step("tool windows");
@@ -1376,6 +1384,9 @@ fn player() -> Result<()> {
         // What the last tick (drops, the options window) changed of the
         // interface's facts reaches the core first (plan step S2f(1)).
         host.borrow_mut().report_ui_facts();
+        // Facts the last tick left unsettled go out before the quit
+        // (S3a(4) review F2).
+        host.borrow_mut().facts_settled();
         // Plan step S3a(4): the core on its thread stops the plugins within
         // the budget, writes the state file (and after a lost device starts
         // the restart) and comes back here; the join is bounded

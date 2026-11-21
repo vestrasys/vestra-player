@@ -81,6 +81,9 @@ const UI_QUIT_WAIT: Duration = Duration::from_secs(5);
 /// writes the state file and ends its turn after the shutdown, well inside
 /// it.
 pub(crate) const JOIN_MARGIN: Duration = Duration::from_secs(2);
+/// The exit code when the core's thread panicked: what a panic that
+/// unwound out of the UI thread's loop gave before plan step S3a(4).
+pub(crate) const CORE_PANIC_EXIT: u32 = 101;
 
 /// The interface's wake (plan step S3a(4), the S3a brief's "Queues"): at
 /// most one `invoke_from_event_loop` pending at a time. The core sets the
@@ -100,6 +103,11 @@ impl Waker {
     pub(crate) fn taken(&self) {
         self.0.store(false, Ordering::Release);
     }
+    /// A wake is posted and not taken yet: also one the interface missed
+    /// while a callback held it (review N1), which its next tick takes.
+    pub(crate) fn pending(&self) -> bool {
+        self.0.load(Ordering::Acquire)
+    }
 }
 
 thread_local! {
@@ -110,12 +118,6 @@ thread_local! {
 /// The interface's wake handler, set once its loop exists (`main.rs`).
 pub(crate) fn set_core_wake(wake: Option<Box<dyn Fn()>>) {
     CORE_WAKE.with(|sink| *sink.borrow_mut() = wake);
-}
-
-/// The interface was busy when the wake came (a callback held it): the wake
-/// is posted again, still pending.
-pub(crate) fn wake_again() {
-    let _ = slint::invoke_from_event_loop(wake_ui);
 }
 
 /// Runs on the UI thread, posted by [`Waker::wake`].
@@ -160,19 +162,21 @@ pub(crate) fn core_events(
             turn.event(label, at.elapsed());
         }
     };
-    // The interface's reports first, then `window.state` from the facts
-    // they left, then the other events in their order (S3a(3)
-    // verification, re-review B2: `events::turn_events`); a subscription
-    // that came in meanwhile is answered after that state, as on main.
-    let mut held = std::mem::take(&mut core.held_events);
-    super::events::turn_events(receiver, &mut held, first, began, |step| match step {
-        super::events::TurnStep::Event(event) => handle(core, event),
-        super::events::TurnStep::ReportsDone => {
-            core.window_state_out();
-            core.flush();
+    // The interface's reports first (`window.state` goes at its
+    // `FactsSettled` among them), then the other events in their order
+    // (S3a(3) verification, re-review B2: `events::turn_events`); a
+    // subscription that came in meanwhile is answered after that state,
+    // as on main.
+    super::events::turn_events(receiver, first, began, |step| {
+        use super::events::TurnStep;
+        match step {
+            TurnStep::Event(event) => handle(core, event),
+            TurnStep::Hold(event) => core.held_events.push_back(event),
+            TurnStep::ReportsDone => core.flush(),
+            TurnStep::NextHeld => return core.held_events.pop_front(),
         }
+        None
     });
-    core.held_events = held;
 }
 
 /// The second half of the core's turn: plan step S3a(3) runs the
@@ -241,6 +245,13 @@ pub(crate) fn run_core(mut core: Core, start: CoreStart, done: mpsc::Sender<Core
         lost,
     } = start;
     let mut next = Instant::now();
+    // `VESTRA_TEST_CORE_PANIC=<ms>`, a test switch: the core panics that
+    // long after its thread started (S3a(4) review F1's test).
+    let panic_at = std::env::var("VESTRA_TEST_CORE_PANIC")
+        .ok()
+        .filter(|_| std::env::var_os("VESTRA_TEST_OFFSCREEN").is_some_and(|v| v == "1"))
+        .and_then(|ms| ms.trim().parse::<u64>().ok())
+        .map(|ms| next + Duration::from_millis(ms));
     // The core ended the run itself, since then; the plugins were stopped.
     let mut own_quit: Option<Instant> = None;
     let mut stopped = false;
@@ -251,8 +262,13 @@ pub(crate) fn run_core(mut core: Core, start: CoreStart, done: mpsc::Sender<Core
         }
         next += CORE_PERIOD;
         let began = Instant::now();
+        // A late turn: the next one a whole period after this one began
+        // (review N3), not at once.
         if next < began {
-            next = began;
+            next = began + CORE_PERIOD;
+        }
+        if panic_at.is_some_and(|at| began >= at) {
+            panic!("test: the core panics (VESTRA_TEST_CORE_PANIC)");
         }
         let mut turn = super::stall::Turn::core(began);
         core_events(
@@ -265,6 +281,19 @@ pub(crate) fn run_core(mut core: Core, start: CoreStart, done: mpsc::Sender<Core
             &to_ui,
         );
         turn.step("events");
+        // What came in during the events (S3a(4) verification): the
+        // interface's reports are handled now, the rest waits for the next
+        // turn in `Core::held_events`, where the supervisor sees a plugin's
+        // request still unanswered (`Busy::Request`) and does not stop it
+        // for idleness meanwhile.
+        while let Ok(event) = receiver.try_recv() {
+            if matches!(event, Event::Report(_)) {
+                core.handle(event);
+                core.flush();
+            } else {
+                core.held_events.push_back(event);
+            }
+        }
         core_steps(&mut core, Some(&mut turn));
         super::stall::turn_ended(&turn, |owner| core.plugin_id(owner));
         let asked = core.quit_asked.take();
@@ -273,6 +302,9 @@ pub(crate) fn run_core(mut core: Core, start: CoreStart, done: mpsc::Sender<Core
             && (core.quitting || device_lost || ends_at.is_some_and(|end| Instant::now() >= end))
         {
             own_quit = Some(Instant::now());
+            // The interface applies what is queued before the plugins stop
+            // (review N5).
+            waker.wake();
             let budget = if device_lost {
                 DEVICE_LOSS_BUDGET
             } else {
@@ -407,7 +439,18 @@ impl Host {
         let (done, back) = mpsc::channel();
         let handle = std::thread::Builder::new()
             .name("vestra-core".into())
-            .spawn(move || run_core(core, start, done))?;
+            .spawn(move || {
+                // A panic of the core ends the player, as it did on the UI
+                // thread before (S3a(4) review F1): the panic hook has
+                // logged it; a live window with a dead core answers nothing.
+                let ran = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    run_core(core, start, done)
+                }));
+                if ran.is_err() {
+                    logged!("exit: the core's thread panicked; ending the player");
+                    platform::exit_now(CORE_PANIC_EXIT);
+                }
+            })?;
         self.link.thread = Some(CoreThread { handle, done: back });
         Ok(())
     }
@@ -433,7 +476,15 @@ impl Host {
                 self.link.core = Some(core);
                 true
             }
-            Err(_) => {
+            // The thread ended without giving the core back: a panic its
+            // wrapper did not get to end the process for (S3a(4) review F1).
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                logged!(
+                    "exit: the core's thread ended without its core (a panic); ending the player"
+                );
+                platform::exit_now(CORE_PANIC_EXIT);
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => {
                 logged!(
                     "exit: the core did not end within {} ms of the quit; ending the player",
                     bound.as_millis()

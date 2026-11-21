@@ -780,6 +780,9 @@ pub(crate) struct Host {
     pub(crate) window_facts: Value,
     /// The UI's one counter of facts values sent (`WindowFacts.seq`).
     pub(crate) facts_seq: u64,
+    /// A facts value or a handoff went out since the last
+    /// `UiReport::FactsSettled` (`Host::facts_settled`; S3a(4) review F2).
+    pub(crate) facts_unsettled: bool,
     /// The panel tabs the UI last sent the core with its facts
     /// (`report_tabs`; plan step S2c(5)).
     pub(crate) tabs_sent: state::PanelTabs,

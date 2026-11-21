@@ -1438,3 +1438,54 @@ fn b3_a_second_confirmation_sent_at_once_is_refused_busy() {
         run.log
     );
 }
+
+// ------------------------------------------------------- Core panic ----
+
+/// S3a(4) review F1: a panic of the core on its thread ends the player
+/// with a failure, as the same panic did on the UI thread before; the run
+/// does not go on with a window and a dead core until its quit. Here the
+/// core panics 1.5 s in (`VESTRA_TEST_CORE_PANIC`) of a 30 s run, which
+/// must end within 10 s, not with a success.
+#[test]
+#[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]
+fn a_panic_of_the_core_ends_the_player_with_a_failure() {
+    let root = tempfile::tempdir().unwrap();
+    let directory = root.path().join("builtins");
+    std::fs::create_dir_all(&directory).unwrap();
+    std::fs::write(
+        directory.join("builtin.json"),
+        json!({"schema":3,"plugins":[]}).to_string(),
+    )
+    .unwrap();
+    let mut command = Command::new(env!("CARGO_BIN_EXE_vestra-host"));
+    isolation::isolate(&mut command, root.path());
+    command
+        .args(["--silent", "--seconds", "30"])
+        .env("VESTRA_TEST_OFFSCREEN", "1")
+        .env("VESTRA_BUILTIN_PLUGINS", &directory)
+        .env("VESTRA_INSTANCE_DIR", root.path().join("instance"))
+        .env("VESTRA_LANGUAGE", "en")
+        .env("VESTRA_TEST_CORE_PANIC", "1500")
+        .env_remove("VESTRA_CORE_ON_UI")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::fs::File::create(root.path().join("stderr.txt")).unwrap());
+    let started = std::time::Instant::now();
+    let mut child = command.spawn().unwrap();
+    let status = loop {
+        if let Some(status) = child.try_wait().unwrap() {
+            break status;
+        }
+        if started.elapsed() > std::time::Duration::from_secs(10) {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("the run went on 10 s after the core's panic");
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    };
+    let log = std::fs::read_to_string(root.path().join("stderr.txt")).unwrap_or_default();
+    assert!(!status.success(), "a failure exit: {log}");
+    assert!(
+        log.contains("VESTRA_TEST_CORE_PANIC"),
+        "the core panicked: {log}"
+    );
+}

@@ -766,8 +766,9 @@ fn a_copy_of_the_pages_given_before_a_write_is_handled_keeps_the_write() {
 /// S3a(3) verification: the window facts of several reports one turn
 /// handles (in-between states: backdrop null, 1280x720, then 960x720)
 /// broadcast `window.state` once, with the final state, as the one facts
-/// value per tick before S3a(3) did; the end of the turn sends what the
-/// drain did not.
+/// value per tick before S3a(3) did. It goes when the interface says its
+/// tick's facts are in (`FactsSettled`, S3a(4) review F2), not at the end
+/// of a turn: on two threads a turn can fall inside the interface's tick.
 #[test]
 fn the_reports_of_one_turn_broadcast_one_window_state() {
     use messages::{UiReport, WindowFacts};
@@ -790,10 +791,13 @@ fn the_reports_of_one_turn_broadcast_one_window_state() {
     core.report(facts(2, json!({"size": [1280, 720]})));
     core.report(facts(3, json!({"size": [960, 720]})));
     assert_eq!(core.window_state_sent, Value::Null, "nothing per report");
-    core.window_state_out();
+    core.report(UiReport::FactsSettled);
     assert_eq!(core.window_state_sent, json!({"size": [960, 720]}));
+    // A turn that ends inside the interface's tick broadcasts nothing.
     core.report(facts(4, json!({"size": [1280, 720]})));
     core.turn_end();
+    assert_eq!(core.window_state_sent, json!({"size": [960, 720]}));
+    core.report(UiReport::FactsSettled);
     assert_eq!(core.window_state_sent, json!({"size": [1280, 720]}));
     // Re-review B1: a report that writes a line (a reply) first sends the
     // facts the reports before it left (R13's `layout.set` exception: its

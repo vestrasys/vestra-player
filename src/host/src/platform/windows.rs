@@ -874,8 +874,10 @@ pub fn show_open_dialog(foreground: bool) {
 
 // -------------------------------------------------------------------- power
 
-/// The UI thread's execution state; `stop` clears it. It also ends with the
-/// thread (and so with the host process).
+/// The execution state of the thread that took it, the core's (`power` runs
+/// on the core, K10; on `vestra-core` since plan step S3a(4)); `stop` clears
+/// it. It also ends with that thread, which lives as long as the host
+/// process.
 struct Awake;
 impl Assertion for Awake {
     fn stop(&mut self) {
