@@ -688,6 +688,8 @@ fn player() -> Result<()> {
         retry_due: false,
         retry_changes: Vec::new(),
         clipboard: Default::default(),
+        quit_asked: None,
+        quitting: false,
         // Made above, before the clock, as before plan step S2c moved it
         // from `Host`.
         on_demand,
@@ -714,6 +716,7 @@ fn player() -> Result<()> {
         to_core,
         queue,
         applied_seq: 0,
+        waker: Default::default(),
         queue_peak: 0,
         clock,
         headless,
@@ -908,10 +911,10 @@ fn player() -> Result<()> {
             }
             // No wait while events the last turn held are left
             // (`Core::held_events`).
-            let wait = if !host.events_held() {
-                Duration::from_millis(10)
-            } else {
+            let wait = if host.events_held() {
                 Duration::ZERO
+            } else {
+                Duration::from_millis(10)
             };
             let received = receiver.recv_timeout(wait);
             // A tick is the work after the wait (`VESTRA_FRAME_LOG=1`).
@@ -937,8 +940,11 @@ fn player() -> Result<()> {
             host.core_steps(None);
             // What the turn issued, applied (plan step S3a(3): the headless
             // run's interface part, e.g. a mount refused before it reaches a
-            // window).
+            // window), then the interface's own events (plan step S3a(4):
+            // the core's drain passes them on; the test hooks' sheet
+            // answers among them).
             host.apply_queue();
+            host.ui_events_tick();
             if let Some(log) = host.frame_log.as_mut() {
                 log.tick_took(began.elapsed());
                 let presentation = &host.playback.render.presentation;
@@ -1091,10 +1097,13 @@ fn player() -> Result<()> {
                 let Some(host) = key_host.upgrade() else {
                     return;
                 };
-                let Ok(host) = host.try_borrow() else {
+                let Ok(mut host) = host.try_borrow_mut() else {
                     diag!("test: key {} lost: the host is busy", bindings::text(input));
                     return;
                 };
+                // R8 (plan step S3a(4)): the table snapshots waiting in the
+                // core→UI queue first.
+                host.apply_queue();
                 let (shared, events, generation) = (
                     host.input.clone(),
                     host.events.clone(),
@@ -1127,10 +1136,44 @@ fn player() -> Result<()> {
         let mut first_draws = (!render.is_gpu() && render.windows == render_mode::WindowKind::Wgpu)
             .then(|| guard.clone());
         let tick_host = host.clone();
-        // Shared with the quit (S3a(3) review item 9: the last reports are
-        // handled before the quit calls).
-        let receiver = Rc::new(receiver);
-        let tick_receiver = receiver.clone();
+        // Plan step S3a(4): the core's turn runs on its own thread
+        // (`vestra-core`, `host::driver::run_core`), which wakes this thread
+        // when the core→UI queue holds something; `VESTRA_CORE_ON_UI=1`
+        // keeps it on this thread's timer (plan step S3a(3)'s arrangement;
+        // a transitional switch, removed in plan step S3c).
+        let core_on_ui = std::env::var_os("VESTRA_CORE_ON_UI").is_some_and(|v| v == "1");
+        let tick_receiver = if core_on_ui {
+            Some(Rc::new(receiver))
+        } else {
+            let wake_host = Rc::downgrade(&host);
+            host::driver::set_core_wake(Some(Box::new(move || {
+                let Some(host) = wake_host.upgrade() else {
+                    return;
+                };
+                let Ok(mut host) = host.try_borrow_mut() else {
+                    // Busy (a callback holds it): again, still pending.
+                    host::driver::wake_again();
+                    return;
+                };
+                // The wake is taken before the queue is drained; then the
+                // interface's own events (R8).
+                host.waker.taken();
+                host.apply_queue();
+                host.ui_events_tick();
+            })));
+            let start_core = host::driver::CoreStart {
+                receiver,
+                to_ui: host.borrow().events.sender(),
+                waker: host.borrow().waker.clone(),
+                ends_at: seconds.map(|seconds| start + Duration::from_secs_f64(seconds)),
+                lost: Some(lost_device.clone()),
+            };
+            host.borrow_mut().start_core_thread(start_core)?;
+            None
+        };
+        // Shared with the quit where the core is here (S3a(3) review item 9:
+        // the last reports are handled before the quit calls).
+        let quit_receiver = tick_receiver.clone();
         let timer = slint::Timer::default();
         let mut menu_revision = u64::MAX;
         // Busy: a post from Windows' move/size loop runs no tick then
@@ -1152,24 +1195,29 @@ fn player() -> Result<()> {
                     // One record per thread's part (plan step S3a(2)): the
                     // core's turn and the interface's tick, each paused while
                     // the other runs.
-                    let mut core_turn = host::stall::Turn::core(began);
                     let mut host = tick_host.borrow_mut();
-                    // The core's turn (plan step S3a(3): whole, on the UI
-                    // thread's timer, the arrangement `VESTRA_CORE_ON_UI=1`
-                    // keeps from S3a(4) on): the events (the interface's
-                    // reports among them), the panel-restart step, the
-                    // periodic steps, the end-of-turn pushes. What it issues
-                    // waits in the core→UI queue.
-                    host.core_events(&tick_receiver, began, None, Some(&mut core_turn), |_| ());
-                    core_turn.step("events");
-                    host.core_steps(Some(&mut core_turn));
-                    host::stall::turn_ended(&core_turn, |owner| host.plugins.plugin_id(owner));
-                    let mut turn = host::stall::Turn::new(Instant::now());
-                    // The interface's wake: the core→UI queue in order, then
-                    // its own events (R8: the tables pushed before a key are
-                    // applied before it is judged).
-                    host.apply_queue();
-                    turn.step("core→UI queue");
+                    let mut turn = if let Some(receiver) = &tick_receiver {
+                        // `VESTRA_CORE_ON_UI=1` (plan step S3a(3)'s
+                        // arrangement): the core's whole turn here, on the
+                        // timer: the events (the interface's reports among
+                        // them), the panel-restart step, the periodic steps,
+                        // the end-of-turn pushes; then the interface's wake.
+                        let mut core_turn = host::stall::Turn::core(began);
+                        host.core_events(receiver, began, None, Some(&mut core_turn), |_| ());
+                        core_turn.step("events");
+                        host.core_steps(Some(&mut core_turn));
+                        host::stall::turn_ended(&core_turn, |owner| host.plugins.plugin_id(owner));
+                        let mut turn = host::stall::Turn::new(Instant::now());
+                        host.apply_queue();
+                        turn.step("core→UI queue");
+                        turn
+                    } else {
+                        // The core on its own thread: the queue is applied
+                        // at its wake, not on this timer (R10).
+                        host::stall::Turn::new(began)
+                    };
+                    // The interface's own events (R8: the tables pushed
+                    // before a key are applied before it is judged).
                     host.ui_events_tick();
                     turn.step("UI events");
                     // The UI part of the turn starts here. The UI stall test
@@ -1328,16 +1376,29 @@ fn player() -> Result<()> {
         // What the last tick (drops, the options window) changed of the
         // interface's facts reaches the core first (plan step S2f(1)).
         host.borrow_mut().report_ui_facts();
-        host.borrow_mut().quit_reports(&receiver);
-        host.borrow_mut()
-            .quitting(|core| core.shutdown_plugins(budget));
+        // Plan step S3a(4): the core on its thread stops the plugins within
+        // the budget, writes the state file (and after a lost device starts
+        // the restart) and comes back here; the join is bounded
+        // (`Host::join_core`). Here (`VESTRA_CORE_ON_UI=1`) as before. No
+        // more wakes either way.
+        host::driver::set_core_wake(None);
+        let device_lost = platform::window_device_lost();
+        if !host.borrow_mut().join_core(budget, device_lost) {
+            if let Some(receiver) = &quit_receiver {
+                host.borrow_mut().quit_reports(receiver);
+            }
+            host.borrow_mut()
+                .quitting(|core| core.shutdown_plugins(budget));
+        }
         host.borrow_mut().sync();
         stop_handoffs();
         // Read now: only a loss that ended the loop restarts the player.
         if platform::window_device_lost() {
             // Standard practice is a new device; Slint cannot give its
             // windows one, so the player starts again where it was (already
-            // started from the device's callback; this is the fallback).
+            // started from the device's callback, or from the core on its
+            // thread, plan step S3a(4); this is the fallback, once per
+            // process).
             teardown_step("saving the UI state");
             let source = host.borrow_mut().quitting(|core| {
                 core.ui_state.flush();

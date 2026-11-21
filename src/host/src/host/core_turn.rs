@@ -122,6 +122,8 @@ fn core(root: &Path) -> (Core, mpsc::Receiver<Event>, mpsc::Receiver<Command>) {
         retry_due: false,
         retry_changes: Vec::new(),
         clipboard: Default::default(),
+        quit_asked: None,
+        quitting: false,
         on_demand: supervisor::OnDemand::from_env(),
     };
     (core, received, commands)
@@ -851,4 +853,46 @@ fn a_mount_applied_after_its_plugin_was_held_goes_as_the_park_would_have_it() {
         "recorded"
     );
     assert!(core.mount_queue.is_empty());
+}
+
+/// S3a(3) round-4 nit N1: an `Applied` that releases a waiting reply (one
+/// `outbox.waiting` entry, a `commands.run` reply behind a column toggle)
+/// sends the pending `window.state` first, then the reply; one that
+/// releases nothing leaves it pending.
+#[test]
+fn an_applied_that_releases_a_reply_sends_the_pending_window_state_first() {
+    use super::outbox::Then;
+    use messages::{UiReport, WindowFacts};
+    let root = tempfile::tempdir().unwrap();
+    let (mut core, _events, _commands) = core(root.path());
+    core.outbox.pushed = 2;
+    core.outbox.waiting.push_back((
+        2,
+        Then::Respond {
+            reply: Reply { owner: 7, id: 1 },
+            result: Ok(Value::Null),
+        },
+    ));
+    core.report(UiReport::WindowFacts(Box::new(WindowFacts {
+        seq: 1,
+        facts: json!({"slots": {"sidebar": {"effective": false}}}),
+        shell: Some(1),
+        menu_origin: true,
+        pip_supported: true,
+        pip_active: false,
+        sidebar_panels: vec![],
+        adjust_panels: vec![],
+        bottom_panel: None,
+    })));
+    // Command 1 applied: the reply waits for command 2, nothing goes.
+    core.report(UiReport::Applied(1));
+    assert_eq!(core.window_state_sent, Value::Null);
+    assert_eq!(core.outbox.waiting.len(), 1);
+    // Command 2 applied: the broadcast goes, then the reply is released.
+    core.report(UiReport::Applied(2));
+    assert_eq!(
+        core.window_state_sent,
+        json!({"slots": {"sidebar": {"effective": false}}})
+    );
+    assert!(core.outbox.waiting.is_empty(), "the reply went");
 }

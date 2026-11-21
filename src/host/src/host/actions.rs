@@ -498,6 +498,10 @@ impl Core {
             crate::stop_handoffs();
             self.ui_state.flush();
             self.ui_command(messages::UiCommand::Window(messages::WindowOp::Quit));
+            // Plan step S3a(4): on its thread the core then ends the run
+            // itself if the interface does not ask in time
+            // (`driver::run_core`).
+            self.quitting = true;
             return;
         }
         self.window_command(id);

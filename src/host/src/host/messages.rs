@@ -1049,7 +1049,9 @@ fn from_ui(event: &Event) -> bool {
         | Event::Position(..)
         | Event::SubtitleTrack(..)
         // Plan step S3a(3): the interface's reports, the core's to handle.
-        | Event::Report(_) => false,
+        | Event::Report(_)
+        // Plan step S3a(4): the interface's quit, the core's to act on.
+        | Event::CoreQuit(_) => false,
     }
 }
 

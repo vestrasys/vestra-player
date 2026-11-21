@@ -158,6 +158,11 @@ impl UiQueue {
     pub(crate) fn take_all(&self) -> std::collections::VecDeque<ToUi> {
         std::mem::take(&mut *self.lock())
     }
+    /// Nothing waits (the core wakes the interface only otherwise; plan
+    /// step S3a(4)).
+    pub(crate) fn is_empty(&self) -> bool {
+        self.lock().is_empty()
+    }
 }
 
 /// The kind of a last-value-wins snapshot, for coalescing in place; `None`

@@ -28,13 +28,21 @@ impl Host {
     /// `Broadcast` from a view's or a settings page's callbacks) goes on to
     /// the core's queue, in its order.
     pub(crate) fn ui_events_tick(&mut self) {
-        while let Ok(event) = self.ui_events.try_recv() {
+        let Ok(first) = self.ui_events.try_recv() else {
+            return;
+        };
+        // Plan step S3a(4): the core→UI queue first (R8: a key behind a
+        // table snapshot is judged by it), also between the core's wakes.
+        self.apply_queue();
+        let mut next = Some(first);
+        while let Some(event) = next.take() {
             match UiEvent::new(event) {
                 Ok(event) => self.ui_event(event.into_event()),
                 Err(event) => {
                     let _ = self.to_core.send(event);
                 }
             }
+            next = self.ui_events.try_recv().ok();
         }
     }
 }
@@ -206,6 +214,9 @@ impl Core {
             Event::SubtitleTrack(track) => self.triggers_subtitle(track),
             // Plan step S3a(3): a report of the interface's, from the queue.
             Event::Report(report) => self.report(*report),
+            // Plan step S3a(4): the interface's quit, acted on at the end of
+            // the core's turn (`driver::run_core`).
+            Event::CoreQuit(quit) => self.quit_asked = Some(quit),
             Event::PluginMessage(owner, event, data) => {
                 self.send(owner, json!({"event":event,"data":data}))
             }

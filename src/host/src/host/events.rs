@@ -133,6 +133,20 @@ pub(crate) enum Event {
     /// A report of the interface's (plan step S3a(3)): into the core's one
     /// event queue, handled in the core's turn (`Core::report`).
     Report(Box<super::messages::UiReport>),
+    /// The interface's quit (plan step S3a(4), `Host::join_core`): the core
+    /// on its thread stops the plugins within the budget, writes the state
+    /// file and ends (`driver::run_core`), behind the interface's last
+    /// reports.
+    CoreQuit(CoreQuit),
+}
+
+/// See [`Event::CoreQuit`].
+pub(crate) struct CoreQuit {
+    /// The plugins' shutdown budget (supervisor.md §9: 1 s at quit, 300 ms
+    /// after a device loss).
+    pub(crate) budget: Duration,
+    /// The windows' device was lost: the core restarts the player.
+    pub(crate) device_lost: bool,
 }
 
 impl Event {
@@ -192,6 +206,7 @@ impl Event {
             Self::Position(_) => ("Position", None),
             Self::SubtitleTrack(_) => ("SubtitleTrack", None),
             Self::Report(report) => (report.label(), None),
+            Self::CoreQuit(_) => ("CoreQuit", None),
         }
     }
 }
