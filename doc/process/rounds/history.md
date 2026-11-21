@@ -228,6 +228,11 @@ The user handed the remaining technical follow-ups to an unattended loop ([agent
 
 #### Loop log (newest first)
 
+- 11-21: **User ruling: T8 starts with a comparison.** Before any T8 code, an agent compares two candidate `video.motion` engines:
+  - the NVIDIA-specific engine (the original plan; it needs libmpv on a newer FFmpeg);
+  - a vendor-neutral RIFE engine (rife-ncnn-vulkan, MIT), run by the host the same way as the AMD engine. RIFE can't be a plugin, because Node can't run GPU inference.
+
+  Measure on the user's GPU: picture quality, per-frame cost at 1080p and 4K, the size of the libraries and models to ship, and the licences. The user then decides between NVIDIA, RIFE or both. Unchanged: T8 PRs stay open for the user's review. Also noted: Apex Neural Rendering (ANR) is game-only (it needs engine motion vectors through DLSS-FG hooks) and its source isn't released. Watch ANR SR for a source release and a video mode; no work now.
 - 11-21: **User approved the plan for the three unmerged branches** (assessment: C:\vestra\design\github-cleanup\unmerged-assessment.md). Steps, in order:
   1. Plugins repo: SDK lock 1.9.0 → 1.10.0 together with `ci-slint-check` (R5), in one PR. Under way.
   2. Silence Skipper 0.2.0 on triggers (`silenceskip-triggers`): finish, then publish. It must land before Release B removes `subscribe()`/`onChange()`. Needs a short check by the user in a real window.
