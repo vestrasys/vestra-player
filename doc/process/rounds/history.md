@@ -228,6 +228,7 @@ The user handed the remaining technical follow-ups to an unattended loop ([agent
 
 #### Loop log (newest first)
 
+- 11-21: **User ruling: Release B ships as SDK 1.11.0.** There are no third-party plugin authors; the user is the only one. So `subscribe()` and `onChange()` are removed as if they had never existed: no compatibility, no special "use player.stream(fn)" error, and at most one plain CHANGELOG line. This overrides plan B2's "fails at activation with a message that names player.stream(fn)" and any 2.0.0 major bump. Every built-in and store plugin is migrated in the same release. **GitHub cleanup done:** 440 branches deleted (430 merged, plus 10 the user ruled on); plugins PRs #59 and #41 closed (failing checks, major upgrades); the SDK Dependabot PRs #127, #120 and #80 wait for the next SDK release; segment-heap, silenceskip-triggers and ci-slint-check are being assessed (motive, compatibility, already solved?) on the user's request. **0.10.2 published** (GitHub release with six assets, latest).
 - 11-21: **Core thread complete (S3c #421); player 0.10.2 tagged (#422, b5b3a0f9), assets being built locally.** **Next task, right after 0.10.2 is published (user ruling): guest windows ("在新窗口播放"), then a patch release.** Chrome's guest-window model. Each guest is a separate `vestra-host` process with a temporary profile directory; core, wire and playback are untouched. User rulings:
   - the title gets 「（临时窗口）」, translated;
   - plugin-data starts empty in a guest;
