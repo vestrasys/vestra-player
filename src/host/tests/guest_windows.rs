@@ -423,3 +423,41 @@ fn a_running_guest_keeps_the_package_version_it_runs_from() {
     assert!(!old.exists(), "collected once the guest is gone");
     assert!(store.join("packages").join(&second).is_dir());
 }
+
+/// The same with windows (offscreen), where a player writes its window
+/// state and its render state at quit: an offscreen main run changes the
+/// main profile (the control), an offscreen guest run after it leaves every
+/// file of it byte-identical and its own directory gone.
+#[test]
+#[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]
+fn an_offscreen_guest_leaves_the_main_profile_byte_identical() {
+    let root = root();
+    std::fs::write(
+        root.path().join("ui-state.json"),
+        r#"{"window":{"x":10.0,"y":20.0,"width":800.0,"height":600.0},"appearance":{"theme":"light"}}"#,
+    )
+    .unwrap();
+    let instance = root.path().join("instance");
+    let instance_text = instance.to_string_lossy().into_owned();
+    let offscreen = [
+        ("VESTRA_TEST_OFFSCREEN", "1"),
+        ("VESTRA_INSTANCE_DIR", instance_text.as_str()),
+    ];
+    let first = main_profile(root.path());
+    run(host(
+        root.path(),
+        &["--silent", "--seconds", "4"],
+        &offscreen,
+    ));
+    let before = main_profile(root.path());
+    assert_ne!(before, first, "an offscreen main run writes its profile");
+    let guest = run(host(
+        root.path(),
+        &["--guest", "--silent", "--seconds", "4"],
+        &offscreen,
+    ));
+    assert!(guest.contains("GUEST|temporary true"), "{guest}");
+    assert!(guest.contains("guest: profile"), "{guest}");
+    assert_eq!(main_profile(root.path()), before, "byte-identical");
+    assert_eq!(entries(&guests(root.path())), Vec::<PathBuf>::new());
+}

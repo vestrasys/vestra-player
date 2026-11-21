@@ -62,6 +62,8 @@ export const deps = {
  * A temporary window (the player's guest window, "Play in New Window", player 0.10.3): the player
  * marks it `temporary: true` in `VESTRA_APP_INFO`, the source of `plugin.app`, which keeps only the
  * fields it knows until an SDK release names this one. No automatic checks run there.
+ * TODO(SDK 1.10.1, AppInfo.temporary): read `plugin.app.temporary` instead and drop this
+ * environment read (and its `env` parameter in the tests).
  */
 export function temporaryWindow(env: NodeJS.ProcessEnv = process.env): boolean {
   try {

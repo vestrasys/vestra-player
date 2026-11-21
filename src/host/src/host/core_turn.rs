@@ -957,3 +957,29 @@ fn a_guest_core_refuses_plugin_changes() {
     );
     assert!(!root.path().join("main-packages").exists(), "nothing made");
 }
+
+/// Guest windows (guest-windows.md §4): the forced removal of versions a
+/// record set aside no longer keeps (`hold_freed`) leaves a version a
+/// running guest leases where it is; the others leave the library.
+#[test]
+fn hold_freed_keeps_a_version_a_running_guest_leases() {
+    let root = tempfile::tempdir().unwrap();
+    let (mut core, _events, _commands) = core(root.path());
+    let library = root.path().join("packages").join("packages");
+    let (leased, other) = ("a".repeat(64), "b".repeat(64));
+    for digest in [&leased, &other] {
+        std::fs::create_dir_all(library.join(digest)).unwrap();
+        std::fs::write(library.join(digest).join("main.js"), "x").unwrap();
+    }
+    let guests = tempfile::tempdir().unwrap();
+    let directory = guests.path().join("guest");
+    std::fs::create_dir(&directory).unwrap();
+    let lock = std::fs::File::create(directory.join("guest.lock")).unwrap();
+    lock.try_lock().unwrap();
+    std::fs::write(directory.join("packages.json"), format!("[\"{leased}\"]")).unwrap();
+    core.packages.set_guests(Some(guests.path().into()));
+    core.hold_freed(&[leased.clone(), other.clone()].into());
+    assert!(library.join(&leased).is_dir(), "leased: left in place");
+    assert!(!library.join(&other).exists(), "taken out of the library");
+    drop(lock);
+}

@@ -3463,15 +3463,15 @@ pub(crate) mod tests {
 
     /// Guest windows (doc/architecture/guest-windows.md §4): the main
     /// library opens read-only as `open` would screen it (a record set
-    /// aside, built-ins added, a pending install recovered), and not one
-    /// byte under it changes; the guest's own state goes to `local`.
+    /// aside, an unknown catalog field set aside, built-ins added, a package
+    /// disabled, all in memory), and not one byte under it changes; the guest's own state goes to `local`.
     #[test]
     fn a_read_only_library_reads_like_open_and_writes_nothing() {
         let root = tempfile::tempdir().unwrap();
         let root_path = dunce::canonicalize(root.path()).unwrap();
         let (counter, other) = two_installed(&root_path);
-        // A record that will be set aside (outside the library) and a
-        // pending update of the other.
+        // A record that will be set aside (outside the library) and an
+        // unknown catalog field.
         fs::remove_dir_all(&counter.directory).unwrap();
         let elsewhere = tempfile::tempdir().unwrap();
         edit_catalog(&root_path, |catalog| {

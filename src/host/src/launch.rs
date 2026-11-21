@@ -33,8 +33,9 @@ pub struct Launch {
     /// Internal: continue the first file at this point
     /// (`--vestra-resume SECONDS:paused|playing`, written by the host only).
     pub resume: Option<Resume>,
-    /// `--guest`: a guest window, with a temporary profile of its own
-    /// (doc/architecture/guest-windows.md).
+    /// Internal: `--guest`, a guest window with a temporary profile of its
+    /// own (doc/architecture/guest-windows.md), written by the host only
+    /// (`app.openWindow`); not in the usage text.
     pub guest: bool,
     /// Internal: the guest directory a restarted guest takes over
     /// (`--vestra-guest-dir DIR`, written by the host only; implies `guest`).
@@ -72,7 +73,7 @@ impl Resume {
     }
 }
 
-const USAGE: &str = "use [FILE…] [--guest] [--plugin DIR] [--headless] [--silent] [--seconds N]";
+const USAGE: &str = "use [FILE…] [--plugin DIR] [--headless] [--silent] [--seconds N]";
 
 /// Parse `args` (without the program name); relative paths resolve against `cwd`.
 pub fn parse(args: &[String], cwd: &Path) -> Result<Launch> {

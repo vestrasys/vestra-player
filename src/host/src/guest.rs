@@ -42,6 +42,8 @@ const CASCADE: i64 = 32;
 /// A directory without a lock file is a guest that died before it took
 /// one, once nothing changed in it for this long.
 const UNLOCKED_KEPT: Duration = Duration::from_secs(60);
+/// How long a new guest waits for its lock while a sweep probes it.
+const CREATE_WAIT: Duration = Duration::from_secs(5);
 /// How long a restarted guest waits for the one it replaces to let go.
 const ADOPT_WAIT: Duration = Duration::from_secs(20);
 /// The settings snapshot (doc/architecture/guest-windows.md §3): copied
@@ -176,18 +178,44 @@ pub fn sweep_later() {
         .spawn(move || sweep(&root, None));
 }
 
-/// A new guest directory under `root`, locked.
+/// A new guest directory under `root`, locked. A sweep that took a new
+/// directory's lock before this process did may have deleted it (it was
+/// not locked yet, so it looked like a leftover): then another one.
 fn create(root: &Path) -> Result<Guest> {
-    let directory = root.join(uuid::Uuid::new_v4().simple().to_string());
-    fs::create_dir(&directory).with_context(|| format!("{}", directory.display()))?;
-    let lock = open_lock(&directory)?;
-    lock.try_lock()
+    for _ in 0..8 {
+        let directory = root.join(uuid::Uuid::new_v4().simple().to_string());
+        fs::create_dir(&directory).with_context(|| format!("{}", directory.display()))?;
+        if let Some(guest) = create_at(&directory)? {
+            return Ok(guest);
+        }
+        diag!(
+            "guest: {} was swept while it started; trying another",
+            directory.display()
+        );
+    }
+    anyhow::bail!(
+        "no temporary window directory could be made under {}",
+        root.display()
+    )
+}
+
+/// Lock the new directory `directory` and make its profile; `None` when a
+/// sweep deleted it meanwhile. A probe holds a lock for a moment
+/// (`probe`): `CREATE_WAIT` for it.
+fn create_at(directory: &Path) -> Result<Option<Guest>> {
+    let lock = open_lock(directory)?;
+    lock_within(&lock, CREATE_WAIT)
         .map_err(|error| anyhow::anyhow!("{}: {error}", directory.display()))?;
+    // Locked: no sweep deletes it from now on. One that had the lock first
+    // may have deleted it already.
+    if !still_there(directory) {
+        return Ok(None);
+    }
     fs::create_dir(directory.join(PROFILE))?;
-    Ok(Guest {
-        directory,
+    Ok(Some(Guest {
+        directory: directory.to_path_buf(),
         _lock: lock,
-    })
+    }))
 }
 
 /// `directory` (a guest that restarted itself): under `root`, its profile
@@ -199,22 +227,42 @@ fn adopt_directory(root: &Path, directory: &Path) -> Result<Guest> {
         "not a temporary window's directory"
     );
     let lock = open_lock(&canonical)?;
-    let deadline = Instant::now() + ADOPT_WAIT;
-    loop {
-        match lock.try_lock() {
-            Ok(()) => break,
-            Err(TryLockError::WouldBlock) if Instant::now() < deadline => {
-                std::thread::sleep(Duration::from_millis(50));
-            }
-            Err(error) => anyhow::bail!("{error}"),
-        }
-    }
-    // A sweep may have taken it meanwhile.
-    anyhow::ensure!(canonical.join(PROFILE).is_dir(), "its profile is gone");
+    lock_within(&lock, ADOPT_WAIT)?;
+    // A sweep may have taken it between the old process and this one.
+    anyhow::ensure!(
+        still_there(&canonical) && canonical.join(PROFILE).is_dir(),
+        "its profile is gone"
+    );
     Ok(Guest {
         directory: canonical,
         _lock: lock,
     })
+}
+
+/// Take `lock`, waiting up to `wait` while another process holds it.
+fn lock_within(lock: &File, wait: Duration) -> io::Result<()> {
+    let deadline = Instant::now() + wait;
+    loop {
+        match lock.try_lock() {
+            Ok(()) => return Ok(()),
+            Err(TryLockError::WouldBlock) if Instant::now() < deadline => {
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            Err(TryLockError::WouldBlock) => {
+                return Err(io::Error::new(
+                    io::ErrorKind::WouldBlock,
+                    "another process holds the lock",
+                ));
+            }
+            Err(TryLockError::Error(error)) => return Err(error),
+        }
+    }
+}
+
+/// The directory and its lock file are still where they were (a sweep
+/// deletes both; it never makes a lock file).
+fn still_there(directory: &Path) -> bool {
+    directory.is_dir() && directory.join(LOCK).is_file()
 }
 
 fn open_lock(directory: &Path) -> io::Result<File> {
@@ -301,52 +349,93 @@ fn write_lease(directory: &Path, digests: &BTreeSet<String>) -> io::Result<()> {
     fs::rename(&partial, directory.join(LEASE))
 }
 
-/// The package digests the live guests under `root` run from: the leases
-/// of the directories whose lock is held. A directory whose lock this
-/// process can take belongs to no running guest; one whose lock cannot
-/// be judged counts as live.
-pub fn leased_in(root: &Path) -> BTreeSet<String> {
-    let mut digests = BTreeSet::new();
-    let Ok(entries) = fs::read_dir(root) else {
-        return digests;
-    };
-    for entry in entries.flatten() {
-        let directory = entry.path();
-        if !directory.is_dir() || alive(&directory) == Some(false) {
-            continue;
-        }
-        if let Ok(bytes) = fs::read(directory.join(LEASE))
-            && let Ok(listed) = serde_json::from_slice::<BTreeSet<String>>(&bytes)
-        {
-            digests.extend(listed);
+/// What the main player's library cleanup must keep for the running
+/// guests (`leased_in`).
+#[derive(Debug, PartialEq)]
+pub enum Leases {
+    /// These digests.
+    These(BTreeSet<String>),
+    /// Everything, this time: a guest that may be running has a lease
+    /// that cannot be read (not written yet, or broken).
+    All,
+}
+
+impl Leases {
+    /// Whether `digest` stays.
+    pub fn keeps(&self, digest: &str) -> bool {
+        match self {
+            Self::These(digests) => digests.contains(digest),
+            Self::All => true,
         }
     }
-    digests
 }
 
-/// `leased_in` under this user's guests directory.
-pub fn leased() -> BTreeSet<String> {
-    root().map(|root| leased_in(&root)).unwrap_or_default()
+/// The package digests the guests under `root` that may be running use:
+/// the leases of the directories whose lock this process cannot take.
+/// Fail-safe: such a directory whose lease cannot be read or parsed, or a
+/// guests directory that cannot be listed, keeps everything for this pass.
+pub fn leased_in(root: &Path) -> Leases {
+    let mut digests = BTreeSet::new();
+    let entries = match fs::read_dir(root) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Leases::These(digests),
+        Err(_) => return Leases::All,
+    };
+    for entry in entries {
+        let Ok(entry) = entry else {
+            return Leases::All;
+        };
+        let directory = entry.path();
+        if !directory.is_dir() || matches!(probe(&directory), Probe::Dead(_)) {
+            continue;
+        }
+        let listed = fs::read(directory.join(LEASE))
+            .ok()
+            .and_then(|bytes| serde_json::from_slice::<BTreeSet<String>>(&bytes).ok());
+        match listed {
+            Some(listed) => digests.extend(listed),
+            None => return Leases::All,
+        }
+    }
+    Leases::These(digests)
 }
 
-/// Whether a guest holds `directory`'s lock: `Some(false)` when this
-/// process could take it (released again at once), `None` without a lock
-/// file or when it cannot be opened.
-fn alive(directory: &Path) -> Option<bool> {
-    let lock = OpenOptions::new()
+/// `leased_in` under the guests directory `root` (`None`: none, as in the
+/// host's unit tests, which never read the user's).
+pub fn leased(root: Option<&Path>) -> Leases {
+    root.map_or(Leases::These(BTreeSet::new()), leased_in)
+}
+
+/// What a look at a guest directory's lock found.
+enum Probe {
+    /// A process holds it.
+    Live,
+    /// Nobody did: this process holds it now, until the value drops.
+    Dead(#[allow(dead_code)] File),
+    /// No lock file, or it cannot be opened or locked.
+    Unknown,
+}
+
+/// Try `directory`'s lock (never making the lock file).
+fn probe(directory: &Path) -> Probe {
+    let Ok(lock) = OpenOptions::new()
         .read(true)
         .write(true)
         .open(directory.join(LOCK))
-        .ok()?;
+    else {
+        return Probe::Unknown;
+    };
     match lock.try_lock() {
-        Ok(()) => Some(false),
-        Err(TryLockError::WouldBlock) => Some(true),
-        Err(TryLockError::Error(_)) => None,
+        Ok(()) => Probe::Dead(lock),
+        Err(TryLockError::WouldBlock) => Probe::Live,
+        Err(TryLockError::Error(_)) => Probe::Unknown,
     }
 }
 
 /// Delete the directories under `root` no guest holds (but `own`): those
-/// whose lock can be taken, and those without a lock file that nothing
+/// whose lock this process takes, deleted while it holds that lock (a
+/// guest starting there cannot lock it meanwhile, and finds it gone
+/// afterwards, `create_at`), and those without a lock file that nothing
 /// changed for `UNLOCKED_KEPT`. How many went.
 pub fn sweep(root: &Path, own: Option<&Path>) -> usize {
     let Ok(entries) = fs::read_dir(root) else {
@@ -358,26 +447,32 @@ pub fn sweep(root: &Path, own: Option<&Path>) -> usize {
         if own == Some(directory.as_path()) || !directory.is_dir() {
             continue;
         }
-        let dead = match alive(&directory) {
-            Some(alive) => !alive,
-            None => {
-                !directory.join(LOCK).exists()
+        let held = match probe(&directory) {
+            Probe::Live => continue,
+            Probe::Dead(lock) => Some(lock),
+            Probe::Unknown => {
+                let old = !directory.join(LOCK).exists()
                     && fs::metadata(&directory)
                         .and_then(|m| m.modified())
                         .ok()
                         .and_then(|modified| modified.elapsed().ok())
-                        .is_some_and(|age| age >= UNLOCKED_KEPT)
+                        .is_some_and(|age| age >= UNLOCKED_KEPT);
+                if !old {
+                    continue;
+                }
+                None
             }
         };
-        if dead {
-            match fs::remove_dir_all(&directory) {
-                Ok(()) => removed += 1,
-                Err(error) => diag!(
-                    "guest: {} left for a later start ({error})",
-                    directory.display()
-                ),
-            }
+        // The lock file is open here (the standard library shares it for
+        // deletion), so it goes with the directory.
+        match fs::remove_dir_all(&directory) {
+            Ok(()) => removed += 1,
+            Err(error) => diag!(
+                "guest: {} left for a later start ({error})",
+                directory.display()
+            ),
         }
+        drop(held);
     }
     if removed > 0 {
         diag!("guest: removed {removed} temporary window folder(s) left behind");
@@ -385,13 +480,48 @@ pub fn sweep(root: &Path, own: Option<&Path>) -> usize {
     removed
 }
 
+/// What a guest does not take from the environment of the player that
+/// starts it: the test and diagnostic switches that write files of that
+/// run (traces, recordings, shots, logs) or script its input.
+/// `VESTRA_TEST_OFFSCREEN` and `VESTRA_TEST_DISPLAYS` stay: a guest of an
+/// offscreen run is offscreen too.
+const NOT_INHERITED: [&str; 24] = [
+    "VESTRA_LOG_FILE",
+    "VESTRA_TRACE",
+    "VESTRA_TEST_WIRE_TRACE",
+    "VESTRA_UI_PROPERTY_TRACE",
+    "VESTRA_UI_RECORD",
+    "VESTRA_UI_SHOTS",
+    "VESTRA_WIDGET_SHOTS",
+    "VESTRA_SHEET_SHOTS",
+    "VESTRA_STRIP_SHOTS",
+    "VESTRA_PROBE_OUT",
+    "VESTRA_PIP_LOG",
+    "VESTRA_FRAME_LOG",
+    "VESTRA_UPDATE_MPV_RULES",
+    "VESTRA_TEST_LOG_DIR",
+    "VESTRA_TEST_EXECUTE",
+    "VESTRA_TEST_KEY",
+    "VESTRA_TEST_PARK",
+    "VESTRA_TEST_WAKE",
+    "VESTRA_TEST_UI_STALL",
+    "VESTRA_TEST_CORE_PANIC",
+    "VESTRA_TEST_GPU_STALL",
+    "VESTRA_TEST_REMOVE_DEVICE",
+    "VESTRA_TEST_CONFIRM",
+    "VESTRA_INSTANCE_DIR",
+];
+
 /// Start a guest on `paths` (`app.openWindow`): `vestra-host --guest
 /// [--silent] -- <paths>`; its process id. It inherits this player's
-/// environment (the test switches that name the main profile's files are
-/// ignored by a guest, §1 of the design).
+/// environment but `NOT_INHERITED` (the switches that name the main
+/// profile's files are ignored by a guest, §1 of the design).
 pub fn spawn(paths: &[PathBuf]) -> io::Result<u32> {
     let exe = std::env::current_exe()?;
     let mut command = std::process::Command::new(exe);
+    for key in NOT_INHERITED {
+        command.env_remove(key);
+    }
     command.arg("--guest");
     if SILENT.load(Ordering::Relaxed) {
         command.arg("--silent");
@@ -491,20 +621,24 @@ mod tests {
     #[test]
     fn leases_count_while_their_guest_holds_its_lock_and_dead_guests_are_swept() {
         let root = tempfile::tempdir().unwrap();
+        assert_eq!(
+            leased_in(&root.path().join("none")),
+            Leases::These(BTreeSet::new()),
+            "no guests directory"
+        );
         let live = create(root.path()).unwrap();
         write_lease(&live.directory, &BTreeSet::from(["a".repeat(64)])).unwrap();
         let dead = create(root.path()).unwrap();
         write_lease(&dead.directory, &BTreeSet::from(["b".repeat(64)])).unwrap();
         let dead_directory = dead.directory.clone();
         drop(dead);
+        let leases = leased_in(root.path());
+        assert_eq!(leases, Leases::These(BTreeSet::from(["a".repeat(64)])));
+        assert!(leases.keeps(&"a".repeat(64)) && !leases.keeps(&"b".repeat(64)));
+        assert_eq!(leased(None), Leases::These(BTreeSet::new()));
         // No lock file yet: young, kept (a guest that is starting).
         let starting = root.path().join("starting");
         fs::create_dir(&starting).unwrap();
-        assert_eq!(
-            leased_in(root.path()),
-            BTreeSet::from(["a".repeat(64)]),
-            "only the live guest's lease"
-        );
         assert_eq!(sweep(root.path(), None), 1);
         assert!(!dead_directory.exists());
         assert!(live.directory.join(LEASE).is_file(), "a live guest stays");
@@ -516,6 +650,73 @@ mod tests {
         assert!(own.is_dir());
         assert_eq!(sweep(root.path(), None), 1);
         assert!(!own.exists());
+    }
+
+    /// Fail-safe: a guest that may be running and whose lease cannot be
+    /// read (not written yet, or broken), or a directory without a lock
+    /// file yet, keeps everything for that pass.
+    #[test]
+    fn an_unreadable_lease_of_a_live_guest_keeps_everything() {
+        for lease in [None, Some(&b"not json"[..]), Some(&b"{\"a\":1}"[..])] {
+            let root = tempfile::tempdir().unwrap();
+            let live = create(root.path()).unwrap();
+            if let Some(bytes) = lease {
+                fs::write(live.directory.join(LEASE), bytes).unwrap();
+            }
+            let leases = leased_in(root.path());
+            assert_eq!(leases, Leases::All, "{lease:?}");
+            assert!(leases.keeps(&"c".repeat(64)));
+        }
+        let root = tempfile::tempdir().unwrap();
+        fs::create_dir(root.path().join("starting")).unwrap();
+        assert_eq!(leased_in(root.path()), Leases::All);
+    }
+
+    /// A probe holds the lock it took (a sweep deletes under it); a new
+    /// guest waits for a probe that lets go and keeps its directory, and
+    /// gives up a directory that the probing sweep deleted meanwhile.
+    #[test]
+    fn a_new_guest_waits_for_a_probe_and_gives_up_a_swept_directory() {
+        let root = tempfile::tempdir().unwrap();
+        let directory = root.path().join("new");
+        fs::create_dir(&directory).unwrap();
+        open_lock(&directory).unwrap();
+        let Probe::Dead(held) = probe(&directory) else {
+            panic!("an unlocked directory is dead");
+        };
+        assert!(
+            matches!(probe(&directory), Probe::Live),
+            "held while probed"
+        );
+        // The probe lets go without deleting: the guest gets it.
+        let path = directory.clone();
+        let starting = std::thread::spawn(move || create_at(&path).unwrap());
+        std::thread::sleep(Duration::from_millis(200));
+        drop(held);
+        let guest = starting.join().unwrap().expect("kept");
+        assert!(guest.directory.join(PROFILE).is_dir());
+        drop(guest);
+
+        // The probing sweep deletes it while the guest waits: given up.
+        let directory = root.path().join("swept");
+        fs::create_dir(&directory).unwrap();
+        open_lock(&directory).unwrap();
+        let Probe::Dead(held) = probe(&directory) else {
+            panic!("an unlocked directory is dead");
+        };
+        let path = directory.clone();
+        let starting = std::thread::spawn(move || create_at(&path).unwrap());
+        std::thread::sleep(Duration::from_millis(200));
+        fs::remove_dir_all(&directory).unwrap();
+        drop(held);
+        assert!(
+            starting.join().unwrap().is_none(),
+            "the swept one is not used"
+        );
+        assert!(!directory.exists(), "and not made again");
+        // `create` then takes another.
+        let guest = create(root.path()).unwrap();
+        assert!(guest.directory.join(PROFILE).is_dir());
     }
 
     #[test]
@@ -535,7 +736,24 @@ mod tests {
         let adopted = adopt_directory(root.path(), &directory).unwrap();
         released.join().unwrap();
         assert_eq!(adopted.directory, dunce::canonicalize(&directory).unwrap());
-        assert_eq!(alive(&directory), Some(true));
+        assert!(matches!(probe(&directory), Probe::Live));
+        drop(adopted);
+
+        // A sweep that took it between the old process and the new one
+        // deletes it under its lock: the new process does not adopt it.
+        let old = create(root.path()).unwrap();
+        let directory = old.directory.clone();
+        drop(old);
+        let Probe::Dead(held) = probe(&directory) else {
+            panic!("released");
+        };
+        let path = directory.clone();
+        let root_path = root.path().to_path_buf();
+        let adopting = std::thread::spawn(move || adopt_directory(&root_path, &path).is_err());
+        std::thread::sleep(Duration::from_millis(200));
+        fs::remove_dir_all(&directory).unwrap();
+        drop(held);
+        assert!(adopting.join().unwrap(), "a swept directory is not adopted");
     }
 
     #[test]
