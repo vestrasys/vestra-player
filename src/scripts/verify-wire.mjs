@@ -278,6 +278,15 @@ export function normaliseTrace(records, context = {}) {
     }
     const normalised = value(line);
     if (id !== null) normalised.id = id;
+    // A shared counter's value (`REVISION_REPLIES`): not compared.
+    if (
+      isReply(line) &&
+      REVISION_REPLIES.has(kind.slice("reply:".length)) &&
+      normalised.result &&
+      typeof normalised.result === "object" &&
+      "revision" in normalised.result
+    )
+      normalised.result.revision = "<revision>";
     const text = JSON.stringify(normalised);
     const side = ((plugins[plugin] ??= { in: [], out: [] })[dir] ??= []);
     // Only a repeated state broadcast is collapsed: every other line,
@@ -329,11 +338,97 @@ export const INTERFACE_ERRORS = new Set([
 
 /**
  * UI-independent methods answered from a worker thread of the core's, not
- * in the core's turn (plan step S3a(3): `clipboard.*` on its serial
- * thread): their replies keep their order among themselves and may move
- * against every other line (class 4 of [`lineClass`]).
+ * in the core's turn: their replies keep their order among the replies of
+ * the same worker and may move against every other line (class 4 of
+ * [`lineClass`]). Each entry: a worker, its methods by exact name, and
+ * its method prefixes (ending in a dot).
+ *
+ * - `clipboard` (plan step S3a(3)): `clipboard.*` on its serial thread.
+ * - `playback` (plan step S3b, the coordinator's K14 ruling): the methods
+ *   the core hands to the playback worker, answered by the worker's own
+ *   reply event (`capabilities/mod.rs` `forward` and `forward_media`,
+ *   `media_sources::forward_with_store`, and the direct sends of
+ *   `mpv.rs`, `video_motion.rs`, `video_upscaling.rs`,
+ *   `source_resolve.rs`). With the event-driven core a worker reply can
+ *   come before or after the reply to a request the plugin sent at the
+ *   same time; replies to concurrent requests were never ordered. Not
+ *   here, answered in the core: `player.setStepSeek`,
+ *   `power.preventSleep`, `sequence.set`, `sequence.step`,
+ *   `timeline.marks`. A refusal the core gives before forwarding is
+ *   counted here too (by method), which only loosens its place.
  */
-export const WORKER_REPLIES = ["clipboard."];
+export const WORKERS = [
+  { name: "clipboard", exact: [], prefixes: ["clipboard."] },
+  {
+    name: "playback",
+    exact: [
+      // capabilities/playback_read.rs
+      "source.state",
+      "processing.state",
+      "playback.stats",
+      "player.chapters",
+      "player.audioDevices",
+      // capabilities/playback_control.rs
+      "playback.set",
+      "source.submit",
+      "source.operation",
+      "audio.addTrack",
+      "audio.selectTrack",
+      "player.setLoop",
+      "player.setAudioDevice",
+      "player.step",
+      // capabilities/processing_video.rs
+      "processing.replace",
+      "processing.operation",
+      "video.shaders.set",
+      // capabilities/source_resolve.rs
+      "sourceResolvers.register",
+      "sourceResolvers.unregister",
+      "sourceResolvers.respond",
+    ],
+    prefixes: [
+      "video.view.", // processing_video.rs
+      "video.render.", // processing_video.rs
+      "snapshot.", // media_control.rs, media_read.rs
+      "jobs.", // media_control.rs, media_read.rs
+      "media.sources.", // media_sources.rs
+      "subtitles.", // subtitles_control.rs, subtitles_read.rs
+      "producer.", // producer_av.rs
+      "mpv.", // mpv.rs
+      "video.motion.", // video_motion.rs
+      "video.upscaling.", // video_upscaling.rs
+    ],
+  },
+];
+/** The worker a method's reply comes from, or `null` (the core). */
+export function workerOf(method) {
+  return (
+    WORKERS.find(
+      (worker) =>
+        worker.exact.includes(method) ||
+        worker.prefixes.some((prefix) => method.startsWith(prefix)),
+    )?.name ?? null
+  );
+}
+/** Kept for callers of the S3a(3) list: the clipboard prefixes. */
+export const WORKER_REPLIES = WORKERS[0].prefixes;
+
+/**
+ * Replies whose `result.revision` is a shared counter of the host's, whose
+ * value depends on how the host's own changes interleave with the request
+ * (plan step S3b, the coordinator's ruling): the command registry's
+ * (`commands.register`, `commands.update`, `commands.list`;
+ * capabilities/commands.rs, commands_run.rs) and the binding table's
+ * (`commands.keys`, binding_manager.rs). Only that field is normalised;
+ * a `revision` elsewhere (`processing.operation`'s own resource
+ * revision) stays compared.
+ */
+export const REVISION_REPLIES = new Set([
+  "commands.register",
+  "commands.update",
+  "commands.list",
+  "commands.keys",
+]);
 
 /**
  * The class of a line written to a plugin (the S3a row's wire-trace rule):
@@ -343,7 +438,7 @@ export const WORKER_REPLIES = ["clipboard."];
 export function lineClass(entry) {
   if (entry.kind.startsWith("reply:")) {
     const method = entry.kind.slice("reply:".length);
-    if (WORKER_REPLIES.some((prefix) => method.startsWith(prefix))) return 4;
+    if (workerOf(method)) return 4;
     return entry.stream === "B" ? 2 : 1;
   }
   if (!entry.kind.startsWith("event:")) return 1;
@@ -414,14 +509,15 @@ export function compareTraces(a, b, { allowReorders = false } = {}) {
                   "UI-bound replies with the interface-report lines",
                   (e) => lineClass(e) === 2 || lineClass(e) === 3,
                 ],
-                ["worker replies", (e) => lineClass(e) === 4],
+                ...WORKERS.map(({ name }) => [
+                  `${name} worker replies`,
+                  (e) =>
+                    lineClass(e) === 4 &&
+                    workerOf(e.kind.slice("reply:".length)) === name,
+                ]),
               ];
         const broken = parts
-          .map(([name, keep]) => [
-            name,
-            x.filter(keep),
-            y.filter(keep),
-          ])
+          .map(([name, keep]) => [name, x.filter(keep), y.filter(keep)])
           .map(([name, xs, ys]) => [name, xs, ys, firstDifference(xs, ys)])
           .find(([, , , index]) => index >= 0);
         if (broken) {
@@ -454,6 +550,9 @@ export function compareTraces(a, b, { allowReorders = false } = {}) {
           });
           moves[2] += moved[2];
           moves[3] += moved[3];
+          // Only worker replies moved (each worker's in order): nothing
+          // to report (plan step S3b).
+          if (moved[2] + moved[3] === 0) continue;
           reorders.push(
             `${plugin} (${label}): the UI-bound replies (${moved[2]} moved) and the interface-report lines (${moved[3]} moved) interleave differently with the core lines from line ${at + 1}; each class in order\n    A ${where(x[at])}\n    B ${where(y[at])}`,
           );
@@ -471,7 +570,9 @@ export function compareTraces(a, b, { allowReorders = false } = {}) {
     }
   }
   // The move counts belong to the allowed-reorders mode only.
-  return allowReorders ? { differences, reorders, moves } : { differences, reorders };
+  return allowReorders
+    ? { differences, reorders, moves }
+    : { differences, reorders };
 }
 
 // ------------------------------------------------------------------ noise
@@ -930,7 +1031,11 @@ export function diffPaths(a, b, options = {}) {
       for (const text of result.differences) lines.push(`  ${text}`);
       continue;
     }
-    const { differences, reorders, moves } = compareTraces(left, right, options);
+    const { differences, reorders, moves } = compareTraces(
+      left,
+      right,
+      options,
+    );
     failed += differences.length;
     moved[2] += moves?.[2] ?? 0;
     moved[3] += moves?.[3] ?? 0;

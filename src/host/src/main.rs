@@ -754,6 +754,7 @@ fn player() -> Result<()> {
         window_facts: Value::Null,
         facts_seq: 0,
         facts_unsettled: false,
+        facts_quiet: false,
         tabs_sent: Default::default(),
         measured_shell: None,
         menu_open: false,

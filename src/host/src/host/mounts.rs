@@ -506,6 +506,16 @@ impl Host {
             self.ui_report(UiReport::Input(messages::UiInput::MountRetry(changes)));
             return;
         }
+        // The layout pass the batch needs, before its reports (plan step
+        // S3b): with the core answering on arrival, a `layout.state` read
+        // right after the reply would otherwise see the facts of the tick
+        // before the batch (R13 case 1). Quiet: its facts ride on the
+        // handoff below, and the core broadcasts them after the reply.
+        if result.is_ok() {
+            self.facts_quiet = true;
+            self.window_tick();
+            self.facts_quiet = false;
+        }
         let elapsed = started.elapsed().as_secs_f64() * 1000.;
         // One report per change, in batch order, each right after the
         // change's own interface work (its restart line): the interleaving

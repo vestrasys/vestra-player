@@ -65,8 +65,9 @@ impl CoreLink {
     }
 }
 
-/// The core's period (R10, plan step S3a(4): a fixed deadline; an arriving
-/// event does not wake it, which is plan step S3b).
+/// The period of the core's steps (R10): their fixed deadline. Since plan
+/// step S3b an arriving event wakes the core at once (it sleeps on its
+/// queue until the next deadline); only the steps wait for it.
 pub(crate) const CORE_PERIOD: Duration = Duration::from_millis(16);
 
 /// How long the core waits for the interface's quit after it ended the run
@@ -248,13 +249,16 @@ pub(crate) struct CoreStart {
     pub(crate) lost: Option<LostDevice>,
 }
 
-/// The core's thread (plan step S3a(4), the S3a brief's loop form): a fixed
-/// 16 ms period on a deadline (sleep to the next deadline; a turn that ran
-/// late starts the next a full period after it began, without a burst;
-/// review N3), each turn the events
-/// (at least 128, then the time budget), the panel-restart step, the
-/// periodic steps; then the interface is woken if the core→UI queue holds
-/// anything. Its quit (the S3a brief's risk 5): it ends when the interface
+/// The core's thread (plan step S3a(4); plan step S3b, R10's second step):
+/// it sleeps on its queue until an event arrives or the steps' 16 ms
+/// deadline comes. An event is handled when it arrives, in the turn's
+/// order (`core_events`: the interface's reports first, then the rest, at
+/// least 128, then the time budget), followed by the end-of-turn pushes
+/// (`Core::turn_end`). At the deadline (a late one moves the next a full
+/// period after it began, without a burst; review N3) what arrived is
+/// taken in (reports handled, the rest held: `Busy::Request`) and the
+/// panel-restart step and the periodic steps run. After each, the
+/// interface is woken if the core→UI queue holds anything. Its quit (the S3a brief's risk 5): it ends when the interface
 /// asks (`Event::CoreQuit`: the plugins stop within the budget asked, the
 /// state file is written, and after a lost device the player is restarted
 /// from here); it also ends the run on its own at the run's end, after its
@@ -283,45 +287,72 @@ pub(crate) fn run_core(mut core: Core, start: CoreStart, done: mpsc::Sender<Core
     let mut own_quit: Option<Instant> = None;
     let mut stopped = false;
     loop {
+        // Plan step S3b (R10's second step): the core sleeps on its queue
+        // until an event arrives or its periodic steps are due, whichever
+        // is first; events it holds are handled without a wait.
         let now = Instant::now();
-        if next > now {
-            std::thread::sleep(next - now);
-        }
-        next += CORE_PERIOD;
+        let first = if core.held_events.is_empty() && next > now {
+            match receiver.recv_timeout(next - now) {
+                Ok(event) => Some(event),
+                Err(mpsc::RecvTimeoutError::Timeout) => None,
+                Err(mpsc::RecvTimeoutError::Disconnected) => {
+                    // No sender left (the interface is gone): the steps
+                    // keep their deadline.
+                    std::thread::sleep(next.saturating_duration_since(Instant::now()));
+                    None
+                }
+            }
+        } else {
+            None
+        };
         let began = Instant::now();
-        // A late turn: the next one a whole period after this one began
-        // (review N3), not at once.
-        if next < began {
-            next = began + CORE_PERIOD;
-        }
         if panic_at.is_some_and(|at| began >= at) {
             panic!("test: the core panics (VESTRA_TEST_CORE_PANIC)");
         }
         let mut turn = super::stall::Turn::core(began);
+        // The events, in the turn's order (`core_events`: the interface's
+        // reports first, then the rest within the budget).
         core_events(
             &mut core,
             &receiver,
             began,
-            None,
+            first,
             Some(&mut turn),
             |_| (),
             &to_ui,
         );
         turn.step("events");
-        // What came in during the events (S3a(4) verification): the
-        // interface's reports are handled now, the rest waits for the next
-        // turn in `Core::held_events`, where the supervisor sees a plugin's
-        // request still unanswered (`Busy::Request`) and does not stop it
-        // for idleness meanwhile.
-        while let Ok(event) = receiver.try_recv() {
-            if matches!(event, Event::Report(_)) {
-                core.handle(event);
-                core.flush();
-            } else {
-                core.held_events.push_back(event);
+        if Instant::now() >= next {
+            // The periodic steps, on their 16 ms deadline (R10).
+            next += CORE_PERIOD;
+            // A late turn: the next one a whole period after this one
+            // began (review N3), not at once.
+            if next < began {
+                next = began + CORE_PERIOD;
             }
+            // What came in during the events (S3a(4) verification): the
+            // interface's reports are handled now, the rest waits in
+            // `Core::held_events`, where the supervisor sees a plugin's
+            // request still unanswered (`Busy::Request`) and does not stop
+            // it for idleness meanwhile.
+            while let Ok(event) = receiver.try_recv() {
+                if matches!(event, Event::Report(_)) {
+                    core.handle(event);
+                    core.flush();
+                } else {
+                    core.held_events.push_back(event);
+                }
+            }
+            core_steps(&mut core, Some(&mut turn));
+        } else {
+            // Between the steps (plan step S3b): what the events changed of
+            // the end-of-turn pushes goes now (the batching window's
+            // hand-over and close on its own clock, the tables and window
+            // settings), so a reply or a table does not wait for the next
+            // deadline.
+            core.turn_end();
+            core.flush();
         }
-        core_steps(&mut core, Some(&mut turn));
         super::stall::turn_ended(&turn, |owner| core.plugin_id(owner));
         let asked = core.quit_asked.take();
         let device_lost = lost.is_some() && platform::window_device_lost();
