@@ -6,6 +6,9 @@
  * `commands.list`. And the Category drop-down's fixed goals.
  */
 import assert from "node:assert/strict";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { TestHost } from "@vestra-player/sdk/testing";
 import { commandLine, goalsOf, OPEN_LIMIT, splitDescription } from "../open-line.ts";
@@ -83,5 +86,25 @@ test("cards and pages show the line: from the index's description before install
     assert.equal(props(started.host)["d-open"], "菜单：工具 ▸ Alpha");
   } finally {
     await started.stop();
+  }
+});
+
+test("every built-in plugin with a sidebar tab names the sidebar first", () => {
+  const plugins = fileURLToPath(new URL("../../", import.meta.url));
+  const sources = (dir: string): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
+      entry.isDirectory()
+        ? ["tests", "vendor", "node_modules", "dist"].includes(entry.name)
+          ? []
+          : sources(join(dir, entry.name))
+        : entry.name.endsWith(".ts")
+          ? [readFileSync(join(dir, entry.name), "utf8")]
+          : [],
+    );
+  const withTab = readdirSync(plugins).filter((name) => sources(join(plugins, name)).some((text) => /panels\.mount\(\s*"sidebar"/.test(text)));
+  assert.ok(withTab.includes("playlist"), "the playlist has a sidebar tab");
+  for (const name of withTab) {
+    const manifest = JSON.parse(readFileSync(join(plugins, name, "manifest.json"), "utf8"));
+    assert.match(splitDescription(manifest.description).open ?? "", /^Sidebar: /, name);
   }
 });

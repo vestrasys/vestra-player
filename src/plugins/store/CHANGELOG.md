@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.2
+
+- The "how to open" convention puts the sidebar first (owner request 2026-11-21): a plugin with a sidebar tab writes `Sidebar: <tab> tab` (with its key when it has one), and adds its next way in after `; ` only while the line stays within 48 characters, for example `Sidebar: VestraTube tab; Menu: Open ▸ VestraTube`. README and `open-line.ts` say so; the fallback for a plugin without the line still reads menus and palette rows only, since the command table has no tabs. A test checks that every built-in plugin that mounts a sidebar tab (today the Playlist) names the sidebar first. Nothing the store shows changes.
+
 ## 0.3.1
 
 - A new tab **Not installed** right after All (as Steam and Synaptic name it): the repositories' plugins that this player can install and that are neither installed, built in nor loaded with `--plugin`, one card per repository as under All, with its count in the title. Entries that cannot be installed (Incompatible, every version revoked, a reserved `vestra.` id) are left out: the tab is what you could still add, and All keeps them with the reason. It follows search, Category, Sort and "Show built-in plugins" like the other tabs; empty, it says "There are no more plugins to install", or, without any index, that the repositories cannot be reached. The tab is remembered by name, so a tab kept by 0.3.0 (Installed, Updates) opens as before.

@@ -9,6 +9,12 @@ import { msg, type Msg } from "./text.ts";
  *   Saves, saves as or copies the current frame …
  *   → Menu: Tools ▸ Snapshot
  *
+ * A plugin with a sidebar tab names the sidebar first, "Sidebar: Playlist tab
+ * (F6)"; its next way in (a menu, a panel, Options, the command palette)
+ * follows after "; " only while the whole line stays within the limit, else
+ * the sidebar stands alone (owner request 2026-11-21). The fallback below
+ * cannot follow it: `commands.list` knows menus and palette rows, not tabs.
+ *
  * The card shows that line and the description is shown without it. The
  * arrow is not a word, so translations keep it and the line works in every
  * language the description is translated into. Anything else (no marker on
