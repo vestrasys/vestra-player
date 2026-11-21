@@ -1155,6 +1155,13 @@ impl Core {
         self.supervisor_run();
         self.on_demand.written = None;
     }
+    /// A request of `owner`'s waits in the core's queue, read and not
+    /// handled yet (`Core::held_events`): `Busy::Request`.
+    pub(crate) fn request_waiting(&self, owner: u64) -> bool {
+        self.held_events.iter().any(
+            |event| matches!(event, Event::Request(o, _) | Event::Prepared(o, ..) if *o == owner),
+        )
+    }
     /// What the Host itself knows keeps `owner` busy now (`Busy`).
     fn host_busy(&mut self, owner: u64, now: u64) -> BTreeSet<Busy> {
         let mut busy = BTreeSet::new();
@@ -1203,9 +1210,7 @@ impl Core {
         if self.source_state_replies.iter().any(|(o, _)| *o == owner) {
             busy.insert(Busy::SourceState);
         }
-        if self.held_events.iter().any(
-            |event| matches!(event, Event::Request(o, _) | Event::Prepared(o, ..) if *o == owner),
-        ) {
+        if self.request_waiting(owner) {
             busy.insert(Busy::Request);
         }
         // The adjust column's current tab counts only while the column is

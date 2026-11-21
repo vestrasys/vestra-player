@@ -1315,8 +1315,10 @@ impl Core {
     /// once, not each in-between state. The core's conditions and triggers
     /// are evaluated first (`broadcast`); a value with only the tabs changed
     /// broadcasts nothing. Called before a report that writes a line
-    /// (`report_writes_lines`, re-review B1), after the turn's reports, and
-    /// at the end of the turn.
+    /// (`report_writes_lines`, re-review B1), at the interface's
+    /// `UiReport::FactsSettled` (S3a(4) review F2), and at quit
+    /// (`quit_reports`); not at the end of a drain or a turn, which on two
+    /// threads can fall inside the interface's tick.
     pub(crate) fn window_state_out(&mut self) {
         if self.window_facts != self.window_state_sent {
             let facts = self.window_facts.clone();

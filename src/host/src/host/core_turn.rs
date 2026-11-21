@@ -900,3 +900,28 @@ fn an_applied_that_releases_a_reply_sends_the_pending_window_state_first() {
     );
     assert!(core.outbox.waiting.is_empty(), "the reply went");
 }
+
+/// S3a(4) re-review: `Busy::Request`'s source. A request of a plugin read
+/// into the core's held events keeps it busy until it is taken to be
+/// handled; another plugin's request does not. (`host_busy` itself needs a
+/// running plugin process in `Core::plugins`, which a unit test cannot
+/// build; it inserts `Busy::Request` exactly when this holds.)
+#[test]
+fn a_held_request_keeps_its_plugin_busy_until_it_is_taken() {
+    let root = tempfile::tempdir().unwrap();
+    let (mut core, _events, _commands) = core(root.path());
+    assert!(!core.request_waiting(7));
+    core.held_events.push_back(Event::Request(
+        7,
+        json!({"id": 1, "method": "bindings.list"}),
+    ));
+    core.held_events.push_back(Event::MainClosed);
+    assert!(core.request_waiting(7), "its request waits");
+    assert!(!core.request_waiting(8), "not another plugin's");
+    let taken = core.held_events.pop_front();
+    assert!(matches!(taken, Some(Event::Request(7, _))));
+    assert!(
+        !core.request_waiting(7),
+        "taken to be handled: no longer busy"
+    );
+}

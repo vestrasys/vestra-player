@@ -84,6 +84,31 @@ pub(crate) const JOIN_MARGIN: Duration = Duration::from_secs(2);
 /// The exit code when the core's thread panicked: what a panic that
 /// unwound out of the UI thread's loop gave before plan step S3a(4).
 pub(crate) const CORE_PANIC_EXIT: u32 = 101;
+/// How long the unwind of a panicked core may take before the process is
+/// ended anyway (`PanicWatchdog`): dropping the core stops its plugins and
+/// joins its playback worker, either of which can block.
+const PANIC_EXIT_WAIT: Duration = Duration::from_secs(2);
+
+/// Ends the process [`PANIC_EXIT_WAIT`] after the core's thread began to
+/// unwind from a panic (S3a(4) re-review): its drop runs before the core's
+/// own (a local of `run_core`, dropped before its `core` argument), so a
+/// `Plugin::drop` or `Backend::drop` that blocks cannot keep the player
+/// alive with a dead core. On a normal return it does nothing.
+struct PanicWatchdog;
+
+impl Drop for PanicWatchdog {
+    fn drop(&mut self) {
+        if std::thread::panicking() {
+            let _ = std::thread::Builder::new()
+                .name("core-panic-watchdog".into())
+                .spawn(|| {
+                    std::thread::sleep(PANIC_EXIT_WAIT);
+                    logged!("exit: the core's unwind did not end; ending the player");
+                    platform::exit_now(CORE_PANIC_EXIT);
+                });
+        }
+    }
+}
 
 /// The interface's wake (plan step S3a(4), the S3a brief's "Queues"): at
 /// most one `invoke_from_event_loop` pending at a time. The core sets the
@@ -225,7 +250,8 @@ pub(crate) struct CoreStart {
 
 /// The core's thread (plan step S3a(4), the S3a brief's loop form): a fixed
 /// 16 ms period on a deadline (sleep to the next deadline; a turn that ran
-/// late starts the next at once, without a burst), each turn the events
+/// late starts the next a full period after it began, without a burst;
+/// review N3), each turn the events
 /// (at least 128, then the time budget), the panel-restart step, the
 /// periodic steps; then the interface is woken if the core→UI queue holds
 /// anything. Its quit (the S3a brief's risk 5): it ends when the interface
@@ -237,6 +263,7 @@ pub(crate) struct CoreStart {
 /// writes the state file and ends. The core goes back to the interface,
 /// which drops it before its windows, as before.
 pub(crate) fn run_core(mut core: Core, start: CoreStart, done: mpsc::Sender<Core>) {
+    let _watchdog = PanicWatchdog;
     let CoreStart {
         receiver,
         to_ui,

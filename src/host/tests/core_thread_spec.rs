@@ -1483,7 +1483,7 @@ fn a_panic_of_the_core_ends_the_player_with_a_failure() {
         std::thread::sleep(std::time::Duration::from_millis(50));
     };
     let log = std::fs::read_to_string(root.path().join("stderr.txt")).unwrap_or_default();
-    assert!(!status.success(), "a failure exit: {log}");
+    assert_eq!(status.code(), Some(101), "the panic exit code: {log}");
     assert!(
         log.contains("VESTRA_TEST_CORE_PANIC"),
         "the core panicked: {log}"
