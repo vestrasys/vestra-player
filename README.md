@@ -1,5 +1,5 @@
 <p align="center"><img src=".github/readme/banner.webp" width="800" alt="Vestra Player: the logo above the player playing Big Buck Bunny with its playlist in the sidebar, and the Plugin Store in front showing AMD Motion Smoothing, Clip Export, Silence Skipper and Shader Upscale"></p>
-<p align="center"><b>A fast, keyboard-friendly desktop video player where every feature is a plugin.</b></p>
+<p align="center"><b>The open-source video player that grows with its community — and with AI.</b></p>
 <p align="center">
   <a href="https://github.com/vestrasys/vestra-player/actions/workflows/main.yml"><img src="https://github.com/vestrasys/vestra-player/actions/workflows/main.yml/badge.svg?branch=main" alt="CI"></a>
   <a href="https://github.com/vestrasys/vestra-player/releases"><img src="https://img.shields.io/badge/release-v0.10.2-blue" alt="Latest release"></a>
