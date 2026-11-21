@@ -509,8 +509,11 @@ impl Host {
         // The layout pass the batch needs, before its reports (plan step
         // S3b): with the core answering on arrival, a `layout.state` read
         // right after the reply would otherwise see the facts of the tick
-        // before the batch (R13 case 1). Quiet: its facts ride on the
-        // handoff below, and the core broadcasts them after the reply.
+        // before the batch (R13 case 1). A full window tick (its other work
+        // too: the bar, the title strip, the measured video area) with only
+        // its facts report held back (`facts_quiet`): the facts ride on the
+        // handoff below, and the core broadcasts them after the reply. It
+        // runs in both arrangements (also under `VESTRA_CORE_ON_UI=1`).
         if result.is_ok() {
             self.facts_quiet = true;
             self.window_tick();

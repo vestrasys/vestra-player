@@ -15,15 +15,16 @@
 //! `VESTRA_CORE_ON_UI=1` keeps from plan step S3a(4) on, when the core
 //! gets its own thread).
 //!
-//! Plan step S3a(4), the thread: the core runs its turn on its own thread
-//! (`vestra-core`, [`run_core`]) on a fixed 16 ms deadline; it wakes the
-//! interface with `invoke_from_event_loop`, at most one wake pending at a
-//! time ([`Waker`]); at quit the interface asks it to end and joins it with
-//! a bound ([`Host::join_core`]), and it ends on its own too (the run's
-//! end, its own quit, a lost device). `VESTRA_CORE_ON_UI=1` keeps the
-//! arrangement of S3a(3): the same queues and messages, the core's turn
-//! called from the UI thread's timer. Start-up and headless runs keep the
-//! core here.
+//! Plan step S3a(4), the thread: the core runs on its own thread
+//! (`vestra-core`, [`run_core`]); since plan step S3b it sleeps on its
+//! queue and handles each event when it arrives, its periodic steps on a
+//! 16 ms deadline. It wakes the interface with `invoke_from_event_loop`,
+//! at most one wake pending at a time ([`Waker`]); at quit the interface
+//! asks it to end and joins it with a bound ([`Host::join_core`]), and it
+//! ends on its own too (the run's end, its own quit, a lost device).
+//! `VESTRA_CORE_ON_UI=1` keeps the arrangement of S3a(3): the same queues
+//! and messages, the core's turn called from the UI thread's timer.
+//! Start-up and headless runs keep the core here.
 use super::messages::{UiEvent, UiReport};
 use super::outbox::{Copies, ToUi};
 use super::*;
@@ -258,8 +259,9 @@ pub(crate) struct CoreStart {
 /// period after it began, without a burst; review N3) what arrived is
 /// taken in (reports handled, the rest held: `Busy::Request`) and the
 /// panel-restart step and the periodic steps run. After each, the
-/// interface is woken if the core→UI queue holds anything. Its quit (the S3a brief's risk 5): it ends when the interface
-/// asks (`Event::CoreQuit`: the plugins stop within the budget asked, the
+/// interface is woken if the core→UI queue holds anything. Its quit (the
+/// S3a brief's risk 5): it ends when the interface asks
+/// (`Event::CoreQuit`: the plugins stop within the budget asked, the
 /// state file is written, and after a lost device the player is restarted
 /// from here); it also ends the run on its own at the run's end, after its
 /// own `quit` command and on a lost device: the plugins stop at once, and

@@ -465,6 +465,32 @@ test("worker replies: the methods of each worker, from the code", () => {
   assert.equal(workerOf("clipboard.writeText"), "clipboard");
 });
 
+test("worker replies: a UI-bound reply is never a worker reply (media.sources.locate stays class 2)", () => {
+  // S3b review: `media.sources.locate` is behind the `media.sources.`
+  // prefix the playback worker answers, but its reply waits for the
+  // user's choice in a file dialog (UI-bound, design row 65c).
+  assert.equal(workerOf("media.sources.locate"), null);
+  assert.equal(workerOf("media.sources.open"), "playback");
+  for (const method of STREAMS.uiBound)
+    assert.equal(workerOf(method), null, `${method} is UI-bound`);
+  const steps: Step[] = [
+    ["l.one", "in", { id: 1, method: "media.sources.locate", params: {} }],
+    ["l.one", "in", { id: 2, method: "timeline.marks", params: {} }],
+    ["l.one", "out", { id: 2, result: { marks: [], ranges: [] } }],
+    ["l.one", "out", { id: 1, result: { path: "x" } }],
+  ];
+  const a = normalise(trace(steps, A), A);
+  assert.equal(a.plugins["l.one"].out[1].stream, "B");
+  assert.equal(lineClass(a.plugins["l.one"].out[1]), 2);
+  // Moved against the core reply: an allowed class 2 move, counted.
+  const moved: Step[] = [steps[0], steps[1], steps[3], steps[2]];
+  const allowed = compareTraces(a, normalise(trace(moved, B), B), {
+    allowReorders: true,
+  });
+  assert.deepEqual(allowed.differences, []);
+  assert.deepEqual(allowed.moves, { 2: 1, 3: 0 });
+});
+
 test("revision noise: only result.revision of the shared counters is not compared (S3b)", () => {
   assert.deepEqual([...REVISION_REPLIES].sort(), [
     "commands.keys",

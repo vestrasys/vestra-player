@@ -391,13 +391,16 @@ export const WORKERS = [
       "video.render.", // processing_video.rs
       "snapshot.", // media_control.rs, media_read.rs
       "jobs.", // media_control.rs, media_read.rs
-      "media.sources.", // media_sources.rs
+      "media.sources.", // media_sources.rs (not `locate`: `except`)
       "subtitles.", // subtitles_control.rs, subtitles_read.rs
       "producer.", // producer_av.rs
       "mpv.", // mpv.rs
       "video.motion.", // video_motion.rs
       "video.upscaling.", // video_upscaling.rs
     ],
+    // UI-bound (design row 65c): its reply waits for the user's choice in
+    // a file dialog, so it is a class 2 reply, not a worker reply.
+    except: ["media.sources.locate"],
   },
 ];
 /** The worker a method's reply comes from, or `null` (the core). */
@@ -405,8 +408,9 @@ export function workerOf(method) {
   return (
     WORKERS.find(
       (worker) =>
-        worker.exact.includes(method) ||
-        worker.prefixes.some((prefix) => method.startsWith(prefix)),
+        !(worker.except ?? []).includes(method) &&
+        (worker.exact.includes(method) ||
+          worker.prefixes.some((prefix) => method.startsWith(prefix))),
     )?.name ?? null
   );
 }
