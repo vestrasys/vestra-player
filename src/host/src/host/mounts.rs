@@ -512,8 +512,7 @@ impl Host {
         // before the batch (R13 case 1). A full window tick (its other work
         // too: the bar, the title strip, the measured video area) with only
         // its facts report held back (`facts_quiet`): the facts ride on the
-        // handoff below, and the core broadcasts them after the reply. It
-        // runs in both arrangements (also under `VESTRA_CORE_ON_UI=1`).
+        // handoff below, and the core broadcasts them after the reply.
         if result.is_ok() {
             self.facts_quiet = true;
             self.window_tick();

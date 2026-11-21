@@ -10,10 +10,7 @@
 //! place any more. The interface's reports go into the core's one event
 //! queue ([`Host::send_report`]) and are handled in the core's turn; what
 //! the core issues goes into the one core→UI queue (`Core::flush`), which
-//! the interface applies at its wake ([`Host::apply_queue`]). The core's
-//! turn is still called from the UI thread's timer (the arrangement
-//! `VESTRA_CORE_ON_UI=1` keeps from plan step S3a(4) on, when the core
-//! gets its own thread).
+//! the interface applies at its wake ([`Host::apply_queue`]).
 //!
 //! Plan step S3a(4), the thread: the core runs on its own thread
 //! (`vestra-core`, [`run_core`]); since plan step S3b it sleeps on its
@@ -22,17 +19,16 @@
 //! at most one wake pending at a time ([`Waker`]); at quit the interface
 //! asks it to end and joins it with a bound ([`Host::join_core`]), and it
 //! ends on its own too (the run's end, its own quit, a lost device).
-//! `VESTRA_CORE_ON_UI=1` keeps the arrangement of S3a(3): the same queues
-//! and messages, the core's turn called from the UI thread's timer.
-//! Start-up and headless runs keep the core here.
+//! Start-up and headless runs keep the core here (the headless driver has
+//! no interface and runs the same turn on the main thread).
 use super::messages::{UiEvent, UiReport};
 use super::outbox::{Copies, ToUi};
 use super::*;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-/// The core as the interface holds it: here (start-up, headless runs, the
-/// arrangement `VESTRA_CORE_ON_UI=1`, and back again after its thread
-/// ended at quit), or on its own thread (plan step S3a(4)).
+/// The core as the interface holds it: here (start-up, headless runs, and
+/// back again after its thread ended at quit), or on its own thread (plan
+/// step S3a(4)).
 pub(crate) struct CoreLink {
     core: Option<Core>,
     thread: Option<CoreThread>,
@@ -53,7 +49,7 @@ impl CoreLink {
         }
     }
     /// The core, here. Only where the core is here: the start-up and quit
-    /// calls, headless runs, the arrangement `VESTRA_CORE_ON_UI=1`.
+    /// calls, headless runs.
     fn here(&mut self) -> &mut Core {
         self.core
             .as_mut()
@@ -520,10 +516,10 @@ impl Host {
     /// shutdown `budget` plus [`JOIN_MARGIN`], before any window is
     /// dropped; the core comes back here. On a timeout the process is ended
     /// at once (`platform::exit_now`), as a stuck teardown after a device
-    /// loss is. False where the core is here (nothing to join).
-    pub(crate) fn join_core(&mut self, budget: Duration, device_lost: bool) -> bool {
+    /// loss is. Nothing to join where the core is already here.
+    pub(crate) fn join_core(&mut self, budget: Duration, device_lost: bool) {
         let Some(thread) = self.link.thread.take() else {
-            return false;
+            return;
         };
         let _ = self.to_core.send(Event::CoreQuit(CoreQuit {
             budget,
@@ -534,7 +530,6 @@ impl Host {
             Ok(core) => {
                 let _ = thread.handle.join();
                 self.link.core = Some(core);
-                true
             }
             // The thread ended without giving the core back: a panic its
             // wrapper did not get to end the process for (S3a(4) review F1).
@@ -619,8 +614,8 @@ impl Host {
         self.stored_in_flight
             .take(&mut self.pages, copies.stored, copies.pages);
     }
-    /// The core's turn's first half, here (the headless driver and the
-    /// arrangement `VESTRA_CORE_ON_UI=1`; [`core_events`]).
+    /// The core's turn's first half, here (the headless driver;
+    /// [`core_events`]).
     pub(crate) fn core_events(
         &mut self,
         receiver: &mpsc::Receiver<Event>,

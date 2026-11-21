@@ -9,10 +9,10 @@ Plugin authors' view of the same rules (timings, stop reasons, what keeps a plug
 | Part | Where | What it does |
 | --- | --- | --- |
 | Core | `src/host/src/supervisor/` | Pure decision logic: it takes events (a process was created, became ready, exited, was reaped; a trigger arrived; a timer is due; the memory level changed) and returns a list of actions (create a process, deliver a message, stop, kill, write a recording, show a notice, …). It does no I/O itself: no files, no processes, no environment, no clock (the time is passed in as milliseconds), and randomness comes from a seeded generator. So the same inputs always give the same actions, and the whole core is tested by deterministic simulations. It contains no `unsafe` code. |
-| Adapter | `src/host/src/host/supervisor/` | Runs on the UI thread. Feeds the core the host's events and executes its actions with the rest of the host: the process layer (`src/host/src/process/`), the capability registries, the playback worker, notices, `packages.changed`. Also safe code only. |
+| Adapter | `src/host/src/host/supervisor/` | Runs on the core's thread (`vestra-core`, since player 0.10.2; before, the UI thread; [core-thread.md](core-thread.md)). Feeds the core the host's events and executes its actions with the rest of the host: the process layer (`src/host/src/process/`), the capability registries, the playback worker, notices, `packages.changed`. Also safe code only. |
 | Platform | `src/host/src/platform/` | Physical memory size and the memory pressure level, per operating system. |
 
-Three helper threads keep slow work off the UI thread: `plugin-spawner` creates own processes (about 30 ms each on Windows), `plugin-recorder` writes standby recordings in order, and `plugin-reaper` waits for every stopped process and kills it at its deadline.
+Three helper threads keep slow work off the core's thread: `plugin-spawner` creates own processes (about 30 ms each on Windows), `plugin-recorder` writes standby recordings in order, and `plugin-reaper` waits for every stopped process and kills it at its deadline.
 
 ## 2. Units and classes
 
@@ -138,7 +138,7 @@ A start waiting for a slot has no deadline of its own: the slots free up within 
 | "Starting *name*…" notice | after 400 ms |
 | Wake events after start-up settles | muted for 1 s; then a plugin parked meanwhile wakes once if a state it listens to changed |
 | Shared runner without members | exits after the idle time, at least 30 s |
-| Shared runner heartbeat | every 2 s; 5 missed in a row = hung (a hello or pong counts when the runner's reader thread sees it, not when the UI thread handles it) |
+| Shared runner heartbeat | every 2 s; 5 missed in a row = hung (a hello or pong counts when the runner's reader thread sees it, not when the core handles it) |
 | Memory pressure reading | every 5 s |
 
 ## 7. Faults, restart and backoff
@@ -176,7 +176,7 @@ The built-ins share one Node process. An uncaught exception the runner traces to
 A plugin may have at most 320 request lines and 4 MiB of request bytes unanswered (user ruling 2026-11-11, after measuring the built-ins; `process/unanswered.rs`). The SDK keeps at most 256 requests in flight per plugin and queues the rest itself without an error, so a plugin on the SDK never reaches the host's limit; it is the backstop for a client that writes the protocol itself. The 64 lines over the SDK's 256 are for the requests the SDK never queues (`UNQUEUED_METHODS`: answers to the player's own calls), whose number the player bounds: at most 32 waiting resolutions (`sourceResolvers.respond`), the front of at most 32 queued input notices (`producer.ackInput`, `CAPACITY` in `playback/producer_input_delivery.rs`) and one pending control (`producer.ack`); the SDK agreement test checks the margin. The time-budgeted drain (README.md §4.2, `ticks`) keeps a flood from stalling input and the other plugins; this limit keeps it from growing the UI thread's queue without bound.
 
 - **Counted per plugin**: an own process, or one member of the shared runner (not the runner). A request counts from the reader thread that read its line (whole line, newline included; a member's with the runner's `"g"` envelope) until the host answers it (`Host::respond`). A repeated id counts each line. A stopped plugin's counter goes with it, and a restart (a new generation) starts at zero.
-- **Past either limit**, the reader thread answers the request at once with `limit` ("too many unanswered requests"): it is not forwarded, so nothing on the UI thread handles it, the other plugins and members are not held behind it, and the plugin is not stopped. The answer goes on the plugin's own write queue (the runner's for a member); at most 256 refusals of one plugin wait there to be written, and past that a request is dropped unanswered, so a client that floods without reading its input cannot fill the queue its answers and events share (a full one would stop it, or restart the runner).
+- **Past either limit**, the reader thread answers the request at once with `limit` ("too many unanswered requests"): it is not forwarded, so nothing in the core handles it, the other plugins and members are not held behind it, and the plugin is not stopped. The answer goes on the plugin's own write queue (the runner's for a member); at most 256 refusals of one plugin wait there to be written, and past that a request is dropped unanswered, so a client that floods without reading its input cannot fill the queue its answers and events share (a full one would stop it, or restart the runner).
 - **Logged** once per burst in host.log (`logged!`): the plugin id and its counts when the first request is refused; the burst ends once the plugin is back under half of both limits (160 lines and 2 MiB), so a plugin with one request held for long (an open dialog) logs its next burst too, and a flood held at the limit logs once, not at every answer.
 - **Notifications** (lines without an `id`) do not count: there is no answer to free them and no id to refuse with, and the protocol has two per run (`runtime.ready`, `runtime.failed`).
 

@@ -27,8 +27,7 @@
 //!   together with `STALL_ASSERTIONS_HOLD = true` in `ui_stall.rs` and the
 //!   R12 stall case in `ui_bound_spec.rs`. Until then `ci:local` shows them
 //!   failing, as it shows that R12 case. (Flipped in plan step S3a(4), the
-//!   thread; they hold only with the core on its own thread, not with
-//!   `VESTRA_CORE_ON_UI=1`.)
+//!   thread; they hold only with the core on its own thread.)
 //!
 //! Not testable through today's public harness (each says which hook it
 //! needs, in its own comment): R8 needs a UI-side key injection hook; groups A/G need displays
@@ -1466,7 +1465,6 @@ fn a_panic_of_the_core_ends_the_player_with_a_failure() {
         .env("VESTRA_INSTANCE_DIR", root.path().join("instance"))
         .env("VESTRA_LANGUAGE", "en")
         .env("VESTRA_TEST_CORE_PANIC", "1500")
-        .env_remove("VESTRA_CORE_ON_UI")
         .stdout(std::process::Stdio::null())
         .stderr(std::fs::File::create(root.path().join("stderr.txt")).unwrap());
     let started = std::time::Instant::now();

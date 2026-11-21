@@ -397,7 +397,9 @@ impl RunsView {
             .iter()
             .any(|((owner, id), _)| *owner == reply.owner && *id == reply.id)
     }
-    /// [`CommandRuns::offered`].
+    /// The interface's copy of `CommandRuns::offered` (a test helper
+    /// there): the shown names the waiting run answering `reply` would
+    /// trust, if it still waits.
     pub fn offered(&self, reply: &Reply) -> Option<&[String]> {
         self.confirming
             .iter()

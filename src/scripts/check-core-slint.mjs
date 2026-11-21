@@ -241,7 +241,9 @@ function scanDriver(sources) {
       const open = m.index + m[0].length - 1;
       const body = text.slice(open + 1, blockEnd(text, open) - 1);
       if (m[1] === "CoreLink" && rel !== DRIVER) {
-        findings.push(`${rel}:${lineOf(text, m.index)}: CoreLink outside ${DRIVER}`);
+        findings.push(
+          `${rel}:${lineOf(text, m.index)}: CoreLink outside ${DRIVER}`,
+        );
       }
       body.split("\n").forEach((line, n) => {
         const at = `${rel}:${lineOf(text, open) + n}`;
@@ -250,7 +252,9 @@ function scanDriver(sources) {
         }
         if (m[1] === "CoreLink") {
           if (/\bpub\b/.test(line)) {
-            findings.push(`${at}: a CoreLink field is not private: ${line.trim()}`);
+            findings.push(
+              `${at}: a CoreLink field is not private: ${line.trim()}`,
+            );
           }
           if (/\bCore\b/.test(line)) links++;
         }
@@ -258,7 +262,9 @@ function scanDriver(sources) {
     }
     if (rel !== DRIVER) {
       for (const m of text.matchAll(/\blink\s*\.\s*core\b/g)) {
-        findings.push(`${rel}:${lineOf(text, m.index)}: link.core outside ${DRIVER}`);
+        findings.push(
+          `${rel}:${lineOf(text, m.index)}: link.core outside ${DRIVER}`,
+        );
       }
     }
     if (rel !== "main.rs" && rel !== DRIVER) {
@@ -304,7 +310,10 @@ fn interface(host: &mut Host) {
     // host.link.core in a comment
 }`,
     ],
-    ["main.rs", `fn main() { host.starting(|core| ()); host.quitting(|core| ()); }`],
+    [
+      "main.rs",
+      `fn main() { host.starting(|core| ()); host.quitting(|core| ()); }`,
+    ],
   ];
   const want = sources[1][1]
     .split("\n")
@@ -312,7 +321,11 @@ fn interface(host: &mut Host) {
     .filter(Boolean);
   const { links, findings: found } = scanDriver(sources);
   const got = [...new Set(found.map((f) => Number(f.split(":")[1])))];
-  if (links !== 2 || found.some((f) => !f.startsWith("host/mod.rs:")) || want.join() !== got.join()) {
+  if (
+    links !== 2 ||
+    found.some((f) => !f.startsWith("host/mod.rs:")) ||
+    want.join() !== got.join()
+  ) {
     console.error(
       `check-core-slint: driver self-test failed: expected findings on host/mod.rs lines ${want.join(", ")}, got ${found.join("; ") || "none"}`,
     );
@@ -387,7 +400,9 @@ function platformWindowFns(sources, names) {
       grew = false;
       for (const [name, body] of bodies) {
         if (reaching.has(name)) continue;
-        if ([...reaching].some((r) => new RegExp(`\\b${r}\\s*\\(`).test(body))) {
+        if (
+          [...reaching].some((r) => new RegExp(`\\b${r}\\s*\\(`).test(body))
+        ) {
           reaching.add(name);
           grew = true;
         }
@@ -463,7 +478,9 @@ function scanBodies(sources) {
       if (invokes.some(([a, b]) => at > a && at < b)) continue;
       report(m.index, "slint", m[0].replace(/\s+/g, ""));
     }
-    for (const m of body.matchAll(/\bcomposition\s*::\s*(build|shell_in)\s*\(/g))
+    for (const m of body.matchAll(
+      /\bcomposition\s*::\s*(build|shell_in)\s*\(/g,
+    ))
       report(m.index, "slint-compile", `composition::${m[1]}`);
     for (const m of body.matchAll(/\bcrate\s*::\s*clipboard\s*::\s*\w+/g))
       report(m.index, "clipboard", m[0].replace(/\s+/g, ""));
@@ -524,7 +541,9 @@ console.log(
 );
 const driver = scanDriver(sources);
 if (driver.links !== 1) {
-  driver.findings.push(`${DRIVER}: expected one CoreLink holding the core, found ${driver.links}`);
+  driver.findings.push(
+    `${DRIVER}: expected one CoreLink holding the core, found ${driver.links}`,
+  );
 }
 console.log(`driver (plan step S3a(1)): ${driver.findings.length} finding(s)`);
 const gate = scanBodies(sources);
