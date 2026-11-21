@@ -1,4 +1,4 @@
-<p align="center"><img src=".github/readme/banner.webp" width="800" alt="Vestra Player: the logo above the player, a meadow from Big Buck Bunny playing, the Adjustments and Effects column open on its Picture panel"></p>
+<p align="center"><img src=".github/readme/banner.webp" width="800" alt="Vestra Player: the logo above the player playing Big Buck Bunny with its playlist in the sidebar, and the Plugin Store in front showing AMD Motion Smoothing, Clip Export, Silence Skipper and Shader Upscale"></p>
 <p align="center"><b>A fast, keyboard-friendly desktop video player where every feature is a plugin.</b></p>
 <p align="center">
   <a href="https://github.com/vestrasys/vestra-player/actions/workflows/main.yml"><img src="https://github.com/vestrasys/vestra-player/actions/workflows/main.yml/badge.svg?branch=main" alt="CI"></a>
@@ -19,11 +19,11 @@ Vestra Player is an open-source video player for macOS and Windows. It aims for 
 
 <table>
   <tr>
-    <td width="50%"><a href=".github/readme/picture-adjustments.webp"><img src=".github/readme/picture-adjustments.webp" alt="The Adjustments and Effects column beside a playing video, its Picture panel open"></a><br><b>Picture adjustments</b>: the Adjustments and Effects column (bottom bar, or Alt+1 for its Picture panel); changes apply while the video plays.</td>
-    <td width="50%"><a href=".github/readme/plugin-store.webp"><img src=".github/readme/plugin-store.webp" alt="Plugin Store window listing the available plugins"></a><br><b>Plugin Store</b>: install plugins from the bottom bar; they appear right away.</td>
+    <td width="50%"><a href=".github/readme/picture-adjustments.webp"><img src=".github/readme/picture-adjustments.webp" alt="The Adjustments and Effects column on its Picture panel beside a playing Big Buck Bunny scene: colour sliders, effects and the geometry preview"></a><br><b>Picture adjustments</b>: the Adjustments and Effects column (bottom bar, or Alt+1 for its Picture panel); changes apply while the video plays.</td>
+    <td width="50%"><a href=".github/readme/plugin-store.webp"><img src=".github/readme/plugin-store.webp" alt="Plugin Store window: a grid of plugin cards with their icons, where each opens and Install buttons"></a><br><b>Plugin Store</b>: install plugins from the bottom bar; each card says where to open it.</td>
   </tr>
   <tr>
-    <td><a href=".github/readme/vestratube.webp"><img src=".github/readme/vestratube.webp" alt="VestraTube search results in the sidebar beside a playing open movie"></a><br><b>VestraTube</b>: search YouTube in the sidebar and play a video.</td>
+    <td><a href=".github/readme/playlist.webp"><img src=".github/readme/playlist.webp" alt="The Playlist tab in the sidebar listing five open movies with thumbnails and durations, beside Big Buck Bunny playing"></a><br><b>Playlist</b>: a sidebar tab with thumbnails and durations (F6); plugins add tabs of their own.</td>
     <td><a href=".github/readme/vestranes.webp"><img src=".github/readme/vestranes.webp" alt="An NES game running in the player with the VestraNES window"></a><br><b>VestraNES</b>: a plugin can be a whole emulator.</td>
   </tr>
   <tr>
@@ -32,7 +32,7 @@ Vestra Player is an open-source video player for macOS and Windows. It aims for 
   </tr>
 </table>
 
-<sub>Footage: Big Buck Bunny © 2008 Blender Foundation, <a href="https://creativecommons.org/licenses/by/3.0/">CC BY 3.0</a>; Spring © Blender Foundation, <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>; Twin Dragons (open-source NES homebrew) by Garydos, surt and Shiru, code <a href="https://github.com/Garydos/twin-dragons-nes">zlib</a>, graphics <a href="https://opengameart.org/content/twin-dragons">CC BY 3.0</a>.</sub>
+<sub>Footage: Big Buck Bunny © 2008, Caminandes 2, Sintel and Tears of Steel © Blender Foundation, <a href="https://creativecommons.org/licenses/by/3.0/">CC BY 3.0</a>; Elephants Dream © 2006 Blender Foundation / Netherlands Media Art Institute, <a href="https://creativecommons.org/licenses/by/2.5/">CC BY 2.5</a>; Spring © Blender Foundation, <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>; Twin Dragons (open-source NES homebrew) by Garydos, surt and Shiru, code <a href="https://github.com/Garydos/twin-dragons-nes">zlib</a>, graphics <a href="https://opengameart.org/content/twin-dragons">CC BY 3.0</a>.</sub>
 
 ## Core ideas
 
