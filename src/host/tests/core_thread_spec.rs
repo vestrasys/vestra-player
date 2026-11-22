@@ -1249,8 +1249,18 @@ const K9_STALL_MS: i64 = 8_000;
 /// shutdown deadline holds while the UI part is stalled"): the run ends
 /// (`--seconds 9`) while the UI is stalled (6 s to 14 s). The plugin is
 /// told to stop within the budget: its `onDispose` runs at most 1 s after
-/// the run's end (plus 1 s for the start's offset and the pipe), well
-/// before the stall ends.
+/// the run's end, well before the stall ends.
+///
+/// The run's end is counted from the host's first phase, not from the
+/// test's clock: `--seconds` counts from `start` in `main.rs`, taken when
+/// start-up is done, so a slower start-up (a loaded machine) moved the end
+/// and failed the test without the stop being late. The test cannot see
+/// `start`; it sees the plugin's activation, which comes right after the
+/// host's first phase and always after `start` (the core thread that
+/// activates plugins starts after it). So the run ends at most
+/// `K9_SECONDS` after the activation, and the stop must come at most 1 s
+/// after that. The stall bound is unchanged: the stall is timed from the
+/// process start, which `started` precedes.
 ///
 /// Assumes the run's end is a quit the core acts on by itself (on two
 /// threads `--seconds` must not wait for the UI). If S3a keeps that clock
@@ -1269,6 +1279,7 @@ fn k9_the_plugin_shutdown_deadline_holds_with_the_ui_stalled() {
         root.path(),
         K9,
         r#"export default function activate(plugin) {
+  log("k9-start", { at: Date.now() });
   plugin.onDispose((info) => log("k9-dispose", { at: Date.now(), reason: info?.reason ?? null }));
   setTimeout(async () => log("k9-alive", await req(plugin, "storage.session.get", { key: "k" })), 1000);
 }
@@ -1286,14 +1297,15 @@ fn k9_the_plugin_shutdown_deadline_holds_with_the_ui_stalled() {
     );
     assert!(run.one("k9-alive").get("ok").is_some(), "{}", run.log);
     let stall_ends = started + STALL_AT_MS + K9_STALL_MS;
-    let end = started + K9_SECONDS * 1_000;
+    // At most the run's end: the activation is after `start` (above).
+    let end = run.one("k9-start")["at"].as_i64().unwrap() + K9_SECONDS * 1_000;
     let disposed = run.spec("k9-dispose");
     let at = disposed
         .first()
         .and_then(|d| d["at"].as_i64())
         .unwrap_or_else(|| panic!("the plugin's onDispose ran: {}", run.log));
     assert!(
-        at < end + 2_000 && at < stall_ends - 1_000,
+        at < end + 1_000 && at < stall_ends - 1_000,
         "K9: the plugin was told to stop {} ms after the run's end ({} ms before the stall ended): {}",
         at - end,
         stall_ends - at,
