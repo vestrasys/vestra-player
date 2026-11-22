@@ -172,6 +172,16 @@ export declare class Connection {
      */
     hold(event: string, why?: Why, always?: boolean): Disposable;
     /**
+     * The SDK's own follower of `event` (SDK 1.11.0-rc.4): a handle that sends
+     * its values again when the source changes (`plugin.video.view()`, a
+     * shader channel, a processing node). It subscribes a held-only group
+     * while it lives, as {@link Connection.hold} does, but counts as the SDK's
+     * copy, not as a listener: the player is told `mirror` unless a plugin
+     * listener holds the group too. What the handle holds keeps the plugin
+     * running with its own reason; following the source is not one.
+     */
+    track(event: string, always?: boolean): Disposable;
+    /**
      * {@link Connection.hold} for `plugin.player.stream` (SDK 1.10.0): the
      * stream reads the state itself when it opens, so the copy is not read
      * once more here.

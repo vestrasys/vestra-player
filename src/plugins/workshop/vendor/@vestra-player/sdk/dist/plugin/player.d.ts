@@ -80,6 +80,14 @@ export declare class PlayerService implements StreamSource {
     patch(belongs: (raw: SourceState) => boolean, fields: Partial<SourceState>): void;
     watch(watcher: (raw: SourceState) => void, always?: boolean): Disposable;
     /**
+     * `watch` for the SDK's own handles that send their values again when the
+     * source changes (the video view, a shader channel, a processing node):
+     * the copy hears `source.state` while the handle lives, but the plugin is
+     * not counted as listening to it (`Connection.track`). The handle's own
+     * resource is what keeps the plugin running.
+     */
+    track(watcher: (raw: SourceState) => void): Disposable;
+    /**
      * `watch`, for `plugin.player.stream`: the copy hears `source.state` while
      * the watcher is open, and the plugin counts as listening to it
      * (`Connection.follow`; the stream reads the state itself).
