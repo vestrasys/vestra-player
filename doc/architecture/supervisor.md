@@ -196,6 +196,20 @@ A plugin may have at most 320 request lines and 4 MiB of request bytes unanswere
 
 When the level becomes Low or Critical, every candidate (as for the budget) goes to standby. Under Critical an interactive trigger also loses its overrun slot. There is no hysteresis: each change into Low or Critical puts the idle plugins in standby again. `VESTRA_TEST_PHYS_MIB` and `VESTRA_TEST_PRESSURE=<none|low|critical>@<ms>[,…]` simulate both.
 
+**The host process's own heap (Windows, next release).** Not a supervisor rule, but the other half of the player's memory: `src/host/windows/vestra.manifest` sets `heapType` to `SegmentHeap`, so the process heap and every `HeapCreate` heap of `vestra-host.exe` use Windows' segment heap (Windows 10 2004 and later; older systems ignore the setting). libmpv and FFmpeg allocate through the UCRT's `malloc`, which is the process heap, so they switch too. The segment heap hands freed memory back to the system sooner than the old NT heap. `build.rs` embeds the manifest in every linked binary, tests included. This came from the 11-14 memory-options record (history.md): option 6 of seven, the only one the user chose to try.
+
+Measured 2026-11-22 on the laptop (Ryzen 9 7940HS, RTX 4070 Laptop): release builds of main a631032f and the same tree with only the manifest line, the 0.10.3 built-ins, an empty isolated profile per run, alternating sides, 3 runs each; memory is the mean of the last 10 s of each run, given as median (range) in MB.
+
+| Case (CPU rendering offscreen unless noted) | Private working set, NT → segment | Commit (private bytes) | Working set |
+| --- | --- | --- | --- |
+| Idle 60 s, 16 built-ins | 187.6 (179.9–188.9) → 160.5 (160.4–161.3) | 208.5 → 174.2 | 233.9 → 206.2 |
+| 1080p60 H.264, 60 s | 262.7 (256.9–263.6) → 237.8 (237.6–238.5) | 341.5 → 313.7 | 322.5 → 297.6 |
+| 2160p60 H.264, 60 s | 406.2 (405.5–407.3) → 387.4 (386.1–388.0) | 623.2 → 600.1 | 467.7 → 449.0 |
+| Four adjust panels opened in turn and closed, 4 cycles; Plugin Store window opened | 463.9 (461.1–465.0) → 429.1 (429.1–429.9) | 489.8 → 445.9 | 510.6 → 475.9 |
+| **GPU rendering, real window, 2160p60, 60 s** (3 runs each; one NT run left out: its playback stopped after 1 s) | 575.8 (574.4–577.2) → 568.3 (553.2–580.1) | 1378 → 1368 | 753 → 745 |
+
+So CPU rendering saves 19–44 MB in every case and the runs are tighter. With GPU rendering the difference is within the noise: most of that memory is the graphics drivers' and the video frames', not heap. Costs: none measured. Every playing run kept 60.5 frames/s with 0 drops and no second under 55 frames; start-up (`lazy: start-up settled`) was about 2.0–2.1 s on both sides once the disk cache was warm; host CPU (% of one core) was the same within the spread: idle 2.7 vs 2.8, 1080p 60.6 vs 61.0, 4K 151 vs 142 (135–161 vs 133–154), panels 4.5 vs 4.6, GPU 4K 44 vs 42. The test switches cannot close a plugin's window, so the store window stayed open after its first opening. Runtime check: the process heap's signature is `0xDDEEDDEE` (segment) instead of `0xFFEEFFEE` (NT).
+
 ## 9. Quit and device loss
 
 At quit the host first writes the recordings it owes (a run classified this session), then sends every process its stop at once (the shared runner one `runner.stop` for all members), and kills whatever is left at one deadline: 1 s at quit, 300 ms when the player restarts after a lost graphics device. A process still left over from a stop that got stuck is killed at once.
