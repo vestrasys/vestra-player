@@ -1830,7 +1830,7 @@ export class TestHost {
      * pass it to {@link startPlugin} as `host`.
      */
     constructor() {
-        revokers.set(this, () => this.#revoke());
+        revokers.set(this, (reason) => this.#revoke(reason));
         this.subtitles = {
             presentation: {
                 revision: 1,
@@ -2929,7 +2929,7 @@ export class TestHost {
         return upgrade(this, this.#inner, activate);
     }
     /** See {@link revokeRun}: each through the host's own handler. */
-    #revoke() {
+    #revoke(reason) {
         const run = (method, params) => {
             try {
                 void Promise.resolve(this.#defaults[method]?.(params)).catch(() => { });
@@ -2953,8 +2953,28 @@ export class TestHost {
         for (const [producerId, producer] of this.producers)
             if (!producer.released)
                 run("producer.release", { producerId });
-        // Its processing chains (filters) are withdrawn.
+        // The playback worker's part (`owner.parked` and `owner.disabled`
+        // alike): its filter chains, display layer, render options, shaders.
         this.processing.resources.clear();
+        if (this.videoView.owner === this.manifestId)
+            run("video.view.release", {});
+        if (this.videoRender.owner === this.manifestId)
+            run("video.render.release", {});
+        this.videoShaders.handles.clear();
+        // Kept through a standby, removed at every other stop (the player's
+        // `keeps_shown_state`: an idle stop only).
+        if (reason === "idle")
+            return;
+        const id = this.manifestId;
+        const marks = this.timeline.layers.delete(id);
+        const ranges = this.timeline.rangeLayers.delete(id);
+        if (marks || ranges)
+            this.emit("timeline.changed", {
+                marks: this.timeline.marks,
+                ranges: this.timeline.ranges,
+            });
+        this.mainWindow.onTop = false;
+        this.mainWindow.cursorAutoHide = "fullscreen";
     }
     #defaults = {
         ...triggersHandlers(this, this.#inner),
@@ -3112,7 +3132,7 @@ export async function startPlugin(activate, options = {}) {
         await instance.dispose({ reason });
         await host.settle();
         // Standby and an upgrade stop the run: the player revokes what it held.
-        revokeRun(host);
+        revokeRun(host, reason);
         await host.settle();
     };
     await host.settle();
@@ -3136,7 +3156,7 @@ export async function startPlugin(activate, options = {}) {
         if (!triggers.parked)
             await instance.dispose({ reason });
         await host.settle();
-        revokeRun(host);
+        revokeRun(host, typeof reason === "string" ? reason : undefined);
         await host.settle();
         host.close();
     };
@@ -3164,7 +3184,7 @@ export async function startPlugin(activate, options = {}) {
             host.loseConnection();
             await instance.dispose({ reason: "host-lost" });
             await host.settle();
-            revokeRun(host);
+            revokeRun(host, "host-lost");
             await host.settle();
             host.close();
         },
