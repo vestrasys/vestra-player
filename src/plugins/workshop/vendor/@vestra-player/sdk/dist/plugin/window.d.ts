@@ -4,7 +4,9 @@ import type { WindowFacts } from "../wire.ts";
 import type { MainWindow, WindowState } from "./types.ts";
 /**
  * One per plugin: read before activation, then kept current from
- * `window.state` events (after `plugin.player.subscribe()`) and after this plugin's own changes.
+ * `window.state` events while something holds them (`onChange`, a
+ * `window.state` listener), from `window.changed`, and after this
+ * plugin's own changes.
  */
 export declare class WindowService {
     #private;
@@ -27,5 +29,11 @@ export declare class WindowService {
         dispose: () => Promise<void>;
     };
 }
+/**
+ * `window.changed`'s data as the listener gets it (`ScopeImpl.fact`,
+ * SDK 1.11.0): the copy takes the facts first, so `plugin.window.state`
+ * holds them when the listener runs.
+ */
+export declare function windowChanged(runtime: Runtime, data: unknown): WindowState;
 export declare const windowOf: (runtime: Runtime) => WindowService;
 export declare function mainWindow(scope: ScopeImpl): MainWindow;

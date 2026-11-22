@@ -15,9 +15,9 @@ export type Why = () => string;
 export declare const WAKE_EVENTS: readonly string[];
 /**
  * What the runtime reads of the plugin's manifest: its id. Nothing in the
- * manifest switches behaviour (1.9.0): event delivery and the start-up
- * reads are the plugin's explicit calls (`plugin.player.subscribe()`,
- * `plugin.player.read()`).
+ * manifest switches behaviour (1.9.0): the start-up read is the plugin's
+ * explicit call (`plugin.player.read()`), and an event reaches the plugin
+ * from its first listener.
  */
 export interface PluginManifest {
     id: string;
@@ -48,6 +48,16 @@ export interface StateSignals {
     /** Something the plugin sees changed that no key describes: everything is evaluated again. */
     invalidate(): void;
 }
+/**
+ * When an event group is subscribed at the player. `"held"`: only while
+ * something holds it: a plugin listener (`plugin.player.on`), a hold (a
+ * watcher such as `MainWindow.onChange`, a media handle's `ready`) or a
+ * stream. The SDK's own copy (a mirror) and a binding's read never
+ * subscribe it on their own; between holders the copy is the newest value
+ * the plugin has (its start-up read, its own calls, an event's data).
+ * `null`: subscribed from the group's first entry, whatever it is.
+ */
+export type Needs = "held" | null;
 /**
  * Per-plugin connection to the player. Scopes reach it through `Runtime`;
  * the flat RPC clients stay private here so protocol fields never reach
@@ -115,14 +125,6 @@ export declare class Connection {
      */
     readonly features: ReadonlySet<string>;
     constructor(transport: Transport, manifest: PluginManifest, directory: string, dataDirectory?: string, app?: unknown, options?: RuntimeOptions);
-    /** Event delivery is on (`plugin.player.subscribe()` was called). */
-    get delivering(): boolean;
-    /**
-     * Turn event delivery on (`plugin.player.subscribe()`): every later
-     * listener is subscribed, and so is what was added before and heard
-     * nothing. Idempotent.
-     */
-    deliver(): void;
     /** Read the state copy kept by `event` again, if one exists; never rejects. */
     reread(event: string): Promise<void>;
     /** Lazily created singletons shared by every scope of this plugin. */
@@ -151,31 +153,39 @@ export declare class Connection {
     callSite(): () => string | undefined;
     /**
      * Host events with one `events.subscribe` per name, however many listeners.
-     * An event that needs delivery (`"events"`) is subscribed only once
-     * `plugin.player.subscribe()` was called; until then its listener simply
-     * never fires.
+     * A plugin listener subscribes its event at once. A `"held"` event (the
+     * default, {@link Needs}) is subscribed only while a listener, a hold or
+     * a stream holds it: a state copy alone (`mirror`) waits, and hears the
+     * events while something else holds the group.
      * `mirror`: the SDK's own copy of the state (`plugin.player.state` and
      * the like), not a listener of the plugin's (see {@link EventGroup}).
      */
-    on(event: string, listener: Listener, 
-    /** `"events"`: it arrives after `plugin.player.subscribe()`; `null`: always. */
-    needs?: "events" | null, mirror?: boolean): Disposable;
+    on(event: string, listener: Listener, needs?: Needs, mirror?: boolean): Disposable;
     /**
-     * Count `event` as listened to while held: a watcher of a service's
-     * state, a binding that reads it. Nothing when nothing subscribed to it
-     * (no `plugin.player.subscribe()`, or the service did not start).
+     * Hold `event` while the handle lives: a watcher of a service's state
+     * (`MainWindow.onChange`, a panel slot's `onChange`, a media handle's
+     * `ready` and `onEnd`, a scrub). It counts as listened to, and a
+     * held-only group ({@link Needs}) is subscribed while held, with its copy
+     * read once more when the subscription starts after `read()` (or
+     * `always`). Nothing when nothing started the group (the service did
+     * not start).
      */
-    hold(event: string, why?: Why): Disposable;
+    hold(event: string, why?: Why, always?: boolean): Disposable;
     /**
-     * Hear `event` while followed, whether or not event delivery is on, and
-     * count it as listened to (`plugin.player.stream`, SDK 1.10.0): the group
-     * the caller started (a state copy's) is subscribed now if it waited for
-     * `plugin.player.subscribe()`, and only it. When the last follower ends,
-     * such a group waits again as before: its subscription at the player
-     * ends, and the copy stays as it was. Nothing when nothing started the
-     * group.
+     * {@link Connection.hold} for `plugin.player.stream` (SDK 1.10.0): the
+     * stream reads the state itself when it opens, so the copy is not read
+     * once more here.
      */
     follow(event: string, why?: Why): Disposable;
+    /**
+     * Count `event` as listened to while a binding reads its state: the
+     * binding's reason joins what the player is told while the group is
+     * subscribed, but it never subscribes a held-only group on its own (a
+     * bound value that reads `plugin.player.state` shows the newest snapshot
+     * the plugin has; a stream or an event makes it follow the player).
+     * Nothing when nothing started the group.
+     */
+    bindingReads(event: string, why: Why): Disposable;
     /**
      * Why the plugin listens to each event it really listens to (mirrors
      * left out), as the player's log says it: for {@link TestHost} and

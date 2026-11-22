@@ -806,8 +806,8 @@ export declare class TestHost implements Transport {
      *
      * @example Simulate the user choosing French for the next start
      * The plugin hears that the saved interface language changed. The host
-     * pushes `appearance.changed`, which a plugin sees (after `plugin.player.subscribe()`) in
-     * `appearance.language` once it has read it and subscribed; this run's
+     * pushes `appearance.changed`, which a plugin that listens to it sees in
+     * `appearance.language`; this run's
      * language does not change.
      * ```ts
      * import assert from "node:assert/strict";
@@ -1070,8 +1070,8 @@ export declare class TestHost implements Transport {
      * @example Let another plugin publish chapters
      * The plugin under test sees two chapter marks another plugin put on the
      * timeline. `setTimelineLayer` stores that plugin's whole layer and pushes
-     * `timeline.changed`; once the plugin uses `plugin.timeline` (after
-     * `plugin.player.subscribe()`) the SDK keeps `marks` current from that event, and `settle()`
+     * `timeline.changed`; while the plugin listens to it the SDK keeps
+     * `marks` current from that event, and `settle()`
      * lets it arrive.
      * ```ts
      * import assert from "node:assert/strict";
@@ -1192,7 +1192,7 @@ export declare class TestHost implements Transport {
      *
      * @example Simulate another plugin switching to the light palette
      * The plugin hears the palette change. The host updates `appearance` and
-     * pushes `appearance.changed` to a plugin that listens (after `plugin.player.subscribe()`).
+     * pushes `appearance.changed` to a plugin that listens.
      * ```ts
      * import assert from "node:assert/strict";
      * declare const host: TestHost;
@@ -2415,7 +2415,7 @@ export declare class TestHost implements Transport {
      * The plugin is built into the player (`startPlugin`'s `builtin`). Only
      * then does the host answer the built-in-only requests
      * (`commands.list`, `commands.run`, `palette.lead.*`); otherwise they
-     * fail with `capability`, as in the player.
+     * fail with `builtin-only`, as in the player.
      *
      * @since 1.7.9
      */
@@ -2432,7 +2432,7 @@ export declare class TestHost implements Transport {
      * oldest first: the files and the process id answered
      * ({@link "@vestra-player/sdk"!App.openWindow | App.openWindow}). No
      * process starts. A
-     * plugin that is not built in is refused with `capability`, as in the
+     * plugin that is not built in is refused with `builtin-only`, as in the
      * player; the files are checked as the player does (`invalid`,
      * `missing`).
      *
@@ -2590,7 +2590,7 @@ export declare class TestHost implements Transport {
      * Deliver a host event to the plugin. Like the player, subscription-based
      * events (`source.state`, `playback.backend`, `window.state`,
      * `timeline.changed`, `appearance.changed`) are delivered only when the
-     * plugin subscribed (it called `plugin.player.subscribe()` and listens). Most tests use the
+     * plugin subscribed (something of it listens). Most tests use the
      * higher-level helpers (`setSource`, `setMainWindow`, ...) instead.
      *
      * @param event - The wire event name.
@@ -3345,13 +3345,11 @@ export declare class TestHost implements Transport {
  * The manifest id comes from `directory/manifest.json` unless `id` is
  * given; then no manifest is read (and without `directory` none is read
  * either: the id is `"test.plugin"`). Nothing in the manifest changes how
- * the plugin runs: event delivery and the start-up reads are the plugin's
- * own calls (`plugin.player.subscribe()`, `plugin.player.read()`), as in
- * the player.
+ * the plugin runs: the start-up read is the plugin's own call
+ * (`plugin.player.read()`), and an event reaches it from its first
+ * listener, as in the player.
  *
- * Rejects when `manifest.json` cannot be read or parsed, when it still has
- * `capabilities` (removed in 1.9.0; the message says what to call
- * instead), when `activate`
+ * Rejects when `manifest.json` cannot be read or parsed, when `activate`
  * throws, or when a registration made during activation fails (for example
  * `limit`, `conflict`, `invalid`). Stricter than the player's runner for
  * commands: there the SDK logs a command declaration the player refuses during

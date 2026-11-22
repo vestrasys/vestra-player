@@ -1220,12 +1220,12 @@ export interface Commands {
      *   const row = commands.find((each) => each.id === "vestra.subtitles/tuning");
      *   if (row?.keys[0]) await plugin.osd.show("Press {}", [row.keys[0]]);
      * } catch (error) {
-     *   // `capability`: not a built-in plugin.
-     *   if ((error as PluginError).code !== "capability") throw error;
+     *   // `builtin-only`: not a built-in plugin.
+     *   if ((error as PluginError).code !== "builtin-only") throw error;
      * }
      * ```
      *
-     * @throws `capability` (rejects) The plugin is not built into the player.
+     * @throws `builtin-only` (rejects) The plugin is not built into the player.
      * @player 0.7.6
      * @since 1.7.9
      */
@@ -1297,7 +1297,7 @@ export interface Commands {
      * });
      * ```
      *
-     * @throws `capability` (rejects) The plugin is not built into the player.
+     * @throws `builtin-only` (rejects) The plugin is not built into the player.
      * @throws `ticket` (rejects) No ticket, or it ended or expired.
      * @throws `missing` (rejects) No listed command has this id, or one of
      *   the ids of `then`.
@@ -1486,7 +1486,7 @@ export interface Palette {
      * @example See Palette
      * {@link Palette}
      *
-     * @throws `capability` (through `ready`) The plugin is not built into the player.
+     * @throws `builtin-only` (through `ready`) The plugin is not built into the player.
      * @throws `conflict` (through `ready`) Another plugin holds the lead.
      * @throws `invalid` (through `ready`) A text over its length.
      * @player 0.7.6
@@ -1632,7 +1632,7 @@ export interface PaletteLead extends Disposable {
     /**
      * Settles when the player has the row.
      *
-     * @throws `capability` (rejects) The plugin is not built into the player.
+     * @throws `builtin-only` (rejects) The plugin is not built into the player.
      * @throws `conflict` (rejects) Another plugin holds the lead.
      * @throws `invalid` (rejects) A text over its length.
      */
@@ -1644,7 +1644,7 @@ export interface PaletteLead extends Disposable {
      * {@link PaletteLead}
      *
      * @throws `invalid` (rejects) A text over its length.
-     * @throws `capability` (rejects) The row was refused (see `ready`).
+     * @throws `builtin-only` (rejects) The row was refused (see `ready`).
      * @since 1.7.9
      */
     update(options: PaletteLeadOptions): Promise<void>;
@@ -1691,7 +1691,7 @@ export interface PaletteLead extends Disposable {
      * });
      * ```
      *
-     * @throws `capability` (rejects) The plugin is not built into the player.
+     * @throws `builtin-only` (rejects) The plugin is not built into the player.
      * @since 1.7.9
      */
     done(ticket: string): Promise<void>;

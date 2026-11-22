@@ -821,7 +821,6 @@ fn r13_a_mount_answered_after_a_stall_is_in_place_when_answered() {
         &fill(
             &format!(
                 r#"export default function activate(plugin) {{
-  plugin.player.subscribe();
   plugin.wire.on("window.state", () => {{}});
 {READS}
   setTimeout(async () => {{
@@ -908,7 +907,6 @@ fn r13_a_layout_change_answered_after_a_stall_is_in_place_when_answered() {
         &fill(
             &format!(
                 r#"export default function activate(plugin) {{
-  plugin.player.subscribe();
   plugin.wire.on("window.state", () => {{}});
 {READS}
   setTimeout(async () => {{

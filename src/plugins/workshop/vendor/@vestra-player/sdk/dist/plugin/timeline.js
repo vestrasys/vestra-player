@@ -52,8 +52,8 @@ const viewRanges = (ranges) => Object.freeze(ranges.map((range) => Object.freeze
 })));
 /**
  * One per plugin: read by `plugin.player.read()`, then kept
- * current from `timeline.changed` (after `plugin.player.subscribe()`) once the plugin uses it
- * (or listens to that event with `player.on`).
+ * current from `timeline.changed` while the plugin listens to that event
+ * (`player.on`), and after this plugin's own changes.
  */
 export class TimelineService {
     #runtime;
@@ -78,7 +78,7 @@ export class TimelineService {
                 this.accept(lists);
             else
                 void this.read();
-        }, "events", true);
+        }, "held", true);
     }
     accept(lists) {
         const marks = view(lists.marks);

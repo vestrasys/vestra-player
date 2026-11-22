@@ -13,6 +13,7 @@ import { isTextValue } from "../../i18n.js";
 import { taken } from "./transport.js";
 import { declaredText, hostText } from "./i18n.js";
 import { timelineChanged } from "./layout.js";
+import { sendFacts, tracksChanged } from "./facts.js";
 import { sourceEvents } from "./source-events.js";
 /**
  * Broadcast the source state `host.source` became from `previous`, then
@@ -23,6 +24,11 @@ export function emitSource(host, previous, reload = false) {
     host.emit("source.state", host.source);
     for (const [name, data] of sourceEvents(previous, host.source, reload))
         host.emit(name, structuredClone(data));
+    const tracks = tracksChanged(previous, host.source);
+    if (tracks)
+        host.emit("audio.tracks.changed", structuredClone(tracks));
+    // The other facts after the source's events (`facts.ts`).
+    sendFacts(host);
 }
 export function initialSource() {
     return {

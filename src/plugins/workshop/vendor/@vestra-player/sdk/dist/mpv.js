@@ -75,7 +75,7 @@ export const MPV_RULES = Object.freeze({
         files: "it makes the player write or delete files (a plugin writes its own with Node)",
         quit: "it ends the player",
         input: "the keyboard and the mouse are the player's (plugin.commands, plugin.bindings)",
-        clipboard: "the clipboard has its own capability (plugin.clipboard)",
+        clipboard: "the clipboard has its own API (plugin.clipboard)",
         managed: "the player manages it and keeps its own state of it (use the plugin API's member for it)",
         filters: "a plugin changes only its own labelled filters (vf/af add, pre, toggle or remove of @label:…, a label not starting with vestra-)",
     }),

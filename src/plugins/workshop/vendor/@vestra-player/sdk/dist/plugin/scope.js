@@ -5,22 +5,23 @@ import { WHEN } from "./when.js";
 import { dialogs } from "./services/dialogs.js";
 import { ui } from "./view/image.js";
 import { panels } from "./view/panel.js";
+import { layoutChanged } from "./view/layout.js";
 import { windows } from "./view/window.js";
 import { timeline, timelineOf } from "./timeline.js";
 import { drops } from "./drops.js";
 import { appearance, appearanceOf } from "./appearance.js";
 import { settings } from "./settings.js";
 import { i18n } from "./language.js";
-import { player } from "./player.js";
+import { audioTracksChanged, player } from "./player.js";
 import { audioFilters, videoFilters } from "./filters.js";
 import { videoRender, videoView } from "./view.js";
 import { videoShaders } from "./shaders.js";
-import { subtitles } from "./subtitles.js";
+import { subtitles, subtitlesChanged } from "./subtitles.js";
 import { mediaCapture } from "./media.js";
 import { resolvers } from "./resolvers.js";
 import { packages } from "./packages.js";
 import { osd } from "./osd.js";
-import { mainWindow } from "./window.js";
+import { mainWindow, windowChanged } from "./window.js";
 import { bindingsApi } from "./bindings.js";
 import { trackedState } from "./state.js";
 import { wire } from "./wire-facade.js";
@@ -35,6 +36,17 @@ const COPIES = {
     "commands.keys": (runtime) => keysOf(runtime).start(),
     "timeline.changed": (runtime) => timelineOf(runtime).start(),
     "appearance.changed": (runtime) => appearanceOf(runtime).start(),
+};
+/**
+ * The fact events (SDK 1.11.0) whose data the listener gets in the SDK's
+ * shape, each taken into the copy it concerns first; the others reach it
+ * as the player sent them.
+ */
+const FACTS = {
+    "audio.tracks.changed": (_, data) => audioTracksChanged(data),
+    "subtitles.changed": subtitlesChanged,
+    "window.changed": windowChanged,
+    "layout.changed": layoutChanged,
 };
 export class ScopeImpl {
     runtime;
@@ -73,6 +85,12 @@ export class ScopeImpl {
     followCopy(event) {
         if (Object.hasOwn(COPIES, event))
             COPIES[event](this.runtime);
+    }
+    /** A fact event's data as `player.on`'s listener gets it ({@link FACTS}). */
+    fact(event, data) {
+        return Object.hasOwn(FACTS, event)
+            ? FACTS[event](this.runtime, data)
+            : data;
     }
     commands = commands(this);
     when = WHEN;
@@ -188,30 +206,6 @@ export class ScopeImpl {
             this.report(error);
         }
         this.update();
-    }
-    /**
-     * Run a listener of a state change (`player.onChange`) like `run`, except
-     * that the full pass after it is left out when it returned synchronously
-     * and read only fields of the state that `change` left alone: its result
-     * then depends on nothing new. The precise pass for the change runs
-     * anyway, and a full pass follows within `SAFETY_PASS_MS`.
-     */
-    runOn(change, handler, ...args) {
-        if (this.disposed)
-            return;
-        let full = true;
-        try {
-            const { value, deps } = this.runtime.observe(() => handler(...args));
-            if (value instanceof Promise)
-                value.catch((error) => this.report(error)).finally(() => this.update());
-            else
-                full = this.runtime.needsFull(deps, change);
-        }
-        catch (error) {
-            this.report(error);
-        }
-        if (full)
-            this.update();
     }
     /**
      * Run a listener that pushes its own values (`player.on`) like `run`, except

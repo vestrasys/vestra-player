@@ -223,7 +223,7 @@ const LISTENER: &str = "vestra.fixture-listener";
 /// SDK's mirrors (`plugin.player.state`) is classified lazy at its first
 /// ready and parked at once, replayed at the next start and woken by its
 /// command, which reads the player's state; a plugin with a listener
-/// (`player.onChange`) is resident, recorded so at its ready, and started
+/// (a `source.state` listener) is resident, recorded so at its ready, and started
 /// at launch the next time instead of being replayed.
 #[test]
 #[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]
@@ -249,7 +249,7 @@ fn mirror_subscriptions_park_and_wake_a_listener_keeps_a_plugin_resident() {
                     format!(
                         "export default async function activate(plugin) {{\n\
                          console.error(`{LISTENER} start`);\n\
-                         plugin.player.onChange(() => {{}});\n\
+                         plugin.player.on(\"source.state\", () => {{}});\n\
                          plugin.commands.add({{ id: \"hello\", path: [\"Tools\", \"Hello\"], run: () => {{}} }});\n}}\n"
                     ),
                 ),
@@ -762,7 +762,7 @@ fn a_when_command_is_parked_and_its_state_follows_playback() {
                 &["events", "playback.read", "playback.control"],
                 format!(
                     "export default function activate(plugin) {{\n\
-                     plugin.player.onChange(() => {{}});\n\
+                     plugin.player.on(\"source.state\", () => {{}});\n\
                      setTimeout(() => plugin.player.open({path}).then(\n\
                      () => console.error(`{OPENER} opened`),\n\
                      (error) => console.error(`{OPENER} failed ${{error}}`)), 3500);\n}}\n"
@@ -879,7 +879,7 @@ fn a_subtitle_track_command_follows_the_selected_track_while_parked() {
                 &["events", "playback.read", "playback.control"],
                 format!(
                     "export default function activate(plugin) {{\n\
-                     plugin.player.onChange(() => {{}});\n\
+                     plugin.player.on(\"source.state\", () => {{}});\n\
                      const select = async () => {{\n\
                        for (let i = 0; i < 50; i++) {{\n\
                          const state = await plugin.subtitles.refresh().catch(() => null);\n\
@@ -957,7 +957,7 @@ fn a_packages_listener_is_parked_and_woken_by_a_package_change() {
                 &["events", "playback.read", "plugins.manage"],
                 format!(
                     "export default function activate(plugin) {{\n\
-                     plugin.player.onChange(() => {{}});\n\
+                     plugin.player.on(\"source.state\", () => {{}});\n\
                      setTimeout(() => plugin.packages.setEnabled(\"aa.fixture-target\", false).then(\n\
                      () => console.error(`{CHANGER} disabled`)), 3000);\n}}\n"
                 ),
@@ -1497,7 +1497,7 @@ fn source_events_wake_their_listeners_in_order() {
                 &["events"],
                 format!(
                     "export default function activate(plugin) {{\n\
-                     plugin.player.onChange(() => {{}});\n\
+                     plugin.player.on(\"source.state\", () => {{}});\n\
                      const log = (name, data) => console.error(`{ALL} event ${{name}} ${{data.state.sourceId}} ${{data.reason ?? \"\"}} ${{data.state.position ?? \"\"}}`);\n\
                      for (const name of [\"source.opening\", \"source.ready\", \"source.ended\"])\n\
                      plugin.player.on(name, (data) => log(name, data));\n}}\n"
@@ -1511,7 +1511,7 @@ fn source_events_wake_their_listeners_in_order() {
                 &["events", "playback.read", "playback.control"],
                 format!(
                     "export default function activate(plugin) {{\n\
-                     plugin.player.onChange(() => {{}});\n\
+                     plugin.player.on(\"source.state\", () => {{}});\n\
                      const step = (at, name, act) => setTimeout(() => act().then(\n\
                      () => console.error(`{PLAYER} ${{name}}`),\n\
                      (error) => console.error(`{PLAYER} ${{name}} failed ${{error}}`)), at);\n\
