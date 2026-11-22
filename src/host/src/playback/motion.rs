@@ -6,7 +6,7 @@
 //! `fruc_vulkan` (NVIDIA's optical flow hardware through Vulkan, RTX 30 and
 //! newer). One converter is in the chain at a time: the engine asked for
 //! first holds it while some plugin asks for it, and the other engine's
-//! requests wait (`doubling`, with a message that names the engine). Built like video upscaling
+//! requests wait (`other-engine`, with a message that names the engine). Built like video upscaling
 //! (`upscaling.rs`); the measurements are in the same section.
 //!
 //! - **Availability** ([`check`], [`Reason`]). The system's check per
@@ -221,8 +221,7 @@ pub enum Reason {
     /// a `frameBlend` node, Frame Doubling; not fixed).
     Doubling,
     /// The other engine's converter is in the chain for another plugin
-    /// (`doubling`: it raises the frame rate already; not fixed, it waits
-    /// until that one is off).
+    /// (`other-engine`; not fixed: it waits until that one is off).
     OtherEngine(Engine),
     /// The video's format was not measured (`format`: 10-bit or HDR; not
     /// fixed).
@@ -254,10 +253,7 @@ impl Reason {
             Self::Rate(_) => "rate",
             Self::Size(_) => "size",
             Self::Doubling => "doubling",
-            // The other converter raises the frame rate: the code of a
-            // filter that does (not fixed, it waits), so plugins need no new
-            // code; the message says which.
-            Self::OtherEngine(_) => "doubling",
+            Self::OtherEngine(_) => "other-engine",
             Self::Format(_) => "format",
         }
     }
@@ -432,11 +428,12 @@ pub const GPU_DISPLAY_LIMIT: (f64, &str) = (1920. * 1080. * 60. * 1.01, "1080p o
 /// Display held 4K30 → 60 with no frame dropped; software rendering held
 /// 4K24 → 48 (1 dropped in 13 s) and was at the edge at 4K30 → 60 (8, 9
 /// and 24 dropped in 13 s; the last run fell back to the faster search).
-/// Its frames reach the renderer from the discrete GPU's copy-back, not
+/// One limit for every renderer and mode all the same (user ruling, T8:
+/// stronger machines keep up, and the plugin tells the user when frames
+/// are dropped). Its frames reach the renderer from the discrete GPU's copy-back, not
 /// from an integrated GPU sharing the CPU's memory as AMD's on this laptop,
 /// which is where AMD's 4K cases fell behind.
-pub const NVIDIA_SOFTWARE_LIMIT: (f64, &str) = (3840. * 2160. * 48. * 1.01, "4K at 24 fps");
-pub const NVIDIA_GPU_LIMIT: (f64, &str) = (3840. * 2160. * 60. * 1.01, "4K at 30 fps");
+pub const NVIDIA_LIMIT: (f64, &str) = (3840. * 2160. * 60. * 1.01, "4K at 30 fps");
 
 /// The size rule: width × height × the frames a second the renderer then
 /// draws (the doubled rate; with Match Display the display's refresh rate,
@@ -457,10 +454,9 @@ fn size(facts: &Facts<'_>, mode: Mode) -> Result<(), Reason> {
         (true, Mode::Display) => (GPU_DISPLAY_LIMIT.0, GPU_DISPLAY_LIMIT.1, "Match Display"),
         (true, _) => (GPU_DOUBLE_LIMIT.0, GPU_DOUBLE_LIMIT.1, "GPU rendering"),
     };
-    let (limit, words) = match (facts.engine, facts.gpu_now) {
-        (Engine::Amd, _) => (limit, words),
-        (Engine::Nvidia, false) => NVIDIA_SOFTWARE_LIMIT,
-        (Engine::Nvidia, true) => NVIDIA_GPU_LIMIT,
+    let (limit, words) = match facts.engine {
+        Engine::Amd => (limit, words),
+        Engine::Nvidia => NVIDIA_LIMIT,
     };
     let drawn = if facts.gpu_now && mode == Mode::Display {
         facts.display_fps

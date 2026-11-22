@@ -2225,37 +2225,44 @@ pub fn motion_filter(
 /// layer other software registered (OBS's capture hook, Steam's overlay)
 /// inside the player, which only the converter uses Vulkan for. Measured
 /// 2026-11-22: with it, those DLLs are no longer loaded and the converter
-/// runs as before (doc/architecture/README.md §4.4a). The variables stay set
+/// runs as before (doc/architecture/README.md §4.4a). Always, and never
+/// widened (user ruling, T8): a value already in the environment is
+/// replaced, and there is no switch to turn it off. The variables stay set
 /// for the process and its later children (Node, FFmpeg), none of which uses
-/// Vulkan; a value the user set is kept. `VESTRA_VULKAN_SCOPE=0` turns it
-/// off (a design choice for review, T8).
+/// Vulkan.
 pub fn prepare_motion(engine: crate::playback::motion::Engine) {
     static ONCE: std::sync::Once = std::sync::Once::new();
-    if engine != crate::playback::motion::Engine::Nvidia
-        || std::env::var("VESTRA_VULKAN_SCOPE").is_ok_and(|v| v.trim() == "0")
-    {
+    if engine != crate::playback::motion::Engine::Nvidia {
         return;
     }
-    ONCE.call_once(|| {
-        for (name, value) in [
-            ("VK_LOADER_DRIVERS_SELECT", NVIDIA_VULKAN_DRIVER),
-            ("VK_LOADER_LAYERS_DISABLE", "~implicit~"),
-        ] {
-            if std::env::var_os(name).is_some() {
-                diag!("motion: {name} is set already; kept");
-                continue;
-            }
-            match vestra_win32::set_process_env(name, value) {
-                Ok(()) => diag!("motion: {name}={value} for the converter's Vulkan device"),
-                Err(error) => diag!("motion: {error}"),
-            }
+    ONCE.call_once(scope_vulkan);
+}
+
+/// Set [`VULKAN_SCOPE`] for this process, over any value already there.
+fn scope_vulkan() {
+    for (name, value) in VULKAN_SCOPE {
+        if let Some(before) = std::env::var_os(name)
+            && before != *value
+        {
+            diag!("motion: {name} was {}; replaced", before.to_string_lossy());
         }
-    });
+        match vestra_win32::set_process_env(name, value) {
+            Ok(()) => diag!("motion: {name}={value} for the converter's Vulkan device"),
+            Err(error) => diag!("motion: {error}"),
+        }
+    }
 }
 
 /// NVIDIA's Vulkan driver manifest (`nv-vk64.json` in the driver store,
 /// the adapter's `VulkanDriverName`), as a loader filter.
 const NVIDIA_VULKAN_DRIVER: &str = "*nv-vk64*";
+
+/// What the Vulkan loader of this process is limited to
+/// (`prepare_motion`): NVIDIA's driver only, no implicit layer.
+const VULKAN_SCOPE: [(&str, &str); 2] = [
+    ("VK_LOADER_DRIVERS_SELECT", NVIDIA_VULKAN_DRIVER),
+    ("VK_LOADER_LAYERS_DISABLE", "~implicit~"),
+];
 
 /// NVIDIA's converter: FFmpeg's `fruc_vulkan` (NVIDIA's optical flow
 /// hardware through `VK_NV_optical_flow`, then FFmpeg's compute shaders)
@@ -2470,6 +2477,29 @@ mod tests {
         assert_eq!(
             d3d11vpp_filter(2., true),
             "d3d11vpp=scale=2.00:scaling-mode=standard"
+        );
+    }
+
+    #[test]
+    fn the_vulkan_loader_sees_only_nvidias_driver_and_no_implicit_layer() {
+        assert_eq!(
+            VULKAN_SCOPE,
+            [
+                ("VK_LOADER_DRIVERS_SELECT", "*nv-vk64*"),
+                ("VK_LOADER_LAYERS_DISABLE", "~implicit~")
+            ]
+        );
+        // Over a value already there (the variables only scope Vulkan,
+        // which no other test in this process uses).
+        vestra_win32::set_process_env("VK_LOADER_DRIVERS_SELECT", "*everything*").unwrap();
+        scope_vulkan();
+        assert_eq!(
+            std::env::var("VK_LOADER_DRIVERS_SELECT").unwrap(),
+            "*nv-vk64*"
+        );
+        assert_eq!(
+            std::env::var("VK_LOADER_LAYERS_DISABLE").unwrap(),
+            "~implicit~"
         );
     }
 

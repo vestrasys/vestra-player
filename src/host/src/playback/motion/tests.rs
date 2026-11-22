@@ -1019,7 +1019,7 @@ fn a_video_too_large_for_the_renderer_is_not_offered() {
 }
 
 #[test]
-fn nvidias_size_limits_are_4k30_on_the_gpu_and_4k24_in_software() {
+fn nvidias_size_limit_is_4k30_for_every_renderer_and_mode() {
     let (reason, rendering) = (RenderReason::Default, Value::Null);
     let probe = amd();
     let at = |w: f64, h: f64, fps: f64, gpu: bool| Facts {
@@ -1030,13 +1030,17 @@ fn nvidias_size_limits_are_4k30_on_the_gpu_and_4k24_in_software() {
         any_rate: true,
         ..facts(&probe, &reason, &rendering)
     };
-    for mode in [Mode::Double, Mode::Display] {
+    for (gpu, mode) in [
+        (false, Mode::Double),
+        (true, Mode::Double),
+        (true, Mode::Display),
+    ] {
         assert_eq!(
-            check(&at(3840., 2160., 30., true), mode),
+            check(&at(3840., 2160., 30., gpu), mode),
             Ok(()),
-            "{mode:?}"
+            "{gpu} {mode:?}"
         );
-        let error = check(&at(4096., 2160., 30., true), mode).unwrap_err();
+        let error = check(&at(4096., 2160., 30., gpu), mode).unwrap_err();
         assert_eq!(error.code(), "size");
         assert!(
             error.message().contains("4K at 30 fps"),
@@ -1044,14 +1048,6 @@ fn nvidias_size_limits_are_4k30_on_the_gpu_and_4k24_in_software() {
             error.message()
         );
     }
-    assert_eq!(check(&at(3840., 2160., 24., false), Mode::Double), Ok(()));
-    let error = check(&at(3840., 2160., 30., false), Mode::Double).unwrap_err();
-    assert_eq!(error.code(), "size");
-    assert!(
-        error.message().contains("4K at 24 fps"),
-        "{}",
-        error.message()
-    );
 }
 
 #[test]
@@ -1084,7 +1080,7 @@ fn engines_parse_and_an_engine_without_a_filter_says_so() {
         Mode::Double,
     )
     .unwrap_err();
-    assert_eq!(error.code(), "doubling");
+    assert_eq!(error.code(), "other-engine");
     assert!(!error.fixed());
     assert!(error.message().starts_with("AMD motion smoothing is on"));
 }
@@ -1132,7 +1128,7 @@ fn one_converter_runs_at_a_time_and_the_first_engine_keeps_it() {
     assert_eq!(state["mode"], "double", "{state}");
     assert_eq!(state["active"], "off", "{state}");
     assert_eq!(state["inChain"], false, "{state}");
-    assert_eq!(state["double"]["code"], "doubling", "{state}");
+    assert_eq!(state["double"]["code"], "other-engine", "{state}");
     assert!(
         state["double"]["message"]
             .as_str()
