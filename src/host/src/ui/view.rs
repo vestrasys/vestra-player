@@ -3072,39 +3072,51 @@ export component W inherits Window {
         )
     }
 
-    /// Every built-in plugin's tool window (the files its `windows.create`
-    /// names) as the player compiles it, shown in this thread's headless
-    /// window at its preferred size, one after the other.
-    fn each_plugin_window(mut check: impl FnMut(&str, &ComponentInstance)) {
+    /// Every built-in plugin's tool window (each `.slint` file under
+    /// `src/plugins` with a component that `inherits Window`; not `dist`,
+    /// `node_modules`, `vendor` or `tests`) as the player compiles it,
+    /// shown in this thread's headless window at its preferred size, one
+    /// after the other. Returns how many there were.
+    fn each_plugin_window(mut check: impl FnMut(&str, &ComponentInstance)) -> usize {
+        fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
+            for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+                let path = entry.path();
+                let name = entry.file_name();
+                if path.is_dir() {
+                    if !["dist", "node_modules", "vendor", "tests"]
+                        .contains(&name.to_str().unwrap_or(""))
+                    {
+                        walk(&path, out);
+                    }
+                } else if path.extension().is_some_and(|e| e == "slint")
+                    && std::fs::read_to_string(&path)
+                        .is_ok_and(|source| source.contains("inherits Window"))
+                {
+                    out.push(path);
+                }
+            }
+        }
         headless();
         let plugins = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../plugins");
-        for (plugin, file) in [
-            ("history", "ui/resume.slint"),
-            ("info", "ui/about.slint"),
-            ("info", "ui/properties.slint"),
-            ("marks", "ui/marks.slint"),
-            ("playback", "ui/open-url.slint"),
-            ("playlist", "ui/link.slint"),
-            ("store", "ui/store.slint"),
-            ("subtitle-online", "ui/download.slint"),
-            ("subtitle-online", "ui/settings.slint"),
-            ("subtitle-online", "ui/service.slint"),
-            ("subtitle-online", "ui/choose.slint"),
-            ("subtitles", "ui/settings.slint"),
-            ("video", "ui/aspect.slint"),
-            ("video", "ui/shaders.slint"),
-            ("workshop", "ai.slint"),
-        ] {
-            let path = plugins.join(plugin).join(file);
-            let instance = compile(&path).unwrap_or_else(|e| panic!("{}: {e:#}", path.display()));
+        let mut files = Vec::new();
+        walk(&plugins, &mut files);
+        files.sort();
+        for path in &files {
+            let name = path
+                .strip_prefix(&plugins)
+                .unwrap_or(path)
+                .display()
+                .to_string();
+            let instance = compile(path).unwrap_or_else(|e| panic!("{name}: {e:#}"));
             instance.show().unwrap();
             let (_, _, (width, height)) = window_limits(&instance);
             instance
                 .window()
                 .set_size(slint::LogicalSize::new(width, height));
-            check(&format!("{plugin}/{file}"), &instance);
+            check(&name, &instance);
             instance.hide().unwrap();
         }
+        files.len()
     }
 
     /// The size limits of the root's layout as Slint computes them, before
@@ -3130,7 +3142,7 @@ export component W inherits Window {
     #[test]
     fn plugin_window_limits_never_swap() {
         let mut wrong = Vec::new();
-        each_plugin_window(|name, instance| {
+        let count = each_plugin_window(|name, instance| {
             let (min_w, max_w, min_h, max_h) = raw_limits(instance);
             let ((lo_w, lo_h), (hi_w, hi_h), (pref_w, pref_h)) = window_limits(instance);
             if max_w < min_w || max_h < min_h {
@@ -3147,6 +3159,9 @@ export component W inherits Window {
                 ));
             }
         });
+        // 15 tool windows in the built-in plugins (November 2026): a walk
+        // that finds far fewer has lost its way.
+        assert!(count >= 15, "found {count} plugin windows");
         assert!(wrong.is_empty(), "{}", wrong.join("\n"));
     }
 
