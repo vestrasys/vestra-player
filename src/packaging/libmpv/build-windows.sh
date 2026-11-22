@@ -40,7 +40,7 @@
 # Run in an MSYS2 UCRT64 shell (https://www.msys2.org, mpv's own Windows
 # CI uses it), with the packages in msys2-packages.txt installed:
 #   pacman -S --needed patch $(sed 's/^/mingw-w64-ucrt-x86_64-/' msys2-packages.txt)
-#   ./build-windows.sh <work dir> [aribcaption|ffmpeg|mpv|package|all]
+#   ./build-windows.sh <work dir> [aribcaption|ffmpeg|mpv|package|sources|all]
 # Sources (pinned, checked by SHA-256):
 FFMPEG_VERSION=9.1
 FFMPEG_URL=https://ffmpeg.org/releases/ffmpeg-$FFMPEG_VERSION.tar.xz
@@ -230,13 +230,66 @@ package() {
   echo "$(sha256sum "$asset" | cut -d' ' -f1)  $(basename "$asset")"
 }
 
+# The complete corresponding source of libmpv-2.dll (GPL-3.0-or-later):
+# FFmpeg's, mpv's and libaribcaption's source archives as downloaded, the
+# patch and these scripts, the MSYS2 source packages of every library linked
+# in (msys2-linked.txt, msys2-sources.lock), and what this build recorded of
+# its configuration. Optional tooling (not part of `all`): for when the source
+# is published with the public release; deps.json upstream.windows-mpv.sources
+# would then pin it and components.json name it.
+sources() {
+  local tree=$WORK/sources/libmpv-sources-ffmpeg$FFMPEG_VERSION-mpv-${MPV_COMMIT:0:10}
+  rm -rf "$tree"
+  mkdir -p "$tree"/{upstream,build,build-records}
+  fetch "$FFMPEG_URL" "$FFMPEG_SHA256" "$WORK/dl/ffmpeg-$FFMPEG_VERSION.tar.xz"
+  fetch "$MPV_URL" "$MPV_SHA256" "$WORK/dl/mpv-$MPV_COMMIT.tar.gz"
+  fetch "$ARIBCC_URL" "$ARIBCC_SHA256" "$WORK/dl/libaribcaption-$ARIBCC_VERSION.tar.gz"
+  cp "$WORK/dl/ffmpeg-$FFMPEG_VERSION.tar.xz" "$WORK/dl/mpv-$MPV_COMMIT.tar.gz" \
+    "$WORK/dl/libaribcaption-$ARIBCC_VERSION.tar.gz" "$tree/upstream/"
+  cp "$HERE"/{build-windows.sh,setup-msys2.sh,mpv-lavfi-hwdevice.patch,static-imp-shims.txt,msys2-packages.txt,msys2-packages.lock,msys2-linked.txt,msys2-sources.lock,README.md} "$tree/build/"
+  "$HERE/setup-msys2.sh" sources "$tree/msys2-sources"
+  # This build's own record of its configuration and link.
+  if [ -d "$WORK/build-ffmpeg" ]; then
+    grep -m1 'FFMPEG_CONFIGURATION' "$WORK/build-ffmpeg/config.h" > "$tree/build-records/ffmpeg-configuration.txt"
+    cp "$WORK/build-mpv/meson-info/intro-buildoptions.json" "$tree/build-records/mpv-meson-options.json"
+    awk '/^build libmpv-2.dll: /{f=1} f && /LINK_ARGS/{print; exit}' "$WORK/build-mpv/build.ninja" > "$tree/build-records/libmpv-link.txt"
+    [ ! -f "$WORK/out/BUILD-INFO.txt" ] || cp "$WORK/out/BUILD-INFO.txt" "$tree/build-records/"
+  fi
+  cat > "$tree/SOURCES.txt" <<EOF
+The source code of libmpv-2.dll in Vestra Player for Windows (GPL-3.0-or-later).
+
+upstream/        FFmpeg $FFMPEG_VERSION ($FFMPEG_URL), mpv at commit $MPV_COMMIT
+                 ($MPV_URL; the tree of that commit) and libaribcaption $ARIBCC_VERSION,
+                 as downloaded (SHA-256 in build/build-windows.sh)
+build/           the build: build-windows.sh (configuration and steps),
+                 mpv-lavfi-hwdevice.patch (the one change to mpv), setup-msys2.sh and
+                 msys2-packages.lock (the exact MSYS2 UCRT64 toolchain and libraries),
+                 README.md
+msys2-sources/   the MSYS2 source packages (source archives, patches and PKGBUILDs) of
+                 every library linked into the DLL: the packages in build/msys2-linked.txt,
+                 checked against build/msys2-sources.lock
+build-records/   what this build recorded: FFmpeg's configure line, mpv's meson options,
+                 the DLL's link line, BUILD-INFO.txt (the DLL's SHA-256 and its inputs)
+
+To rebuild: in MSYS2 UCRT64, build/setup-msys2.sh install (the MSYS2 binary packages
+are also attached to the libmpv release, as msys2-packages-ucrt64-*.tar), then
+build/build-windows.sh <work dir> all.
+EOF
+  local asset=$WORK/libmpv-sources-ffmpeg$FFMPEG_VERSION-mpv-${MPV_COMMIT:0:10}.tar
+  # Reproducible: names sorted, fixed owner and time.
+  tar --sort=name --owner=0 --group=0 --numeric-owner --mtime='2026-01-01 00:00:00Z' \
+    -C "$WORK/sources" -cf "$asset" "$(basename "$tree")"
+  echo "$(sha256sum "$asset" | cut -d' ' -f1)  $(basename "$asset")"
+}
+
 case $STEP in
   aribcaption) build_aribcaption ;;
   ffmpeg) build_ffmpeg ;;
   mpv) build_mpv ;;
   package) package ;;
+  sources) sources ;;
   all)
     "$HERE/setup-msys2.sh" check || { echo "MSYS2 differs from msys2-packages.lock: run ./setup-msys2.sh install"; exit 1; }
     build_aribcaption; build_ffmpeg; build_mpv; package ;;
-  *) echo "step: aribcaption | ffmpeg | mpv | package | all"; exit 2 ;;
+  *) echo "step: aribcaption | ffmpeg | mpv | package | sources | all"; exit 2 ;;
 esac

@@ -4,18 +4,23 @@
 #        A pre-release libmpv-ffmpeg<ver>-<date> on this repository with the mpv-dev zip
 #        and the MSYS2 package archive; both must match deps.json "upstream.windows-mpv"
 #        (url, sha256, msys2_packages, msys2_packages_sha256).
+#   1b. publish.ps1 -Step sources -Assets <dir>
+#        The DLL's complete corresponding source (build-windows.sh <work> sources) uploaded to
+#        that libmpv release; it must match deps.json "upstream.windows-mpv" (sources,
+#        sources_sha256), which components.json then names (collect-windows-deps.mjs). Optional:
+#        for when the source is published with the public release.
 #   2. publish.ps1 -Step deps
 #        The Windows half of deps.yml on this machine: collect-windows-deps.mjs (it fetches
 #        the pinned libmpv asset and the FFmpeg tools of the pinned deps release, and checks
 #        them), mpv.lib from the DLL's exports, vestra-deps-windows-x64.zip; the macOS
-#        assets copied unchanged from the
-#        release deps.json names (as deps.yml does for a system it does not rebuild); then a
+#        assets copied unchanged from the release deps.json names (as deps.yml does for a
+#        system it does not rebuild); then a
 #        pre-release deps-<date>.N with SHA256SUMS, and deps.json's release/assets rewritten.
 #        With remote CI, `gh workflow run deps.yml -f platforms=windows` does the same.
 #
 # Without -Publish it only prints what it would upload. Needs gh, Node 26, VS Build Tools, 7z or tar.
 param(
-  [Parameter(Mandatory)] [ValidateSet('libmpv', 'deps')] [string]$Step,
+  [Parameter(Mandatory)] [ValidateSet('libmpv', 'sources', 'deps')] [string]$Step,
   [string]$Assets = '',
   [string]$Tag = '',
   [switch]$Publish
@@ -41,6 +46,16 @@ if ($Step -eq 'libmpv') {
   Run gh @('release', 'create', $tag, '--repo', $repo, '--prerelease', '--title', "libmpv $tag (FFmpeg $($mpv.ffmpeg), built by src/packaging/libmpv)",
     '--notes', "libmpv-2.dll built by src/packaging/libmpv/build-windows.sh (mpv $($mpv.mpv_commit), FFmpeg $($mpv.ffmpeg), mpv-lavfi-hwdevice.patch). libmpv-2.dll sha256 $($mpv.libmpv_sha256). The MSYS2 packages it was built with (msys2-packages.lock) are attached for rebuilds after MSYS2 prunes them.",
     $zip, $tar)
+  exit 0
+}
+
+if ($Step -eq 'sources') {
+  if (-not $Assets) { throw '-Assets <dir> with the libmpv-sources tar' }
+  $tar = Join-Path $Assets ([IO.Path]::GetFileName(([Uri]$mpv.sources).AbsolutePath))
+  if ((Sha $tar) -ne $mpv.sources_sha256) { throw "$tar does not match deps.json's sources_sha256" }
+  $tag = ([Uri]$mpv.sources).Segments[-2].TrimEnd('/')
+  if ($tag -ne ([Uri]$mpv.url).Segments[-2].TrimEnd('/')) { throw 'the sources must be on the libmpv release of the DLL' }
+  Run gh @('release', 'upload', $tag, '--repo', $repo, $tar)
   exit 0
 }
 

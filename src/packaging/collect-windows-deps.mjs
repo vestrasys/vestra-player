@@ -216,6 +216,14 @@ const manifest = {
         build: mpv.build,
         archive: mpv.url,
         archive_sha256: mpv.sha256,
+        // The DLL's source archive, when one is pinned (build-windows.sh
+        // sources; optional until the source is published).
+        ...(mpv.sources
+          ? {
+              complete_source: mpv.sources,
+              complete_source_sha256: mpv.sources_sha256,
+            }
+          : {}),
       },
       note: `libmpv-2.dll built by src/packaging/libmpv/build-windows.sh in MSYS2 UCRT64: FFmpeg ${mpv.ffmpeg ?? "9.1"} (--enable-gpl --enable-version3) and mpv with mpv-lavfi-hwdevice.patch, with the MSYS2 libraries pinned in msys2-packages.lock (libass, freetype, fribidi, harfbuzz, libplacebo, shaderc, spirv-cross, luajit, mujs, uchardet, lcms2, libjpeg, zimg, libbluray, libdvdnav, libarchive, rubberband, OpenSSL, x264, x265, dav1d, libaribcaption, …) linked in statically; the combination is distributed under GPL-3.0-or-later. The patch and the scripts are in this repository.`,
       files: ["libmpv-2.dll"],
