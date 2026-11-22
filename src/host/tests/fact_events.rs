@@ -14,9 +14,8 @@
 //!
 //! `audio.devices.changed` needs an audio device to come or go; the
 //! offscreen run has none (its decision is a unit test,
-//! `source_backend.rs`). The listeners use the wire (`plugin.wire`): the
-//! player's built-ins still build on SDK 1.10, whose `player.on` does not
-//! know these names yet.
+//! `source_backend.rs`). The listeners use the wire (`plugin.wire.on`), so
+//! they log the data in the player's wire shape.
 //!
 //! Needs Node 26 on `PATH` (or `VESTRA_NODE`), the development runner,
 //! libmpv and ffmpeg (`VESTRA_FFMPEG`). Ignored by default; `npm run
@@ -70,14 +69,14 @@ fn package(root: &Path, id: &str, main: String) -> Value {
     json!({"id":id,"version":"1.0.0","directory":id,"digest":digest(&files)})
 }
 
-/// A listener of `event` alone, through the wire: it logs
-/// `FACT|<id>|<event>|<data>` for each one.
+/// A listener of `event` alone, through the wire (`plugin.wire.on`
+/// subscribes an event the SDK knows, and hands the listener the wire
+/// shape): it logs `FACT|<id>|<event>|<data>` for each one.
 fn listener(id: &str, event: &str) -> String {
     format!(
         "export default async function activate(plugin) {{\n\
          console.error(`{id} start`);\n\
-         plugin.wire.on(\"{event}\", (data) => console.error(`FACT|{id}|{event}|${{JSON.stringify(data)}}`));\n\
-         await plugin.wire.request(\"events.subscribe\", {{ event: \"{event}\", why: [\"{id} listens\"] }});\n}}\n"
+         plugin.wire.on(\"{event}\", (data) => console.error(`FACT|{id}|{event}|${{JSON.stringify(data)}}`));\n}}\n"
     )
 }
 
@@ -178,8 +177,7 @@ fn fact_events_are_sent_and_wake_their_listeners() {
         DRIVER,
         format!(
             "export default function activate(plugin) {{\n\
-             plugin.player.subscribe();\n\
-             plugin.player.onChange(() => {{}});\n\
+             plugin.player.on(\"source.state\", () => {{}});\n\
              const step = (at, name, act) => setTimeout(() => Promise.resolve().then(act).then(\n\
              () => console.error(`{DRIVER} ${{name}}`),\n\
              (error) => console.error(`{DRIVER} ${{name}} failed ${{error?.code ?? error}}`)), at);\n\

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.12
+
+- **Events and triggers (SDK 1.11, release B step B3)**: `plugin.player.subscribe()` and `plugin.player.onChange()` are gone. While the list shows, its rows follow the player with `plugin.player.stream()`, opened when the list appears and stopped when it is hidden (the sidebar closed, another tab in front, the fullscreen overlay collapsed); the stream's first state catches up on what changed meanwhile. While it is hidden the plugin hears `source.opening`, `source.ready` and `source.ended` instead: the bound row's status and length, an adopted row's natural end (which advances), a failure, a close (one `player.refresh()`, since the ended source's state does not say the player is empty), A13's following of sources other plugins open, and the thumbnails' hold while a source opens. The sequence provider, Play in New Window and the menus are unchanged; the plugin stays running for its sequence provider as before. Behaviour is unchanged. Who must change: nobody. Tests: the A13 cases, removing the playing row, and errors and stops also run with the list hidden (`PLAYLIST_TEST_HIDDEN=1` runs every case so).
+
 ## 0.2.11
 
 - The hidden element that measures the hint in the Add Links window is placed (`x`, `y`), so its layout limits stay out of the window's. Nothing changes today; the same unplaced element made the Plugin Store's maximum height 0, so its size limits swapped (Store 0.3.3). Who must change: nobody.

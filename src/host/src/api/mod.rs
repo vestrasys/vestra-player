@@ -9,7 +9,7 @@
 //! left is by provenance: the built-in-only areas (`commands.run`,
 //! `palette.lead`, `app.windows`) answer only built-in plugins
 //! (`Route::check_caller`).
-//! [`ALL`] and `uncapable.rs` are the only lists: the dispatch (`lookup`)
+//! [`ALL`] and `open.rs` are the only lists: the dispatch (`lookup`)
 //! is built from them.
 use crate::{
     host::{Core, Origin, Reply, RpcError},
@@ -28,6 +28,7 @@ mod media_control;
 mod media_read;
 mod media_sources;
 mod mpv;
+mod open;
 pub(crate) mod palette_lead;
 mod playback_control;
 mod playback_read;
@@ -48,7 +49,6 @@ mod ui_osd;
 mod ui_settings;
 mod ui_theme;
 mod ui_window;
-mod uncapable;
 mod video_motion;
 mod video_upscaling;
 mod window_control;
@@ -69,7 +69,7 @@ pub struct Info {
     /// Its name, the manifest capability it once was: "commands", "ui.mount", ...
     pub name: &'static str,
     /// Only built-in plugins may use it: `Core::dispatch` and `replay`
-    /// refuse its methods to any other plugin with `capability`, built-in
+    /// refuse its methods to any other plugin with `builtin-only`, built-in
     /// by provenance (`Core::is_builtin`), never by a manifest field or a
     /// load mode.
     pub builtin_only: bool,
@@ -247,7 +247,7 @@ pub static ALL: &[&dyn Capability] = &[
     &app_windows::AppWindows,
 ];
 
-/// Where a method goes: its owner (`None`: `uncapable`).
+/// Where a method goes: its owner (`None`: `open`).
 #[derive(Clone, Copy)]
 pub struct Route {
     owner: Option<&'static dyn Capability>,
@@ -262,8 +262,8 @@ impl Route {
     pub fn check_caller(&self, builtin: bool) -> std::result::Result<(), RpcError> {
         if self.builtin_only() && !builtin {
             return Err(RpcError::new(
-                "capability",
-                "this capability is for built-in plugins only",
+                "builtin-only",
+                "this is for built-in plugins only",
             ));
         }
         Ok(())
@@ -271,7 +271,7 @@ impl Route {
     pub fn handle(&self, core: &mut Core, reply: &Reply, method: &str, params: &Value) -> Handled {
         match self.owner {
             Some(capability) => capability.handle(core, reply, method, params),
-            None => uncapable::handle(core, reply, method, params),
+            None => open::handle(core, reply, method, params),
         }
     }
 }
@@ -285,7 +285,7 @@ fn routes() -> &'static Routes {
         let owned = ALL
             .iter()
             .flat_map(|c| c.methods().iter().map(move |m| (Some(*c), *m)))
-            .chain(uncapable::METHODS.iter().map(|m| (None, *m)));
+            .chain(open::METHODS.iter().map(|m| (None, *m)));
         let mut exact = HashMap::new();
         let mut prefixes = Vec::new();
         for (owner, name) in owned {
@@ -356,7 +356,7 @@ mod tests {
     use super::*;
     use std::collections::BTreeSet;
 
-    /// The area a method goes to (`None`: `uncapable`), or `Err` for
+    /// The area a method goes to (`None`: `open`), or `Err` for
     /// no method.
     fn area(method: &str) -> Result<Option<&'static str>, ()> {
         lookup(method)
@@ -367,10 +367,7 @@ mod tests {
     #[test]
     fn every_method_has_one_owner_and_names_are_unique() {
         let mut seen = BTreeSet::new();
-        let all = ALL
-            .iter()
-            .flat_map(|c| c.methods())
-            .chain(uncapable::METHODS);
+        let all = ALL.iter().flat_map(|c| c.methods()).chain(open::METHODS);
         for method in all {
             assert!(seen.insert(*method), "{method} has two owners");
         }
@@ -404,11 +401,8 @@ mod tests {
             let route = lookup(method).unwrap();
             assert!(route.builtin_only(), "{method}");
             let refused = route.check_caller(false).unwrap_err();
-            assert_eq!(refused.code, "capability", "{method}");
-            assert_eq!(
-                refused.message,
-                "this capability is for built-in plugins only"
-            );
+            assert_eq!(refused.code, "builtin-only", "{method}");
+            assert_eq!(refused.message, "this is for built-in plugins only");
             assert!(route.check_caller(true).is_ok(), "{method}");
         }
         // The `commands` area's own methods stay open to everyone, as does
@@ -425,7 +419,7 @@ mod tests {
                 assert!(route.check_caller(false).is_ok(), "{method}");
             }
         }
-        for method in uncapable::METHODS {
+        for method in open::METHODS {
             assert!(
                 lookup(method).unwrap().check_caller(false).is_ok(),
                 "{method}"

@@ -259,7 +259,7 @@ fn a_guest_leaves_the_main_profile_byte_identical_and_cleans_up() {
         command.arg(&development);
         command
     });
-    assert_eq!(main.matches("GUEST|open capability").count(), 1, "{main}");
+    assert_eq!(main.matches("GUEST|open builtin-only").count(), 1, "{main}");
     assert_eq!(main.matches("GUEST|open unsupported").count(), 1, "{main}");
     assert!(!main.contains("GUEST|temporary true"), "{main}");
     let before = main_profile(root.path());

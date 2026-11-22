@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.5.14
+
+- SDK 1.11 (events and triggers, Release B): `player.subscribe()` and `player.onChange()` are gone. What the state stream drove (the sync and channel follow, the Audio Track menu, auto-loading companion audio, the command states) now runs at `source.opening`, `source.ready`, `source.ended` and `audio.tracks.changed`, and at the flips of two conditions the player evaluates, `when.ready` and `when.open` (playing again after the end, closing after it). The channel count comes from `audio.reconfigured` (it replaces the second `stats()` read a second after a track change); the device list and the device in use from `audio.devices.changed` (it replaces the 5 s poll of the list and the unplug check on the stream). The panel follows the volume and mute with `player.stream()` only while it is on screen. Menus, the panel, the effects and the settings are unchanged; the audio chain keeps the plugin running once an effect is on; with nothing applied (an empty chain, the Audio tab not shown) the player may now stop it while idle, and opening the tab, a command or a device change starts it again. Tests: idle it keeps nothing running, and a device change in standby wakes it. Who must change: nobody.
+
 ## 1.5.13
 
 - The description's last line, starting with `→ `, says where to open the plugin; Store 0.3.1 shows it on the plugin's card, also before install. Description text and its translations only. Who must change: nobody.

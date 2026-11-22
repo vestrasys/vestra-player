@@ -40,8 +40,8 @@ export declare const TIMELINE_LIMITS: Readonly<{
 }>;
 /**
  * One per plugin: read by `plugin.player.read()`, then kept
- * current from `timeline.changed` (after `plugin.player.subscribe()`) once the plugin uses it
- * (or listens to that event with `player.on`).
+ * current from `timeline.changed` while the plugin listens to that event
+ * (`player.on`), and after this plugin's own changes.
  */
 export declare class TimelineService {
     #private;

@@ -295,9 +295,23 @@ test("TestHost answers processing changes like the player", async () => {
   }
 });
 
-// Player 0.9.0 (SDK 1.9.0): manifests declare nothing, so the player's
-// capability table (host/capabilities.json) and the SDK's copy of it are
-// gone; apiVersion is the runner's constant.
+/** Whether the installed SDK is older than `major.minor.patch`. */
+function sdkBefore(major: number, minor: number, patch: number): boolean {
+  const version = JSON.parse(
+    readFileSync(
+      new URL(
+        "../../node_modules/@vestra-player/sdk/package.json",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  ).version as string;
+  const [a, b, c] = version.split(".").map(Number);
+  return a! * 1e6 + b! * 1e3 + c! < major * 1e6 + minor * 1e3 + patch;
+}
+
+// Player 0.9.0 (SDK 1.9.0): manifests declare nothing; apiVersion is the
+// runner's constant.
 test("apiVersion is the player's (host/src/process/mod.rs API)", () => {
   const api = /pub const API: &str = "([^"]+)";/.exec(
     host("src/process/mod.rs"),
@@ -306,25 +320,27 @@ test("apiVersion is the player's (host/src/process/mod.rs API)", () => {
   assert.equal(api, API_VERSION);
 });
 
-test("a manifest with capabilities is refused with the SDK's words (packages/manifest.rs CAPABILITIES_REMOVED; SDK 1.9.0)", () => {
-  const rust = /pub const CAPABILITIES_REMOVED: &str = r#"([^]*?)"#;/.exec(
+// User ruling 2026-11-21 (option A): a field an older player knew
+// (`capabilities`) is refused like any other unknown field, by the player
+// (serde's deny_unknown_fields, packages/manifest.rs) and by the SDK
+// (manifestProblems, SDK 1.11.0), with no message of its own.
+test("a former manifest field is an ordinary unknown field on both sides (option A; SDK 1.11.0)", (t) => {
+  assert.doesNotMatch(
     host("src/packages/manifest.rs"),
-  )?.[1];
-  assert.ok(rust, "CAPABILITIES_REMOVED in packages/manifest.rs");
-  // The SDK keeps it in src/manifest.ts (not exported from ./runtime).
-  const sdk =
-    /export const CAPABILITIES_REMOVED = ('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*");/.exec(
-      sdkFile("manifest.js"),
-    )?.[1];
-  assert.ok(sdk, "CAPABILITIES_REMOVED in the SDK's dist/manifest.js");
-  assert.equal(rust, (0, eval)(sdk) as string);
+    /CAPABILITIES_REMOVED|rename = "capabilities"/,
+  );
   assert.ok(!MANIFEST_FIELDS.includes("capabilities"));
+  if (/CAPABILITIES_REMOVED/.test(sdkFile("manifest.js")))
+    return t.skip(
+      "the installed SDK is older than 1.11.0: it still has a message of its own",
+    );
+  assert.doesNotMatch(sdkFile("manifest.js"), /"capabilities"/);
 });
 
-test("the built-in-only requests are TestHost's (capabilities/commands_run.rs, palette_lead.rs: code capability)", async () => {
+test("the built-in-only requests are TestHost's (api/commands_run.rs, palette_lead.rs: code builtin-only; SDK 1.11.0)", async (t) => {
   // The player: the areas marked builtin_only, and their methods.
   const only = (file: string) => {
-    const rust = host(`src/capabilities/${file}`);
+    const rust = host(`src/api/${file}`);
     assert.match(rust, /builtin_only: true/, file);
     const methods = /static METHODS: &\[&str\] = &\[([^\]]*)\]/.exec(rust)?.[1];
     assert.ok(methods, `METHODS in ${file}`);
@@ -347,7 +363,7 @@ test("the built-in-only requests are TestHost's (capabilities/commands_run.rs, p
       "app.openWindow",
     ],
   );
-  const root = new URL("../../host/src/capabilities/", import.meta.url);
+  const root = new URL("../../host/src/api/", import.meta.url);
   const marked = readdirSync(root)
     .filter((name) => name.endsWith(".rs"))
     .filter((name) =>
@@ -360,20 +376,22 @@ test("the built-in-only requests are TestHost's (capabilities/commands_run.rs, p
     "palette_lead.rs",
   ]);
   assert.match(
-    host("src/capabilities/mod.rs"),
-    /"capability",\s*"this capability is for built-in plugins only"/,
+    host("src/api/mod.rs"),
+    /"builtin-only",\s*"this is for built-in plugins only"/,
   );
-  // TestHost: the same requests fail `capability` for a plugin that is
+  if (sdkBefore(1, 11, 0))
+    return t.skip("the installed SDK is older than 1.11.0 (code builtin-only)");
+  // TestHost: the same requests fail `builtin-only` for a plugin that is
   // not built-in, whatever else it does.
   const { plugin, stop } = await startPlugin(() => {});
   try {
     await assert.rejects(
       plugin.palette.lead({ title: "Ask", icon: "ai" }).ready,
-      { code: "capability" },
+      { code: "builtin-only" },
     );
     await assert.rejects(
       (plugin.commands as unknown as { list(): Promise<unknown> }).list(),
-      { code: "capability" },
+      { code: "builtin-only" },
     );
   } finally {
     await stop();
@@ -707,12 +725,9 @@ test("step seek parameters are the player's: setStepSeek keyframes, host.run sec
   assert.match(wire, /"player\.setStepSeek",\s*keyframes === undefined/);
   assert.match(wire, /"host\.run",\s*seconds === undefined/);
   // The player reads them under the same names.
+  assert.match(host("src/api/playback_control.rs"), /params\["keyframes"\]/);
   assert.match(
-    host("src/capabilities/playback_control.rs"),
-    /params\["keyframes"\]/,
-  );
-  assert.match(
-    host("src/capabilities/commands.rs"),
+    host("src/api/commands.rs"),
     /run_step\(action, &params\["seconds"\]\)/,
   );
   assert.match(
@@ -914,7 +929,7 @@ function matching(text: string, open: number): number {
   throw new Error("unbalanced brackets");
 }
 
-test("OSD_LIMITS, SECRET_LIMITS, TIMELINE_LIMITS and MESSAGE_LIMIT are the player's (capabilities/ui_osd.rs, system.rs, secret_index.rs, timeline.rs, process/mod.rs)", () => {
+test("OSD_LIMITS, SECRET_LIMITS, TIMELINE_LIMITS and MESSAGE_LIMIT are the player's (api/ui_osd.rs, system.rs, secret_index.rs, timeline.rs, process/mod.rs)", () => {
   const constant = (file: string, name: string) => {
     const value = new RegExp(`const ${name}: \\w+ = ([^;]+);`).exec(
       host(file),
@@ -927,13 +942,13 @@ test("OSD_LIMITS, SECRET_LIMITS, TIMELINE_LIMITS and MESSAGE_LIMIT are the playe
   };
   assert.deepEqual(
     {
-      messageChars: constant("src/capabilities/ui_osd.rs", "OSD_MESSAGE_CHARS"),
-      panelLines: constant("src/capabilities/ui_osd.rs", "OSD_PANEL_LINES"),
-      panelBytes: constant("src/capabilities/ui_osd.rs", "OSD_PANEL_BYTES"),
-      minColumns: constant("src/capabilities/ui_osd.rs", "OSD_MIN_COLUMNS"),
-      maxColumns: constant("src/capabilities/ui_osd.rs", "OSD_MAX_COLUMNS"),
-      actions: constant("src/capabilities/ui_osd.rs", "OSD_ACTIONS"),
-      actionChars: constant("src/capabilities/ui_osd.rs", "OSD_ACTION_CHARS"),
+      messageChars: constant("src/api/ui_osd.rs", "OSD_MESSAGE_CHARS"),
+      panelLines: constant("src/api/ui_osd.rs", "OSD_PANEL_LINES"),
+      panelBytes: constant("src/api/ui_osd.rs", "OSD_PANEL_BYTES"),
+      minColumns: constant("src/api/ui_osd.rs", "OSD_MIN_COLUMNS"),
+      maxColumns: constant("src/api/ui_osd.rs", "OSD_MAX_COLUMNS"),
+      actions: constant("src/api/ui_osd.rs", "OSD_ACTIONS"),
+      actionChars: constant("src/api/ui_osd.rs", "OSD_ACTION_CHARS"),
     },
     { ...OSD_LIMITS },
     "OSD_LIMITS differ from the player's OSD_* constants",
@@ -1321,7 +1336,7 @@ test("VIDEO_PROCESSING_LIMITS are the player's (playback/effects.rs, plugin_file
   );
 });
 
-test("MEDIA_SOURCE_LIMITS are the player's (playback/media_sources.rs, capabilities/media_sources.rs; SDK 1.7.8)", () => {
+test("MEDIA_SOURCE_LIMITS are the player's (playback/media_sources.rs, api/media_sources.rs; SDK 1.7.8)", () => {
   // `[pub ]const NAME: <type> = …;` (the request share and the Locate
   // interval are private), products of numbers; `86400.` reads as 86400.
   const constant = (file: string, name: string) => {
@@ -1337,7 +1352,7 @@ test("MEDIA_SOURCE_LIMITS are the player's (playback/media_sources.rs, capabilit
       .reduce((a, b) => a * b, 1);
   };
   const store = "src/playback/media_sources.rs";
-  const capability = "src/capabilities/media_sources.rs";
+  const capability = "src/api/media_sources.rs";
   assert.deepEqual(
     {
       references: constant(store, "MAX_PER_PLUGIN"),
@@ -1491,7 +1506,9 @@ const SDK_UNREACHABLE_CODES = new Map<
   ["staleDigest", { method: "packages.validate", param: "digest" }],
 ]);
 
-test("the error codes the player returns are PluginError codes", () => {
+test("the error codes the player returns are PluginError codes", (t) => {
+  if (sdkBefore(1, 11, 0))
+    return t.skip("the installed SDK is older than 1.11.0 (code builtin-only)");
   const types = sdkTypes();
   const table = types.slice(
     types.indexOf("| code | meaning |"),
@@ -1503,7 +1520,7 @@ test("the error codes the player returns are PluginError codes", () => {
     ),
   );
   assert.ok(
-    documented.has("capability"),
+    documented.has("builtin-only"),
     "the PluginError table in the SDK's plugin types",
   );
   const root = new URL("../../host/src/", import.meta.url);
@@ -1889,13 +1906,13 @@ test("SESSION_STORAGE_LIMITS are the player's (session_storage.rs; SDK 1.5.25, p
   );
 });
 
-test("the SDK's wake events are the player's (capabilities/events.rs WAKE_EVENTS; commands.keys from SDK 1.6.7)", async () => {
-  const rust = host("src/capabilities/events.rs");
+test("the SDK's wake events are the player's (api/events.rs WAKE_EVENTS; commands.keys from SDK 1.6.7)", async () => {
+  const rust = host("src/api/events.rs");
   const block =
     /pub\(crate\) const WAKE_EVENTS: &\[&str\] = &\[([\s\S]*?)\];/.exec(
       rust,
     )?.[1];
-  assert.ok(block, "WAKE_EVENTS in capabilities/events.rs");
+  assert.ok(block, "WAKE_EVENTS in api/events.rs");
   const player = [...block.matchAll(/"([^"]+)"/g)].map((m) => m[1]);
   // Internal to the SDK: TestHost and `vestra-plugin test` use it to say
   // what keeps a plugin running while idle.
@@ -1937,10 +1954,10 @@ test("the SDK's wake events are the player's (capabilities/events.rs WAKE_EVENTS
 });
 
 test("palette.lead's status states are the player's (palette_lead.rs StatusState::NAMES; SDK 1.7.15)", async (t) => {
-  const rust = host("src/capabilities/palette_lead.rs");
+  const rust = host("src/api/palette_lead.rs");
   const block = found(
     /pub const NAMES: \[&'static str; \d+\] = \[([^\]]*)\];/.exec(rust)?.[1],
-    "StatusState::NAMES in capabilities/palette_lead.rs",
+    "StatusState::NAMES in api/palette_lead.rs",
   );
   const player = [...block.matchAll(/"([^"]+)"/g)].map((m) => m[1]!);
   const version = JSON.parse(
@@ -2001,12 +2018,12 @@ test("COMMAND_RUN_LIMITS are the player's (commands_run.rs; SDK 1.7.16)", async 
   };
   if (!runtime.COMMAND_RUN_LIMITS)
     return t.skip("the installed SDK is older than 1.7.16");
-  const rust = host("src/capabilities/commands_run.rs");
+  const rust = host("src/api/commands_run.rs");
   const constant = (name: string) =>
     Number(
       found(
         new RegExp(`pub const ${name}: \\w+ = ([\\d_]+);`).exec(rust)?.[1],
-        `${name} in capabilities/commands_run.rs`,
+        `${name} in api/commands_run.rs`,
       ).replaceAll("_", ""),
     );
   assert.deepEqual(
@@ -2036,7 +2053,7 @@ test("TestHost asks for a commands.run plan as the player does (commands_run.rs 
     t.skip(`the installed SDK ${version} predates commands.run then (1.7.16)`);
     return;
   }
-  const rust = host("src/capabilities/commands_run.rs");
+  const rust = host("src/api/commands_run.rs");
   const fake = new TestHost();
   fake.setSource({ phase: "ready", duration: 60, position: 0 });
   const ran: string[] = [];

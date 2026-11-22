@@ -5,8 +5,8 @@ import type { Appearance, LanguagePreference, ThemeId } from "./types.ts";
 export declare const THEMES: readonly ThemeId[];
 /**
  * One per plugin: the value comes with the `window.state` read before
- * activation; after `plugin.player.subscribe()`, `appearance.changed` keeps it current once
- * the plugin uses it (or listens to that event with `player.on`).
+ * activation; `appearance.changed` keeps it current while the plugin
+ * listens to that event (`player.on`), and this plugin's own `set` does.
  */
 declare class AppearanceService {
     #private;

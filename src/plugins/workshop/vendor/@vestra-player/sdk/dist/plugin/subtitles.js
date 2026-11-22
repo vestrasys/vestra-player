@@ -95,8 +95,8 @@ class SubtitleService {
                 return;
             this.#source = source;
             void this.refresh().catch(() => { });
-        }, "events", true);
-        runtime.on("playback.backend", () => void this.refresh().catch(() => { }), "events", true);
+        }, "held", true);
+        runtime.on("playback.backend", () => void this.refresh().catch(() => { }), "held", true);
         this.style = new Latest(async ({ style, options }) => {
             const expected = await this.expected(options);
             await this.#mutate(++this.#operation, (operationId) => runtime.host.subtitles.style({
@@ -147,6 +147,17 @@ class SubtitleService {
         for (const watcher of [...this.#watchers])
             watcher();
         this.#runtime.invalidate();
+    }
+    /**
+     * `subtitles.changed`'s state (SDK 1.11.0): taken into the copy when it
+     * is newer, and handed to the listener as a {@link SubtitlesState} (the
+     * copy's own when it holds the same state, so it works as `ifCurrent`).
+     */
+    event(raw) {
+        this.accept(raw);
+        return this.state && JSON.stringify(this.raw) === JSON.stringify(raw)
+            ? this.state
+            : this.#view(raw);
     }
     #view(raw) {
         const tracks = raw.tracks.map((track) => {
@@ -263,6 +274,11 @@ function target(track) {
     if (!found)
         throw failure("invalid", "unknown subtitle track");
     return found;
+}
+/** `subtitles.changed`'s data as the listener gets it (`ScopeImpl.fact`). */
+export function subtitlesChanged(runtime, data) {
+    const { state } = data;
+    return { state: serviceOf(runtime).event(state) };
 }
 export function subtitles(scope) {
     const service = () => serviceOf(scope.runtime);

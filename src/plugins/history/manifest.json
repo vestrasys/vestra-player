@@ -1,6 +1,6 @@
 {
   "id": "vestra.history",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "name": "Playback History",

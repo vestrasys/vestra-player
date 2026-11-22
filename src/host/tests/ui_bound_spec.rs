@@ -383,7 +383,6 @@ fn r5_r6_r13_a_mount_and_a_layout_change_are_in_place_when_answered() {
         "export default function activate(plugin) {\n\
            const w = plugin.wire;\n\
            const req = (method, params) => outcome(w.request(method, params));\n\
-           plugin.player.subscribe();\n\
            w.on(\"window.state\", () => {});\n\
            setTimeout(async () => {\n\
              log(\"layout-before\", await req(\"layout.state\"));\n\
@@ -576,8 +575,7 @@ fn r6_side_effects_before_the_reply_and_triggers_before_their_broadcast() {
         ORDER,
         &format!(
             "export default function activate(plugin) {{\n\
-               plugin.player.subscribe();\n\
-               plugin.player.onChange(() => {{}});\n\
+               plugin.player.on(\"source.state\", () => {{}});\n\
                for (const phase of [\"loading\", \"error\"])\n\
                  plugin.trigger(`on-${{phase}}`).firesOn(plugin.when.phase(phase))\n\
                    .enter(() => log(`fired-${{phase}}`, true));\n\

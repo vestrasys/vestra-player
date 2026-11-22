@@ -25,7 +25,7 @@ pub const MENU_SHOWS_CMD: bool = false;
 /// title bar of its own.
 pub const FULLSCREEN_TITLE_STRIP: bool = true;
 /// No system alerts: every confirmation is drawn on the main window's
-/// sheet (`capabilities/ui_dialog.rs`).
+/// sheet (`api/ui_dialog.rs`).
 pub const SYSTEM_ALERTS: bool = false;
 
 const WINDOWS: Unavailable = Unavailable("native windows are not supported on this system");

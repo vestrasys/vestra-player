@@ -486,7 +486,7 @@ impl Core {
             return;
         }
         if id == ASK_AGAIN {
-            crate::capabilities::ask_again_before_plugin_commands(self);
+            crate::api::ask_again_before_plugin_commands(self);
             return;
         }
         if id == "quit" {

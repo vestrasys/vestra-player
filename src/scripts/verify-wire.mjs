@@ -346,7 +346,7 @@ export const INTERFACE_ERRORS = new Set([
  * - `clipboard` (plan step S3a(3)): `clipboard.*` on its serial thread.
  * - `playback` (plan step S3b, the coordinator's K14 ruling): the methods
  *   the core hands to the playback worker, answered by the worker's own
- *   reply event (`capabilities/mod.rs` `forward` and `forward_media`,
+ *   reply event (`api/mod.rs` `forward` and `forward_media`,
  *   `media_sources::forward_with_store`, and the direct sends of
  *   `mpv.rs`, `video_motion.rs`, `video_upscaling.rs`,
  *   `source_resolve.rs`). With the event-driven core a worker reply can
@@ -362,13 +362,13 @@ export const WORKERS = [
   {
     name: "playback",
     exact: [
-      // capabilities/playback_read.rs
+      // api/playback_read.rs
       "source.state",
       "processing.state",
       "playback.stats",
       "player.chapters",
       "player.audioDevices",
-      // capabilities/playback_control.rs
+      // api/playback_control.rs
       "playback.set",
       "source.submit",
       "source.operation",
@@ -377,11 +377,11 @@ export const WORKERS = [
       "player.setLoop",
       "player.setAudioDevice",
       "player.step",
-      // capabilities/processing_video.rs
+      // api/processing_video.rs
       "processing.replace",
       "processing.operation",
       "video.shaders.set",
-      // capabilities/source_resolve.rs
+      // api/source_resolve.rs
       "sourceResolvers.register",
       "sourceResolvers.unregister",
       "sourceResolvers.respond",
@@ -422,7 +422,7 @@ export const WORKER_REPLIES = WORKERS[0].prefixes;
  * value depends on how the host's own changes interleave with the request
  * (plan step S3b, the coordinator's ruling): the command registry's
  * (`commands.register`, `commands.update`, `commands.list`;
- * capabilities/commands.rs, commands_run.rs) and the binding table's
+ * api/commands.rs, commands_run.rs) and the binding table's
  * (`commands.keys`, binding_manager.rs). Only that field is normalised;
  * a `revision` elsewhere (`processing.operation`'s own resource
  * revision) stays compared.

@@ -50,6 +50,7 @@ export function playback(scope: Scope, queue: Queue, settled: () => void = () =>
   // source empty; a resolver's own failure (or an expired resolution) leaves it in `error`.
   const cancelled = (code: string) => code === "backend" && player.state.phase === "empty";
 
+  /** Follow one state of the player (main.ts hands over each change it hears). */
   const observe = (state: PlayerState) => {
     if (advancing?.sourceId === state.sourceId && state.phase !== "loading") {
       const now = performance.now();
@@ -76,7 +77,6 @@ export function playback(scope: Scope, queue: Queue, settled: () => void = () =>
       } else if (!ended) adoptedEnded = false;
     }
   };
-  player.onChange(observe); // B3: Player.onChange is removed in SDK 1.11
 
   // Only when nobody changed the source after it ended: otherwise "stale".
   const advance = (binding: Binding, ended: PlayerState): Promise<void> | undefined => {
@@ -256,6 +256,15 @@ export function playback(scope: Scope, queue: Queue, settled: () => void = () =>
     return !!opening || !!loading;
   }
   return {
+    observe,
+    /**
+     * A natural end heard as `source.ended`, which comes once per playthrough: the
+     * adopted row's end is armed again first (a restart after the end sends no event).
+     */
+    endedNaturally(state: PlayerState) {
+      adoptedEnded = false;
+      observe(state);
+    },
     play,
     busy,
     adopt,

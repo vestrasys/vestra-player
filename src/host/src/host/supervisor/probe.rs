@@ -14,7 +14,7 @@
 //!   numbers: they change with every generation.
 //! - `VESTRA_TEST_PARK=all`: every installed plugin
 //!   counts as lazy at its ready (what it holds live is ignored) and records
-//!   what a recording can hold (`capabilities::recordable`), so resident ones
+//!   what a recording can hold (`api::recordable`), so resident ones
 //!   are parked too. **Isolated profile only**: such recordings are
 //!   incomplete; they carry `testPark: true` and only a run with the same
 //!   switch reads them back (any other run ignores them and records again).
@@ -37,7 +37,7 @@
 //! Source resolvers live in the playback worker and are not listed (no
 //! built-in registers one; `owner.resources` reports a lazy plugin's).
 use super::*;
-use crate::capabilities::{self, Call};
+use crate::api::{self, Call};
 use std::io::Write;
 
 #[derive(Default)]
@@ -151,9 +151,9 @@ impl Core {
         backend: &Value,
     ) -> std::result::Result<Vec<Call>, &'static str> {
         if self.on_demand.probe.park_all {
-            return Ok(capabilities::recordable(self, owner, backend));
+            return Ok(api::recordable(self, owner, backend));
         }
-        capabilities::record(self, owner, backend)
+        api::record(self, owner, backend)
     }
     /// `VESTRA_TEST_WAKE`: once due, every parked plugin wakes.
     pub(super) fn probe_tick(&mut self, now: u64) {
@@ -346,9 +346,7 @@ impl Core {
             Some(plugin) => plugin
                 .subscriptions
                 .iter()
-                .filter(|(event, active)| {
-                    **active && capabilities::WAKE_EVENTS.contains(&event.as_str())
-                })
+                .filter(|(event, active)| **active && api::WAKE_EVENTS.contains(&event.as_str()))
                 .map(|(event, _)| event.clone())
                 .collect::<Vec<_>>(),
             None => self

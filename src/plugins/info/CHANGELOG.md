@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.18
+
+- `subscribe()` and `player.onChange` are gone (SDK 1.11.0): the overlay (Tab) and the short information (Shift+Tab) open a state stream and listen to `window.changed` (for the video width the short lines are cut to) only while one of them shows, beside their existing 1-second refresh; Playback Properties streams the state while its window is open, where it used a listener of its own. With nothing shown the plugin holds nothing and may be stopped while idle. What is shown is unchanged. Who must change: nobody.
+
 ## 0.1.17
 
 - The hidden elements that measure translated labels in the About and Properties windows are placed (`x`, `y`), so their layout limits stay out of the window's. Nothing changes today; the same unplaced element made the Plugin Store's maximum height 0, so its size limits swapped (Store 0.3.3). Who must change: nobody.

@@ -291,7 +291,6 @@ mod tests {
                 id: "counter".into(),
                 api_version: crate::process::API.into(),
                 entry: "main.js".into(),
-                removed_capabilities: Default::default(),
                 version: Some("1.0.0".into()),
                 ..Default::default()
             })
@@ -454,7 +453,7 @@ mod tests {
     }
 
     #[test]
-    fn contract_a_manifest_with_capabilities_is_rejected() {
+    fn contract_a_manifest_with_a_former_field_is_rejected_as_unknown() {
         let root = fixture();
         let path = root.path().join("manifest.json");
         let mut manifest: serde_json::Value =
@@ -465,7 +464,7 @@ mod tests {
             panic!("a manifest with capabilities was accepted");
         };
         assert!(
-            format!("{error:#}").contains(crate::packages::manifest::CAPABILITIES_REMOVED),
+            format!("{error:#}").contains("unknown field `capabilities`"),
             "{error:#}"
         );
     }

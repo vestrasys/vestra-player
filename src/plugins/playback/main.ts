@@ -26,7 +26,6 @@ import type { Osd } from "./texts.ts";
  * (B23, moved from the marks plugin: the `ab.*` commands and the panel's A-B Loop section).
  */
 export default async function activate(plugin: Plugin) {
-  plugin.player.subscribe(); // B3: removed in SDK 1.11; migrate (events-and-triggers.md §7)
   await plugin.player.read(); // was "playback.read"
   const { player } = plugin;
   const bar = plugin.panels.mount("bottom", "ui/bar.slint");
@@ -102,10 +101,16 @@ export default async function activate(plugin: Plugin) {
   // The core's step is 5 s exact until someone sets it, and returns to that when this plugin stops.
   void stepSeek();
 
+  // The bar shows the player's state as it changes (the seek line, the time, the
+  // buttons' and commands' states that read `player.state`), so it follows the
+  // player with a stream for as long as the bar is mounted: the plugin's whole run
+  // (it is never unmounted; the fullscreen overlay and a hidden bar come back without
+  // a new mount). Each change also drives what follows playback here: the A-B loop's
+  // passes, the remembered volume and mute, the seek bar's thumbnails, the last file.
   // Another source, or anyone else's change during a drag, ends the gesture;
   // further pointer moves wait for the next press. A failed load is announced once.
   let { sourceId, phase } = player.state;
-  player.onChange(async (state) => { // B3: Player.onChange is removed in SDK 1.11
+  player.stream(async (state) => {
     const replaced = state.sourceId !== sourceId;
     if (state.phase === "error" && (replaced || phase !== "error"))
       if (state.error) osd("Open failed: {}", [state.error]);
@@ -127,5 +132,12 @@ export default async function activate(plugin: Plugin) {
     }
     if (replaced) panel.sourceChanged();
   });
+  // The other facts the bar, the panel and the commands read, kept current by their
+  // events (the SDK's copies take each one before these listeners): the fullscreen
+  // button (`plugin.window.state`), the Playback panel's place (its slot's state) and
+  // everyone's marks and ranges on the seek line (`plugin.timeline`).
+  player.on("window.changed", () => {});
+  player.on("layout.changed", () => {});
+  player.on("timeline.changed", () => {});
 }
 

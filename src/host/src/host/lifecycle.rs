@@ -185,7 +185,7 @@ impl Core {
         // (moved at its spawn; `panel_restart.rs`).
         let id = self.plugin_id(owner);
         self.adopt_panels(&id, owner);
-        capabilities::revoke(self, owner, park);
+        api::revoke(self, owner, park);
         // A run the supervisor restarts by itself after a fault keeps its
         // panels in the shell meanwhile (user ruling 2026-11-10): no
         // compile now, none when its restart mounts them again. Any other
@@ -339,14 +339,14 @@ impl Core {
             event,
             "source.state" | "window.state" | "appearance.changed"
         ) {
-            capabilities::refresh_conditions(self);
+            api::refresh_conditions(self);
             // Trigger conditions too (crate::triggers): what flips is
             // delivered before the broadcast itself.
             self.triggers_facts();
         }
-        let wake = capabilities::WAKE_EVENTS.contains(&event);
+        let wake = api::WAKE_EVENTS.contains(&event);
         // A source event reports one change, not a state to compare.
-        if wake && !capabilities::SOURCE_EVENTS.contains(&event) {
+        if wake && !api::SOURCE_EVENTS.contains(&event) {
             // What a plugin parked at start-up is compared with (`wake_missed`).
             self.note_announced(event, &data);
         }
@@ -362,7 +362,7 @@ impl Core {
             // ready: a newer one waits behind it, never before (§6.9; the
             // core holds it while its start is waking).
             if wake && self.supervisor.waking(Pid(*owner)).is_some() {
-                let trigger = capabilities::wake_trigger(event, &data);
+                let trigger = api::wake_trigger(event, &data);
                 self.supervisor.wake(Pid(*owner), &trigger);
                 continue;
             }
@@ -370,7 +370,7 @@ impl Core {
             // running listener is a wake trigger sent now: it counts as
             // use and cancels a standby on its way, so the process is not
             // stopped under its handler (§4.9).
-            if wake && capabilities::counts_as_use(event) {
+            if wake && api::counts_as_use(event) {
                 self.supervisor.delivering(Pid(*owner));
             }
             if let Err(error) = plugin.send(json!({"event":event,"data":data})) {

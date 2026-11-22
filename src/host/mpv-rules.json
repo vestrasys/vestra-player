@@ -10,7 +10,7 @@
   "rules": {
     "categories": {
       "clients": "it opens a control channel to the player or talks to its other clients",
-      "clipboard": "the clipboard has its own capability (plugin.clipboard)",
+      "clipboard": "the clipboard has its own API (plugin.clipboard)",
       "code": "it loads scripts or configuration into the player",
       "files": "it makes the player write or delete files (a plugin writes its own with Node)",
       "filters": "a plugin changes only its own labelled filters (vf/af add, pre, toggle or remove of @label:…, a label not starting with vestra-)",

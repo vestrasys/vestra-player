@@ -1075,6 +1075,64 @@ test("IA-WIN-01: 画中画 and 迷你尺寸 exclude each other: each leaves the 
   assert.equal(lastOsd(host), "Cannot exit picture-in-picture: refused by the system");
 });
 
+// ------------------------------------------------------------------ standby (events and triggers, B3)
+
+test("standby: nothing keeps the plugin running; woken mid-playback it neither sizes again nor loses on top", async () => {
+  const { host } = await start();
+  assert.deepEqual(host.keepsRunning, []);
+  await host.command("top.playing").run();
+  await play(host, { width: 1280, height: 720 });
+  assert.deepEqual([host.mainWindow.videoArea, host.mainWindow.onTop], [{ width: 1280, height: 720 }, true]);
+  host.setMainWindow({ videoArea: { width: 900, height: 506 } }); // the user's own size
+  await host.settle();
+  assert.deepEqual(host.keepsRunning, []);
+
+  await host.park();
+  assert.equal(host.parked, true);
+  assert.equal(host.mainWindow.onTop, true, "the player keeps the setting through standby");
+  // A wake event starts it again: the source already playing is not sized a second time.
+  host.setMainWindow({ fullscreen: true });
+  await host.settle(30);
+  assert.equal(host.parked, false);
+  host.setMainWindow({ fullscreen: false, videoArea: { width: 900, height: 506 } });
+  await host.settle(30);
+  assert.deepEqual(host.sent("window.setVideoArea"), [{ width: 1280, height: 720 }]);
+  assert.equal(state(host, "size.1").enabled, true, "the size is known again after the wake");
+  // The trigger's leave after the wake still lets go of on top.
+  host.setSource({ paused: true });
+  await host.settle();
+  assert.equal(host.mainWindow.onTop, false);
+  assert.deepEqual(host.sent("window.setAlwaysOnTop").map((p) => p.onTop), [true, false]);
+
+  // Parked while paused, playing wakes it through the trigger.
+  await host.park();
+  host.setSource({ paused: false });
+  await host.settle(30);
+  assert.equal(host.mainWindow.onTop, true);
+  // The next file is sized as before.
+  await play(host, { width: 640, height: 480 });
+  assert.deepEqual(host.mainWindow.videoArea, { width: 640, height: 480 });
+});
+
+test("video.reconfigured: a new shown size (a filter turned the picture) is the size the commands use", async () => {
+  const { host } = await manual();
+  await play(host, { width: 1920, height: 1080 });
+  host.emit("video.reconfigured", {
+    sourceId: host.source.stamp.generation,
+    width: 1920,
+    height: 1080,
+    displayWidth: 1080,
+    displayHeight: 1920,
+    fps: 25,
+    rotation: 90,
+    hdr: false,
+  });
+  await host.settle();
+  host.setMainWindow({ videoArea: { width: 540, height: 960 } });
+  await host.settle();
+  assert.equal(state(host, "size.0.5").checked, true);
+});
+
 // ------------------------------------------------------------------ zh-Hans
 
 test("zh-Hans: the menus, the settings page and the OSD texts are the Chinese ones from before", async () => {

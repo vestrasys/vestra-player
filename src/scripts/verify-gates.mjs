@@ -476,7 +476,7 @@ export function compareCapabilities(base, head) {
     }
   }
   // The host looks a method up by its exact name first, then by the first
-  // `prefix.*` entry in table order (capabilities/mod.rs `lookup`): a new
+  // `prefix.*` entry in table order (api/mod.rs `lookup`): a new
   // exact name under an existing prefix, or a new prefix before an existing
   // one it overlaps, takes methods over without touching an old entry.
   const routes = (table) => {

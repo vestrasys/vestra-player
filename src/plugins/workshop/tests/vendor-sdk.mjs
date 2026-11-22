@@ -44,7 +44,7 @@ export function sources() {
 }
 
 const TREES = ["vendor/@vestra-player", "vendor/typescript", "vendor/@types", "vendor/undici-types"];
-const SDK_FILES = ["package.json", "LICENSE", "README.md", "bin", "dist", "slint", "llms.txt", "capability-scan.json"];
+const SDK_FILES = ["package.json", "LICENSE", "README.md", "bin", "dist", "slint", "llms.txt"];
 /** tsc (lib/tsc.js loads lib/_tsc.js), the compiler API the CLI transpiles with, and the lib declarations. */
 const TS_FILE = (name) => /^(tsc|_tsc|typescript)\.js$/.test(name) || /^lib\..*\.d\.ts$/.test(name);
 

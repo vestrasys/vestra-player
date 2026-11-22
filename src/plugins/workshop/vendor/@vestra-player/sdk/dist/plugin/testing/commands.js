@@ -425,7 +425,7 @@ export function commandsHandlers(host, inner) {
  */
 export function builtinOnly(host) {
     if (!host.builtin)
-        throw new HostError("capability", "this is for built-in plugins only");
+        throw new HostError("builtin-only", "this is for built-in plugins only");
 }
 /** The palette's rows: the player's core commands and the plugin's own. */
 function rows(host) {

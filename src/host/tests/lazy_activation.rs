@@ -223,7 +223,7 @@ const LISTENER: &str = "vestra.fixture-listener";
 /// SDK's mirrors (`plugin.player.state`) is classified lazy at its first
 /// ready and parked at once, replayed at the next start and woken by its
 /// command, which reads the player's state; a plugin with a listener
-/// (`player.onChange`) is resident, recorded so at its ready, and started
+/// (a `source.state` listener) is resident, recorded so at its ready, and started
 /// at launch the next time instead of being replayed.
 #[test]
 #[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]
@@ -249,7 +249,7 @@ fn mirror_subscriptions_park_and_wake_a_listener_keeps_a_plugin_resident() {
                     format!(
                         "export default async function activate(plugin) {{\n\
                          console.error(`{LISTENER} start`);\n\
-                         plugin.player.onChange(() => {{}});\n\
+                         plugin.player.on(\"source.state\", () => {{}});\n\
                          plugin.commands.add({{ id: \"hello\", path: [\"Tools\", \"Hello\"], run: () => {{}} }});\n}}\n"
                     ),
                 ),
@@ -762,7 +762,7 @@ fn a_when_command_is_parked_and_its_state_follows_playback() {
                 &["events", "playback.read", "playback.control"],
                 format!(
                     "export default function activate(plugin) {{\n\
-                     plugin.player.onChange(() => {{}});\n\
+                     plugin.player.on(\"source.state\", () => {{}});\n\
                      setTimeout(() => plugin.player.open({path}).then(\n\
                      () => console.error(`{OPENER} opened`),\n\
                      (error) => console.error(`{OPENER} failed ${{error}}`)), 3500);\n}}\n"
@@ -879,7 +879,7 @@ fn a_subtitle_track_command_follows_the_selected_track_while_parked() {
                 &["events", "playback.read", "playback.control"],
                 format!(
                     "export default function activate(plugin) {{\n\
-                     plugin.player.onChange(() => {{}});\n\
+                     plugin.player.on(\"source.state\", () => {{}});\n\
                      const select = async () => {{\n\
                        for (let i = 0; i < 50; i++) {{\n\
                          const state = await plugin.subtitles.refresh().catch(() => null);\n\
@@ -957,7 +957,7 @@ fn a_packages_listener_is_parked_and_woken_by_a_package_change() {
                 &["events", "playback.read", "plugins.manage"],
                 format!(
                     "export default function activate(plugin) {{\n\
-                     plugin.player.onChange(() => {{}});\n\
+                     plugin.player.on(\"source.state\", () => {{}});\n\
                      setTimeout(() => plugin.packages.setEnabled(\"aa.fixture-target\", false).then(\n\
                      () => console.error(`{CHANGER} disabled`)), 3000);\n}}\n"
                 ),
@@ -1105,6 +1105,71 @@ fn a_listener_parked_at_start_up_is_woken_once_for_a_muted_change() {
         );
     }
     assert!(!second.contains(&format!("] {BINDINGS} start")), "{second}");
+}
+
+const TWO: &str = "vestra.fixture-two-events";
+const LATE_TWO: &str = "vestra.fixture-late-two";
+
+/// A listener of two wake events, parked before both changed during
+/// start-up: the first missed event wakes it, and the log names it once.
+/// The second needs no wake of its own (the plugin starts and reads the
+/// state, as every start does), so no second line, and none without a name
+/// (the plugin was no longer in standby when the second was looked at).
+#[test]
+#[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]
+fn a_listener_that_missed_two_events_at_start_up_is_woken_once_and_named() {
+    let root = root_with(|plugins| {
+        vec![
+            package(
+                plugins,
+                TWO,
+                &[],
+                format!(
+                    "export default async function activate(plugin) {{\n\
+                     console.error(`{TWO} start`);\n\
+                     plugin.bindings.onChange(() => console.error(`{TWO} heard bindings`));\n\
+                     plugin.player.on(\"resolvers.fileTypes\", () => console.error(`{TWO} heard file types`));\n}}\n"
+                ),
+            ),
+            package(
+                plugins,
+                LATE_TWO,
+                &[],
+                format!(
+                    "export default async function activate(plugin) {{\n\
+                     await new Promise((done) => setTimeout(done, 4000));\n\
+                     plugin.commands.add({{ id: \"late\", path: [\"Tools\", \"Late\"], run: () => {{}} }});\n\
+                     await plugin.wire.request(\"sourceResolvers.register\", {{ id: \"late-files\", extensions: [\"latetwo\"] }});\n\
+                     console.error(`{LATE_TWO} added`);\n}}\n"
+                ),
+            ),
+        ]
+    });
+    let lazy = [("VESTRA_SHARED", "1"), ("VESTRA_IDLE_MS", "500")];
+    let log = run(root.path(), 10, &lazy);
+    let at = |text: &str| log.find(text).unwrap_or_else(|| panic!("{text}: {log}"));
+    // The set-up: parked before both changed, during start-up.
+    let parked = at(&format!("lazy: {TWO} parked"));
+    let added = at(&format!("{LATE_TWO} added"));
+    let settled = at("lazy: start-up settled");
+    assert!(parked < added && added < settled, "{log}");
+    // Woken once, named, by the first of the two (in name order).
+    assert_eq!(count(&log, &format!("lazy: {TWO} woken by")), 1, "{log}");
+    assert_eq!(
+        count(&log, &format!("lazy: {TWO} parked before ")),
+        1,
+        "{log}"
+    );
+    assert!(
+        log.contains(&format!(
+            "lazy: {TWO} parked before bindings.changed changed at start-up, waking it"
+        )),
+        "{log}"
+    );
+    assert!(!log.contains("lazy:  parked before"), "{log}");
+    // Its woken run started after the mute ended.
+    let woken_start = log.rfind(&format!("{TWO} start")).unwrap();
+    assert!(settled < woken_start, "{log}");
 }
 
 /// A test parks and wakes every built-in and diffs the registries: for
@@ -1497,7 +1562,7 @@ fn source_events_wake_their_listeners_in_order() {
                 &["events"],
                 format!(
                     "export default function activate(plugin) {{\n\
-                     plugin.player.onChange(() => {{}});\n\
+                     plugin.player.on(\"source.state\", () => {{}});\n\
                      const log = (name, data) => console.error(`{ALL} event ${{name}} ${{data.state.sourceId}} ${{data.reason ?? \"\"}} ${{data.state.position ?? \"\"}}`);\n\
                      for (const name of [\"source.opening\", \"source.ready\", \"source.ended\"])\n\
                      plugin.player.on(name, (data) => log(name, data));\n}}\n"
@@ -1511,7 +1576,7 @@ fn source_events_wake_their_listeners_in_order() {
                 &["events", "playback.read", "playback.control"],
                 format!(
                     "export default function activate(plugin) {{\n\
-                     plugin.player.onChange(() => {{}});\n\
+                     plugin.player.on(\"source.state\", () => {{}});\n\
                      const step = (at, name, act) => setTimeout(() => act().then(\n\
                      () => console.error(`{PLAYER} ${{name}}`),\n\
                      (error) => console.error(`{PLAYER} ${{name}} failed ${{error}}`)), at);\n\

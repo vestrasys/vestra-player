@@ -1,4 +1,4 @@
-// The mpv pass-through (capability `mpv`, SDK 1.8.0): the SDK repeats the
+// The mpv pass-through (area `mpv`, SDK 1.8.0): the SDK repeats the
 // player's closed refusal rules and limits (`MPV_RULES`, `MPV_LIMITS`), refuses
 // early with them and models them in TestHost. They are contract data: they
 // must be the player's (src/host/mpv-rules.json, generated from
@@ -32,6 +32,21 @@ const runtime = (await import("@vestra-player/sdk/runtime")) as unknown as {
 };
 const OLDER = "the installed SDK is older than 1.8.0";
 
+/** Whether the installed SDK is older than `major.minor.patch`. */
+function sdkBefore(major: number, minor: number, patch: number): boolean {
+  const version = JSON.parse(
+    readFileSync(
+      new URL(
+        "../../node_modules/@vestra-player/sdk/package.json",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  ).version as string;
+  const [a, b, c] = version.split(".").map(Number);
+  return a! * 1e6 + b! * 1e3 + c! < major * 1e6 + minor * 1e3 + patch;
+}
+
 const player = JSON.parse(host("mpv-rules.json")) as {
   limits: Record<string, number>;
   rules: Record<string, unknown>;
@@ -48,6 +63,11 @@ test("MPV_LIMITS are the player's (host/mpv-rules.json)", (t) => {
 
 test("MPV_RULES are the player's (host/mpv-rules.json)", (t) => {
   if (!runtime.MPV_RULES) return t.skip(OLDER);
+  // SDK 1.11.0 words the clipboard refusal as the player now does.
+  if (sdkBefore(1, 11, 0))
+    return t.skip(
+      "the installed SDK is older than 1.11.0 (the clipboard wording)",
+    );
   const sdk = runtime.MPV_RULES;
   // Each table on its own, so a difference names its table. The prefixes
   // are a list in the player's file: their order decides.
@@ -82,10 +102,10 @@ test("MPV_RULES are the player's (host/mpv-rules.json)", (t) => {
     );
 });
 
-test("the mpv group serves the pass-through's five methods, open to every plugin (capabilities/mpv.rs)", () => {
-  const rust = host("src/capabilities/mpv.rs");
+test("the mpv group serves the pass-through's five methods, open to every plugin (api/mpv.rs)", () => {
+  const rust = host("src/api/mpv.rs");
   const methods = /static METHODS: &\[&str\] = &\[([^\]]*)\]/.exec(rust)?.[1];
-  assert.ok(methods, "METHODS in capabilities/mpv.rs");
+  assert.ok(methods, "METHODS in api/mpv.rs");
   assert.deepEqual(
     [...methods.matchAll(/"([^"]+)"/g)].map((m) => m[1]),
     ["command", "get", "set", "observe", "unobserve"].map(
@@ -94,7 +114,7 @@ test("the mpv group serves the pass-through's five methods, open to every plugin
   );
   assert.match(rust, /name: "mpv",\s*builtin_only: false,/);
   // No other area lists an mpv.* method.
-  const root = new URL("../../host/src/capabilities/", import.meta.url);
+  const root = new URL("../../host/src/api/", import.meta.url);
   for (const file of readdirSync(root).filter((name) => name.endsWith(".rs"))) {
     if (file === "mpv.rs") continue;
     const list = /static METHODS: &\[&str\] = &\[([^\]]*)\]/.exec(

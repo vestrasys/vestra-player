@@ -70,7 +70,7 @@ export function checkOwner(text: string): string {
   return owner;
 }
 
-export const TIMEOUTS = { typecheck: 90_000, test: 90_000, check: 120_000, pack: 120_000, scan: 30_000 };
+export const TIMEOUTS = { typecheck: 90_000, test: 90_000, check: 120_000, pack: 120_000 };
 /** Text returned to the model at most per call. */
 const MAX_RESULT = 12_000;
 
@@ -228,10 +228,14 @@ export class Toolchain {
   /** One tool at a time per project (a build rewrites its dist/). */
   private readonly locks = new Map<string, Promise<unknown>>();
 
-  constructor(packageDir: string, dataDir: string, validate?: Validator) {
+  /** The running player's version (`plugin.app.version`): a new project's `minPlayerVersion`, at least {@link MIN_PLAYER}. */
+  readonly playerVersion: string | undefined;
+
+  constructor(packageDir: string, dataDir: string, validate?: Validator, playerVersion?: string) {
     this.packageDir = packageDir;
     this.dataDir = dataDir;
     this.validate = validate;
+    this.playerVersion = playerVersion;
     this.vendor = path.join(packageDir, "vendor");
     this.sdk = path.join(this.vendor, "@vestra-player", "sdk");
   }
@@ -358,11 +362,11 @@ export class Toolchain {
    * (ui/main.slint), and fails. They run the same check first, on the same
    * fixed arguments.
    */
-  private async confined(directory: string, session: SessionPaths, tmp: string, children: boolean): Promise<string[]> {
+  private async confined(directory: string, session: SessionPaths, tmp: string): Promise<string[]> {
     const read = [await fs.realpath(this.packageDir), await fs.realpath(path.join(this.dataDir, "node_modules")), directory, tmp];
     const config = path.join(await fs.realpath(session.dir), "tsconfig.json");
     if (existsSync(config)) read.push(config);
-    return ["--permission", ...read.map((p) => `--allow-fs-read=${p}`), `--allow-fs-write=${tmp}`, ...(children ? ["--allow-child-process"] : [])];
+    return ["--permission", ...read.map((p) => `--allow-fs-read=${p}`), `--allow-fs-write=${tmp}`, "--allow-child-process"];
   }
 
   private async cli(command: string, directory: string, session: SessionPaths, extra: string[], signal?: AbortSignal): Promise<RunResult> {
@@ -370,9 +374,7 @@ export class Toolchain {
     try {
       // Trusted code on fixed arguments; it never runs the project's code
       // (bundling and npm installs are refused before, see packageProblems()).
-      // The scan (scan()) reads the source and runs the type checker in its
-      // own process: confined the same way, without child processes.
-      const permissions = command === "check" || command === "scan" ? await this.confined(directory, session, tmp, command === "check") : [];
+      const permissions = command === "check" ? await this.confined(directory, session, tmp) : [];
       // ES module imports in the SDK find vendor/ too (see worker/vendor-resolve.ts).
       const resolver = pathToFileURL(await fs.realpath(path.join(this.packageDir, "worker", "vendor-resolve.ts"))).href;
       // The flags go in NODE_OPTIONS, each quoted. Given as arguments, Node
@@ -467,7 +469,7 @@ export class Toolchain {
     const directory = path.join(session.work, id);
     if (existsSync(directory)) return result(false, `work/${id}/ already exists; keep working on it, or choose another name`);
     await this.mirror();
-    const files = template(id, name, title, this.sdkVersion);
+    const files = template(id, name, title, this.sdkVersion, this.playerVersion);
     for (const [rel, text] of Object.entries(files)) {
       await fs.mkdir(path.dirname(path.join(directory, rel)), { recursive: true });
       await fs.writeFile(path.join(directory, rel), text);
@@ -478,28 +480,6 @@ export class Toolchain {
       files: Object.keys(files),
       next: "Edit main.ts, ui/main.slint and tests/main.test.ts, then typecheck → test → check",
       ...(owner ? {} : { note: "No GitHub name in the settings: the id has the local. prefix (for this computer only)" }),
-    });
-  }
-
-  /**
-   * What the project's code uses of the player's sensitive features: the
-   * `uses` of this Workshop's own vendored `vestra-plugin scan` (category
-   * words such as "clipboard", each once). It reads the source; it runs no
-   * project code and changes nothing. `null` when the scan gave no answer
-   * (it failed, timed out, was cancelled or printed something else).
-   */
-  scan(session: SessionPaths, id: string, signal?: AbortSignal): Promise<string[] | null> {
-    return this.locked(id, async () => {
-      try {
-        const directory = await this.project(session, id);
-        const run = await this.cli("scan", directory, session, [], signal);
-        if (run.code !== 0 || run.timedOut || run.cancelled || run.truncated) return null;
-        const found = JSON.parse(run.stdout) as { scan?: unknown; uses?: unknown };
-        if (found?.scan !== 1 || !Array.isArray(found.uses) || !found.uses.every((word) => typeof word === "string")) return null;
-        return [...new Set(found.uses as string[])];
-      } catch {
-        return null;
-      }
     });
   }
 
@@ -875,16 +855,33 @@ const TSCONFIG = {
  */
 const VSCODE_SETTINGS = { "typescript.tsdk": "node_modules/typescript/lib", "typescript.enablePromptUseWorkspaceTsdk": true };
 
+/** The oldest player a generated plugin may name: the first with the events and triggers of SDK 1.11. */
+export const MIN_PLAYER = "0.11.0";
+
+/**
+ * A generated plugin's `minPlayerVersion`: the running player's version
+ * (`plugin.app.version`, the player it is written and tried in), at least
+ * {@link MIN_PLAYER}. A pre-release suffix is dropped.
+ */
+export function minPlayerVersion(running?: string): string {
+  const parse = (v: string) => /^(\d+)\.(\d+)\.(\d+)/.exec(v)?.slice(1).map(Number);
+  const have = running ? parse(running) : undefined;
+  const floor = parse(MIN_PLAYER)!;
+  if (!have) return MIN_PLAYER;
+  for (let i = 0; i < 3; i++) if (have[i] !== floor[i]) return have[i]! > floor[i]! ? have.join(".") : MIN_PLAYER;
+  return MIN_PLAYER;
+}
+
 /** The starting point of a new project: the official repository's layout, one window and its command, one test. */
-export function template(id: string, name: string, title: string, sdkVersion: string): Record<string, string> {
+export function template(id: string, name: string, title: string, sdkVersion: string, playerVersion?: string): Record<string, string> {
   const manifest = {
     id,
     version: "0.1.0",
     apiVersion: "vestra/1",
     entry: "main.ts",
     name: title,
-    // A player without manifest capabilities (SDK 1.9.0): an older one requires the field.
-    minPlayerVersion: "0.9.0",
+    // The player it is written in, at least the first with SDK 1.11's events and triggers.
+    minPlayerVersion: minPlayerVersion(playerVersion),
   };
   return {
     "manifest.json": `${JSON.stringify(manifest, null, 2)}\n`,
@@ -918,8 +915,10 @@ import test from "node:test";
 import { startPlugin } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
 
-test("the menu command opens the window", async () => {
+test("the menu command opens the window; idle, nothing keeps the plugin running", async () => {
   const { host, stop } = await startPlugin(activate, { directory: new URL("..", import.meta.url) });
+  // Idle: the player may stop the plugin and start it again on its next use.
+  assert.deepEqual(host.keepsRunning, []);
   await host.command("${name}.open").run();
   assert.equal(host.window("main").props.message, "Hello");
   await stop();

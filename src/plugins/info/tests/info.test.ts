@@ -455,3 +455,24 @@ test("palette: every command has a category, translated in every language (playe
     await stop();
   }
 });
+
+test("idle: the overlay and the short information stream the state only while shown; hidden, it holds nothing", async () => {
+  const host = new TestHost();
+  playing(host);
+  const { stop } = await startPlugin(activate, { directory, host, ...zh });
+  assert.deepEqual(host.keepsRunning, []);
+  assert.equal(host.listening.has("source.state"), false);
+  await host.press("Tab");
+  await host.settle();
+  assert.equal(host.listening.has("source.state"), true, "the overlay follows the state");
+  await host.press("Tab");
+  await host.settle();
+  assert.equal(host.listening.has("source.state"), false, "hidden: the stream ends");
+  await host.press("Shift+Tab");
+  await host.settle();
+  assert.equal(host.listening.has("source.state"), true, "the short information follows the state");
+  await host.settle(3100);
+  assert.equal(host.listening.has("source.state"), false, "gone after three seconds");
+  assert.deepEqual(host.keepsRunning, []);
+  await stop();
+});

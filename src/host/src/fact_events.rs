@@ -1,6 +1,6 @@
 //! The second batch of events (events-and-triggers.md §4.6, release B):
 //! facts that changed, each sent once per change, never as a stream. All
-//! eight are wake events (`capabilities::events::FACT_EVENTS`): a listener
+//! eight are wake events (`api::events::FACT_EVENTS`): a listener
 //! of one keeps nothing running, and a plugin in standby is woken for one.
 //!
 //! Where each is decided, by the core thread's rules

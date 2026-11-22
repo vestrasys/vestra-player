@@ -9,7 +9,7 @@
 //! Quit). The caller cannot answer, skip or word it.
 //!
 //! The same sheet asks a plugin's `dialogs.confirm` raised for the main
-//! window (step 5, H5; `capabilities/ui_dialog.rs`): Ask Vestra's first-use
+//! window (step 5, H5; `api/ui_dialog.rs`): Ask Vestra's first-use
 //! consent, clearing the playlist or the history, removing subtitles. A
 //! confirmation is the main window's when the user last acted for the
 //! caller there (`host/origins.rs`), or, without an origin, when no tool
@@ -57,7 +57,7 @@ use crate::ui::{command_palette, confirm};
 pub(crate) const GUARD_MS: u64 = 500;
 /// The sheet's step rows (`ui/review-sheet.slint`): every plan fits
 /// (`commands_run::PLAN_STEPS`).
-pub(crate) const SLOTS: usize = crate::capabilities::PLAN_STEPS;
+pub(crate) const SLOTS: usize = crate::api::PLAN_STEPS;
 
 /// One step of the plan as the sheet lists it.
 #[derive(Clone, Debug, PartialEq)]

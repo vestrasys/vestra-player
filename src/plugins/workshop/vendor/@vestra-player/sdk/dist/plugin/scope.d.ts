@@ -1,6 +1,5 @@
 /** Scopes own handles. Disposal runs newest first and never throws. */
 import type { MotionEngine } from "./types.ts";
-import type { Change } from "./passes.ts";
 import type { Runtime } from "./runtime.ts";
 import type { Disposable, DisposeInfo, Plugin, PluginError, Scope, StopReason, Trigger } from "./types.ts";
 export declare class ScopeImpl implements Plugin {
@@ -19,6 +18,8 @@ export declare class ScopeImpl implements Plugin {
      * an event without one.
      */
     followCopy(event: string): void;
+    /** A fact event's data as `player.on`'s listener gets it ({@link FACTS}). */
+    fact(event: string, data: unknown): unknown;
     readonly commands: import("./types.ts").Commands;
     readonly when: import("./types.ts").When;
     readonly windows: import("./types.ts").Windows;
@@ -71,14 +72,6 @@ export declare class ScopeImpl implements Plugin {
     report(error: unknown): void;
     /** Invoke plugin code on its behalf: report failures, then refresh bindings. */
     run(handler: (...args: never[]) => unknown, ...args: unknown[]): void;
-    /**
-     * Run a listener of a state change (`player.onChange`) like `run`, except
-     * that the full pass after it is left out when it returned synchronously
-     * and read only fields of the state that `change` left alone: its result
-     * then depends on nothing new. The precise pass for the change runs
-     * anyway, and a full pass follows within `SAFETY_PASS_MS`.
-     */
-    runOn(change: Change, handler: (...args: never[]) => unknown, ...args: unknown[]): void;
     /**
      * Run a listener that pushes its own values (`player.on`) like `run`, except
      * that no full pass follows it: what it writes to `plugin.state` runs the

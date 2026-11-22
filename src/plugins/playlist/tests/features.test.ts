@@ -40,6 +40,8 @@ async function start(
     random?: () => number;
     locale?: "en" | "zh-Hans";
     compact?: boolean;
+    /** The list is closed after the start: the plugin hears the source events, not a stream. */
+    hidden?: boolean;
   } = {},
 ) {
   const root = await realpath(await mkdtemp(join(tmpdir(), "vestra-playlist-features-")));
@@ -56,6 +58,11 @@ async function start(
   if (options.compact) {
     panel.emit("toggle-thumbnails");
     await host.settle();
+  }
+  if (options.hidden ?? !!process.env.PLAYLIST_TEST_HIDDEN) {
+    await host.command("playlist.close").run();
+    await host.settle();
+    assert.equal(host.layout.sidebar?.effective, false, "the list is hidden");
   }
   const app = {
     host,
@@ -267,23 +274,24 @@ test("C07: Ctrl+Delete keeps the selection; Remove Invalid Items removes rows wh
   }
 });
 
-test("C07: removing the playing row keeps the media playing", async () => {
-  const app = await start();
-  try {
-    const [a, b] = await app.files(["a.mp4", "b.mp4"]);
-    await app.addFiles([a!, b!]);
-    await app.press("Enter");
-    app.host.setSource({ phase: "ready" });
-    await app.host.settle();
-    await app.click(1);
-    await app.press("Ctrl+Delete");
-    assert.deepEqual(app.names(), ["b.mp4"]);
-    assert.equal(app.host.source.phase, "ready");
-    assert.equal(app.rows().some((row) => row.current), false);
-  } finally {
-    await app.close();
-  }
-});
+for (const hidden of [false, true])
+  test(`C07: removing the playing row keeps the media playing${hidden ? " (list hidden: source events)" : ""}`, async () => {
+    const app = await start({ hidden });
+    try {
+      const [a, b] = await app.files(["a.mp4", "b.mp4"]);
+      await app.addFiles([a!, b!]);
+      await app.press("Enter");
+      app.host.setSource({ phase: "ready" });
+      await app.host.settle();
+      await app.click(1);
+      await app.press("Ctrl+Delete");
+      assert.deepEqual(app.names(), ["b.mp4"]);
+      assert.equal(app.host.source.phase, "ready");
+      assert.equal(app.rows().some((row) => row.current), false);
+    } finally {
+      await app.close();
+    }
+  });
 
 test("C11: sort keys, direction, missing values last, stable order, shuffle and reversing", async () => {
   const app = await start({ durations: { "b.mkv": 30, "a10.mp4": 10, "c.avi": 20 }, random: () => 0 });
@@ -859,101 +867,104 @@ test("C23: only the first 20 selected files are shown", async () => {
   }
 });
 
-test("A13 / IA-PL-01: a file another plugin opened replaces the list with its similar files; its row is adopted; the end advances", async () => {
-  const app = await start();
-  try {
-    const [, a2, a3] = await app.files(["dir/A01.mkv", "dir/A02.mkv", "dir/A03.mkv", "dir/B.mkv", "dir/song.mp3"]);
-    await app.addFiles(await app.files(["x.mp4", "y.mp4", "z.mp4"]));
-    assert.equal(app.command("open-mode-similar").state.checked, true, "the default (OpenWithSameName=1)");
-    app.host.openElsewhere(a2!);
-    await app.host.settle(30);
-    assert.deepEqual(app.names(), ["A01.mkv", "A02.mkv", "A03.mkv"]);
-    assert.deepEqual(app.rows().map((row) => row.current), [false, true, false]);
-    assert.equal(app.osd(), "已加入同文件夹 2 个文件");
-    assert.equal(app.host.sent("dialogs.confirm").length, 0);
-    assert.deepEqual(app.host.sequence, { canNext: true, canPrevious: true });
-    assert.equal(app.opens().length, 0, "this plugin opened nothing");
+for (const hidden of [false, true])
+  test(`A13 / IA-PL-01: a file another plugin opened replaces the list with its similar files; its row is adopted; the end advances${hidden ? " (list hidden: source events)" : ""}`, async () => {
+    const app = await start({ hidden });
+    try {
+      const [, a2, a3] = await app.files(["dir/A01.mkv", "dir/A02.mkv", "dir/A03.mkv", "dir/B.mkv", "dir/song.mp3"]);
+      await app.addFiles(await app.files(["x.mp4", "y.mp4", "z.mp4"]));
+      assert.equal(app.command("open-mode-similar").state.checked, true, "the default (OpenWithSameName=1)");
+      app.host.openElsewhere(a2!);
+      await app.host.settle(30);
+      assert.deepEqual(app.names(), ["A01.mkv", "A02.mkv", "A03.mkv"]);
+      assert.deepEqual(app.rows().map((row) => row.current), [false, true, false]);
+      assert.equal(app.osd(), "已加入同文件夹 2 个文件");
+      assert.equal(app.host.sent("dialogs.confirm").length, 0);
+      assert.deepEqual(app.host.sequence, { canNext: true, canPrevious: true });
+      assert.equal(app.opens().length, 0, "this plugin opened nothing");
 
-    const ended = { ...app.host.source.stamp };
-    app.end();
-    app.end(); // a repeated end event of the same playthrough
-    await app.host.settle(30);
-    assert.equal(app.opens().length, 1);
-    assert.deepEqual(app.opens().at(-1), { kind: "open", source: a3, startPaused: false, expected: ended });
-    app.host.setSource({ phase: "ready" });
-    await app.host.settle();
-    assert.equal(app.rows()[2]!.current, true);
-  } finally {
-    await app.close();
-  }
-});
+      const ended = { ...app.host.source.stamp };
+      app.end();
+      app.end(); // a repeated end event of the same playthrough
+      await app.host.settle(30);
+      assert.equal(app.opens().length, 1);
+      assert.deepEqual(app.opens().at(-1), { kind: "open", source: a3, startPaused: false, expected: ended });
+      app.host.setSource({ phase: "ready" });
+      await app.host.settle();
+      assert.equal(app.rows()[2]!.current, true);
+    } finally {
+      await app.close();
+    }
+  });
 
-test("A13: the whole folder (same group only); with 「追加」 an existing row is adopted without adding; repeat one restarts", async () => {
-  const app = await start();
-  try {
-    const [a1, a2] = await app.files(["dir/A01.mkv", "dir/A02.mkv", "dir/A03.mkv", "dir/B.mkv", "dir/song.mp3"]);
-    await app.run("open-mode-folder");
-    app.host.openElsewhere(a1!);
-    await app.host.settle(30);
-    assert.deepEqual(app.names(), ["A01.mkv", "A02.mkv", "A03.mkv", "B.mkv"]);
-    assert.equal(app.osd(), "已加入同文件夹 3 个文件");
-    app.host.settingsPage("playlist").emit("set-append-on-open", true);
-    await app.host.settle();
-    const notices = app.host.osd.length;
-    app.host.openElsewhere(a2!);
-    await app.host.settle(30);
-    assert.equal(app.rows().length, 4);
-    assert.equal(app.rows()[1]!.current, true);
-    assert.equal(app.host.osd.length, notices, "nothing added, nothing said");
+for (const hidden of [false, true])
+  test(`A13: the whole folder (same group only); with 「追加」 an existing row is adopted without adding; repeat one restarts${hidden ? " (list hidden: source events)" : ""}`, async () => {
+    const app = await start({ hidden });
+    try {
+      const [a1, a2] = await app.files(["dir/A01.mkv", "dir/A02.mkv", "dir/A03.mkv", "dir/B.mkv", "dir/song.mp3"]);
+      await app.run("open-mode-folder");
+      app.host.openElsewhere(a1!);
+      await app.host.settle(30);
+      assert.deepEqual(app.names(), ["A01.mkv", "A02.mkv", "A03.mkv", "B.mkv"]);
+      assert.equal(app.osd(), "已加入同文件夹 3 个文件");
+      app.host.settingsPage("playlist").emit("set-append-on-open", true);
+      await app.host.settle();
+      const notices = app.host.osd.length;
+      app.host.openElsewhere(a2!);
+      await app.host.settle(30);
+      assert.equal(app.rows().length, 4);
+      assert.equal(app.rows()[1]!.current, true);
+      assert.equal(app.host.osd.length, notices, "nothing added, nothing said");
 
-    await app.run("repeat-one");
-    const ended = { ...app.host.source.stamp };
-    app.end();
-    await app.host.settle(30);
-    assert.deepEqual(app.opens().at(-1), { kind: "restart", expected: ended });
-    assert.equal(app.rows()[1]!.current, true, "a restart keeps the adoption");
+      await app.run("repeat-one");
+      const ended = { ...app.host.source.stamp };
+      app.end();
+      await app.host.settle(30);
+      assert.deepEqual(app.opens().at(-1), { kind: "restart", expected: ended });
+      assert.equal(app.rows()[1]!.current, true, "a restart keeps the adoption");
 
-    // Another outside source ends the adoption silently; a URL is never handled.
-    app.host.openElsewhere("https://example.org/v");
-    await app.host.settle(30);
-    assert.equal(app.rows().some((row) => row.current), false);
-    assert.equal(app.rows().length, 4);
-  } finally {
-    await app.close();
-  }
-});
+      // Another outside source ends the adoption silently; a URL is never handled.
+      app.host.openElsewhere("https://example.org/v");
+      await app.host.settle(30);
+      assert.equal(app.rows().some((row) => row.current), false);
+      assert.equal(app.rows().length, 4);
+    } finally {
+      await app.close();
+    }
+  });
 
-test("A13: \"仅打开该文件\" leaves only that file, adopted; with 「追加」 it neither adds nor adopts; own opens are not handled", async () => {
-  const app = await start();
-  try {
-    const [a1, a2] = await app.files(["dir/A01.mkv", "dir/A02.mkv"]);
-    await app.addFiles([a2!]);
-    await app.run("open-mode-only");
-    app.host.openElsewhere(a1!);
-    await app.host.settle(30);
-    assert.deepEqual(app.names(), ["A01.mkv"]);
-    assert.equal(app.rows()[0]!.current, true);
+for (const hidden of [false, true])
+  test(`A13: "仅打开该文件" leaves only that file, adopted; with 「追加」 it neither adds nor adopts; own opens are not handled${hidden ? " (list hidden: source events)" : ""}`, async () => {
+    const app = await start({ hidden });
+    try {
+      const [a1, a2] = await app.files(["dir/A01.mkv", "dir/A02.mkv"]);
+      await app.addFiles([a2!]);
+      await app.run("open-mode-only");
+      app.host.openElsewhere(a1!);
+      await app.host.settle(30);
+      assert.deepEqual(app.names(), ["A01.mkv"]);
+      assert.equal(app.rows()[0]!.current, true);
 
-    app.host.settingsPage("playlist").emit("set-append-on-open", true);
-    await app.host.settle();
-    app.host.openElsewhere(a2!);
-    await app.host.settle(30);
-    assert.deepEqual(app.names(), ["A01.mkv"]);
-    assert.equal(app.rows()[0]!.current, false);
-    assert.deepEqual(app.host.sequence, { canNext: false, canPrevious: false });
+      app.host.settingsPage("playlist").emit("set-append-on-open", true);
+      await app.host.settle();
+      app.host.openElsewhere(a2!);
+      await app.host.settle(30);
+      assert.deepEqual(app.names(), ["A01.mkv"]);
+      assert.equal(app.rows()[0]!.current, false);
+      assert.deepEqual(app.host.sequence, { canNext: false, canPrevious: false });
 
-    await app.run("open-mode-folder");
-    await app.click(0);
-    await app.press("Enter"); // this plugin's own open: no folder is added
-    app.host.setSource({ phase: "ready" });
-    await app.host.settle(30);
-    assert.equal(app.rows().length, 1);
-    assert.equal(app.rows()[0]!.current, true);
-    void a2;
-  } finally {
-    await app.close();
-  }
-});
+      await app.run("open-mode-folder");
+      await app.click(0);
+      await app.press("Enter"); // this plugin's own open: no folder is added
+      app.host.setSource({ phase: "ready" });
+      await app.host.settle(30);
+      assert.equal(app.rows().length, 1);
+      assert.equal(app.rows()[0]!.current, true);
+      void a2;
+    } finally {
+      await app.close();
+    }
+  });
 
 // The panel takes the whole list: 20 000 rows need the large lists P3 player and SDK (player
 // 0.6.0, SDK 1.5.46); with an older SDK this test waits.

@@ -428,6 +428,34 @@ test("quota, bad key and network failures are explained; other services' results
   }
 });
 
+test("playing the same source again keeps the results; another source clears them", async () => {
+  const fetch = fakeFetch({
+    [`${OS}/subtitles`]: () => jsonResponse({ data: [osResult(7, "zh-CN", "Movie.CN")] }),
+  });
+  const t = await setup();
+  try {
+    await t.host.command("search").run();
+    const window = t.host.window("subtitle-download");
+    await waitFor(() => (window.props["rows"] as unknown[])?.length === 1 && window.props["busy"] === false, "results");
+    // The file plays to its end and starts again: the same source id, a new load cycle, so the
+    // player sends `source.opening` for it once more.
+    t.host.setSource({ phase: "ended", terminalReason: "natural" });
+    await t.host.settle();
+    const cycle = t.host.source.cycle;
+    t.host.setSource({ phase: "loading", cycle: cycle + 1 });
+    await t.host.settle();
+    t.host.setSource({ phase: "ready" });
+    await t.host.settle();
+    assert.equal((window.props["rows"] as unknown[]).length, 1, "a restart keeps what was found");
+    t.host.openElsewhere("/other.mkv");
+    await waitFor(() => (window.props["rows"] as unknown[]).length === 0, "a new source clears the results");
+  } finally {
+    await t.stop();
+    fetch.restore();
+    await t.cleanup();
+  }
+});
+
 test("a source change during the download aborts it; nothing is loaded into the new source", async () => {
   let release!: () => void;
   const gate = new Promise<void>((resolve) => (release = resolve));
@@ -556,6 +584,34 @@ test("automatic search: a hash match in the first language is loaded when a vide
     await pause(100);
     await t.host.settle();
     assert.equal(fetch.calls.length, before);
+  } finally {
+    await t.stop();
+    fetch.restore();
+    await t.cleanup();
+  }
+});
+
+test("idle: it holds nothing unless the download window is open; in standby a video that opens wakes it and is searched", async () => {
+  const fetch = searchAndDownload();
+  const t = await setup({ settings: { autoSearch: "no-subtitles", afterSearch: "load-best" }, ...zh });
+  try {
+    assert.deepEqual(t.host.keepsRunning, []);
+    assert.equal(t.host.listening.has("source.state"), false, "no stream while nothing shows");
+    await t.host.command("search").run();
+    await t.host.settle();
+    assert.equal(t.host.listening.has("source.state"), true, "the download window follows the state while open");
+    t.host.window("subtitle-download").userClose();
+    await t.host.settle();
+    assert.equal(t.host.listening.has("source.state"), false, "the stream ends with the window");
+    const before = fetch.calls.length;
+
+    await t.host.park();
+    assert.equal(t.host.parked, true);
+    t.host.openElsewhere(t.video);
+    t.host.subtitles.selection.stamp = { generation: 2, revision: 1 };
+    await waitFor(() => t.host.osd.at(-1)?.startsWith("已自动载入在线字幕") === true, "auto loaded after the wake");
+    assert.equal(t.host.parked, false);
+    assert.ok(fetch.calls.length > before);
   } finally {
     await t.stop();
     fetch.restore();

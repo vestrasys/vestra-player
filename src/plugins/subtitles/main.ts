@@ -111,8 +111,7 @@ const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest(
 
 /** Subtitles: the Subtitles panel (adjust column), the Subtitle Settings window, the commands, serialized subtitle operations. */
 export default async function activate(plugin: Plugin) {
-  plugin.player.subscribe(); // B3: removed in SDK 1.11; migrate (events-and-triggers.md §7)
-  await plugin.player.read(); // was "playback.read"
+  await plugin.player.read();
   const { subtitles, osd } = plugin;
   const { text } = plugin.i18n;
   /**
@@ -1408,7 +1407,7 @@ export default async function activate(plugin: Plugin) {
     scanOnOpen();
   });
   // The subtitle state may be ready before the player's state says the local file is (or the other way round).
-  plugin.player.onChange(() => scanOnOpen()); // B3: Player.onChange is removed in SDK 1.11
+  plugin.player.on("source.ready", () => scanOnOpen());
   // The host has no subtitle event; the panel on screen or an open window also re-reads every 1.5 s.
   const poll = setInterval(() => {
     if ((panel.state?.effective || settings.opened) && !busy)

@@ -34,7 +34,7 @@ export const MAX_MODEL_CALLS = 4;
 const CONSENT_SCOPE = "v2";
 /**
  * The player's rate for one ticket: at most this many `commands.run` a
- * second (host `capabilities/commands_run.rs` RUNS_PER_SECOND; the SDK's
+ * second (host `api/commands_run.rs` RUNS_PER_SECOND; the SDK's
  * `commands.run` reference: `limit`, 4 a second). A plan has up to
  * MAX_STEPS (8), so its steps are paced to stay within it (`pace`).
  */
@@ -366,7 +366,7 @@ export function askVestra(plugin: Plugin, model: AskModel) {
       if (code === "missing") throw new Refusal({ source: "{} is no longer there", args: [label] });
       if (code === "limit") throw new Refusal({ source: "Too many commands at once" });
       if (code === "ticket") throw new Refusal({ source: "The request has ended" });
-      if (code === "capability") throw new Refusal({ source: "This player does not let Vestra run commands" });
+      if (code === "builtin-only") throw new Refusal({ source: "This player does not let Vestra run commands" });
       throw new Refusal(cut((error as Error).message));
     }
     if (!result.ran) throw new Declined(label);

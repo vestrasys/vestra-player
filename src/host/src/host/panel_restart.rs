@@ -238,7 +238,7 @@ impl Core {
             return;
         }
         self.restarts_changed(None, false);
-        crate::capabilities::ui_mount::rekey_panels(self, from, to);
+        crate::api::ui_mount::rekey_panels(self, from, to);
         diag!("shell: {id}'s kept panel(s) now belong to its restart (owner {from} → {to})");
     }
     /// Panel `key` was mounted again by its restarted run, or went: the

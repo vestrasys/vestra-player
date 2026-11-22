@@ -22,7 +22,7 @@
 //! opens the palette, or dismisses an end state.
 //! doc/architecture/palette-lead.md §3.
 use super::*;
-use crate::capabilities::{LeadStatus, StatusState};
+use crate::api::{LeadStatus, StatusState};
 
 /// How long a done status shows (then the 300 ms fade, as the OSD's).
 pub(crate) const DONE_MS: u64 = 2000;
