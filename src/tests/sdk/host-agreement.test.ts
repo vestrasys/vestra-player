@@ -725,10 +725,7 @@ test("step seek parameters are the player's: setStepSeek keyframes, host.run sec
   assert.match(wire, /"player\.setStepSeek",\s*keyframes === undefined/);
   assert.match(wire, /"host\.run",\s*seconds === undefined/);
   // The player reads them under the same names.
-  assert.match(
-    host("src/api/playback_control.rs"),
-    /params\["keyframes"\]/,
-  );
+  assert.match(host("src/api/playback_control.rs"), /params\["keyframes"\]/);
   assert.match(
     host("src/api/commands.rs"),
     /run_step\(action, &params\["seconds"\]\)/,
