@@ -17,10 +17,14 @@
   },
   "upstream": {
     "windows-mpv": {
-      "url": "https://github.com/shinchiro/mpv-winbuild-cmake/releases/download/20261021/mpv-dev-x86_64-20261021-git-e471496c56.7z",
-      "sha256": "efc719eff3dc5954b4a5efc800632808bcec01cc9034940dd14e5eb7fe9ea633",
+      "url": "https://github.com/vestrasys/vestra-player/releases/download/libmpv-ffmpeg9.1-20261122/libmpv-dev-x86_64-ffmpeg9.1-mpv-e471496c56.zip",
+      "sha256": "7373615a9a8e9576e260c53bc064ea867526bb88a4686baaac270b18192c3204",
       "mpv_commit": "e471496c56f0f49c133bd88b50aed62b845f1909",
-      "build": "https://github.com/shinchiro/mpv-winbuild-cmake/tree/20261021"
+      "build": "src/packaging/libmpv (build-windows.sh, msys2-packages.lock; README.md)",
+      "ffmpeg": "9.1",
+      "libmpv_sha256": "055771cc53d785f2466e44dff81779cffcd97384a86960cea78b0021adf187ce",
+      "msys2_packages": "https://github.com/vestrasys/vestra-player/releases/download/libmpv-ffmpeg9.1-20261122/msys2-packages-ucrt64-20261122.tar",
+      "msys2_packages_sha256": "67fa9d5395d88f9ef4b732f5d9c867944dffeeebac2a6116a34aac1716ac4369"
     },
     "windows-ffmpeg": {
       "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-21-13-06/ffmpeg-n9.0.2-31-gc89d6ee1ca-win64-gpl-shared-9.0.zip",
@@ -33,17 +37,6 @@
       "sha256": "065076fe13d39ab97eea4740596426d5ae741b5044e48e1c9495d04835c92dbe",
       "version": "1.4.363.0",
       "build": "https://packages.msys2.org/base/mingw-w64-vulkan-loader"
-    },
-    "windows-mpv-t8": {
-      "note": "T8 branch only: libmpv-2.dll built locally by src/packaging/libmpv/build-windows.sh (FFmpeg 9.1 with fruc_vulkan, mpv at mpv_commit with mpv-lavfi-hwdevice.patch) and pinned with libmpv/pin-local.ps1 into a local deps directory. No deps-* release carries it yet: deps.yml still takes windows-mpv (shinchiro) and needs a build job for this before a release can ship the NVIDIA engine.",
-      "ffmpeg": "https://ffmpeg.org/releases/ffmpeg-9.1.tar.xz",
-      "ffmpeg_sha256": "1a4d394ae63d190a526cd052eb4415c156b5c5e2df37efab41a7de0b8fde2433",
-      "mpv_commit": "e471496c56f0f49c133bd88b50aed62b845f1909",
-      "mpv_sha256": "562674ce7a0f6ac0681291037abc4c8595e0d1202d86d27eb341113eb7d984ba",
-      "build": "src/packaging/libmpv/build-windows.sh",
-      "libmpv_sha256": "055771cc53d785f2466e44dff81779cffcd97384a86960cea78b0021adf187ce",
-      "aribcaption": "https://github.com/xqq/libaribcaption/archive/refs/tags/v1.1.2.tar.gz",
-      "aribcaption_sha256": "649b50bde99272b97c66af2a8400163e2f84eae072d252daa26baaaf0866a1c2"
     }
   }
 }

@@ -4,14 +4,17 @@
  * verified and laid out the way setup-libmpv and bundle-windows.mjs use them:
  *
  *   <out>/
- *     libmpv-2.dll, include/mpv/*.h   shinchiro mpv-dev (MinGW, FFmpeg and the
- *                                     other libraries linked statically)
+ *     libmpv-2.dll, include/mpv/*.h   our mpv-dev build (src/packaging/libmpv:
+ *                                     MSYS2 UCRT64, FFmpeg 9.1 and the other
+ *                                     libraries linked statically; a release
+ *                                     asset pinned in deps.json)
  *     mpv.lib                         MSVC import library (deps.yml adds it)
  *     ffmpeg/ffmpeg.exe, ffprobe.exe, *.dll   BtbN win64 gpl-shared
  *     licenses/mpv/…, licenses/ffmpeg/…
  *     components.json
  *
- * The .7z is unpacked with 7z when present, else with tar (bsdtar reads 7z).
+ * The archive (.zip; shinchiro's were .7z) is unpacked with 7z when present,
+ * else with tar (bsdtar reads both).
  *
  *   node packaging/collect-windows-deps.mjs --out <dir> [--cache <dir>]
  */
@@ -172,7 +175,7 @@ const manifest = {
         archive: mpv.url,
         archive_sha256: mpv.sha256,
       },
-      note: "libmpv-2.dll from shinchiro/mpv-winbuild-cmake. FFmpeg (--enable-gpl --enable-version3) and the libraries in that build's packages/ (libass, freetype, fribidi, harfbuzz, libplacebo, shaderc, spirv-cross, vulkan, luajit, mujs, uchardet, lcms2, libjpeg, zimg, libbluray, libdvdnav, libarchive, rubberband, x264, x265, dav1d, …) are linked in statically; the combination is distributed under GPL-3.0-or-later.",
+      note: `libmpv-2.dll built by src/packaging/libmpv/build-windows.sh in MSYS2 UCRT64: FFmpeg ${mpv.ffmpeg ?? "9.1"} (--enable-gpl --enable-version3) and mpv with mpv-lavfi-hwdevice.patch, with the MSYS2 libraries pinned in msys2-packages.lock (libass, freetype, fribidi, harfbuzz, libplacebo, shaderc, spirv-cross, luajit, mujs, uchardet, lcms2, libjpeg, zimg, libbluray, libdvdnav, libarchive, rubberband, OpenSSL, x264, x265, dav1d, libaribcaption, …) linked in statically; the combination is distributed under GPL-3.0-or-later. The patch and the scripts are in this repository.`,
       files: ["libmpv-2.dll"],
       license_files: [
         "licenses/mpv/Copyright",

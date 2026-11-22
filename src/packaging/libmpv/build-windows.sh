@@ -175,7 +175,7 @@ build_mpv() {
   # OpenAL's static library defines the KSDATAFORMAT_SUBTYPE_* GUIDs that
   # mpv's WASAPI output defines too (INITGUID): the same constants, so the
   # first definition is kept.
-  local link="-Wl,--gc-sections -static -L$(cygpath -m "$PREFIX/lib") $(cygpath -m "$shims.o") -l:libgomp.a -Wl,--allow-multiple-definition"
+  local link="-s -Wl,--no-insert-timestamp -Wl,--gc-sections -static -L$(cygpath -m "$PREFIX/lib") $(cygpath -m "$shims.o") -l:libgomp.a -Wl,--allow-multiple-definition"
   link+=$(grep -v '^#' "$HERE/static-imp-shims.txt" | sed 's/^/ -Wl,-u,/' | tr -d '\n')
   [ -f "$build/build.ninja" ] || meson setup "$build" "$src" \
     --prefix="$PREFIX" --libdir="$PREFIX/lib" \
@@ -197,8 +197,9 @@ build_mpv() {
 
 package() {
   local build=$WORK/build-mpv out=$WORK/out
+  # Stripped and without a link timestamp at link time (-s,
+  # --no-insert-timestamp), so nothing rewrites the bytes here.
   cp "$build/libmpv-2.dll" "$out/"
-  strip -s "$out/libmpv-2.dll"
   mkdir -p "$out/include/mpv"
   cp "$WORK/src/mpv-$MPV_COMMIT"/include/mpv/{client.h,render.h,render_gl.h,stream_cb.h} "$out/include/mpv/"
   # Every DLL it imports must be a Windows one or vulkan-1.dll.
@@ -208,6 +209,23 @@ package() {
   fi
   (cd "$out" && sha256sum libmpv-2.dll > libmpv-2.dll.sha256)
   cat "$out/libmpv-2.dll.sha256"
+  # The release asset deps.json's windows-mpv pins (the layout of an mpv-dev
+  # archive: libmpv-2.dll and include/mpv at the top), with what it was
+  # built from.
+  {
+    echo "libmpv-2.dll $(cut -d' ' -f1 "$out/libmpv-2.dll.sha256")"
+    echo "ffmpeg $FFMPEG_VERSION $FFMPEG_SHA256"
+    echo "mpv $MPV_COMMIT $MPV_SHA256"
+    echo "libaribcaption $ARIBCC_VERSION $ARIBCC_SHA256"
+    echo "mpv-lavfi-hwdevice.patch $(sha256sum "$HERE/mpv-lavfi-hwdevice.patch" | cut -d' ' -f1)"
+    echo "build-windows.sh $(sha256sum "$HERE/build-windows.sh" | cut -d' ' -f1)"
+    echo "msys2-packages.lock $(sha256sum "$HERE/msys2-packages.lock" | cut -d' ' -f1)"
+  } > "$out/BUILD-INFO.txt"
+  cp "$HERE/mpv-lavfi-hwdevice.patch" "$out/"
+  local asset=$WORK/libmpv-dev-x86_64-ffmpeg$FFMPEG_VERSION-mpv-${MPV_COMMIT:0:10}.zip
+  rm -f "$asset"
+  (cd "$out" && bsdtar -a -cf "$asset" libmpv-2.dll include BUILD-INFO.txt mpv-lavfi-hwdevice.patch)
+  echo "$(sha256sum "$asset" | cut -d' ' -f1)  $(basename "$asset")"
 }
 
 case $STEP in
@@ -215,6 +233,8 @@ case $STEP in
   ffmpeg) build_ffmpeg ;;
   mpv) build_mpv ;;
   package) package ;;
-  all) build_aribcaption; build_ffmpeg; build_mpv; package ;;
+  all)
+    "$HERE/setup-msys2.sh" check || { echo "MSYS2 differs from msys2-packages.lock: run ./setup-msys2.sh install"; exit 1; }
+    build_aribcaption; build_ffmpeg; build_mpv; package ;;
   *) echo "step: aribcaption | ffmpeg | mpv | package | all"; exit 2 ;;
 esac

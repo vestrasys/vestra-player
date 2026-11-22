@@ -7,7 +7,7 @@
 #   macOS   Homebrew mpv + ffmpeg bottles → collect-macos-deps.mjs (dylib
 #           closure, @rpath, ad-hoc signed, components.json, licenses) and the
 #           source archives of every formula (GPL source offer).
-#   Windows deps.json "upstream" pins (shinchiro mpv-dev, BtbN ffmpeg) →
+#   Windows deps.json "upstream" pins (our libmpv build from src/packaging/libmpv, BtbN ffmpeg) →
 #           collect-windows-deps.mjs, plus mpv.lib for MSVC.
 name: deps
 
@@ -91,7 +91,7 @@ jobs:
           if-no-files-found: error
 
   windows:
-    name: Windows x64 (shinchiro, BtbN, Vulkan loader)
+    name: Windows x64 (our libmpv, BtbN, Vulkan loader)
     if: inputs.platforms != 'macos'
     runs-on: windows-2022
     timeout-minutes: 30
