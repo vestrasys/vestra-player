@@ -1454,9 +1454,11 @@ test("E11: 比例 menu and Shift+F6 set the display layer with the OSD wording; 
   assert.equal(host.osd.at(-1), "填满窗口", "window edits give no on-screen text");
   assert.equal(host.sent("processing.replace").length, replaced, "a display property, not a filter");
   await stop();
-  // SDK 1.11: nothing is sent after `runtime.stop`; the player releases the display layer itself
-  // (the test host does not model that release, so the owner is not checked here).
+  // SDK 1.11: nothing is sent after `runtime.stop`; the player releases the display layer itself,
+  // and the test host does as the player (SDK 1.11.0-rc.3): no owner, the defaults back.
   assert.deepEqual(host.sent("video.view.release"), [], "no request after runtime.stop");
+  assert.equal(host.videoView.owner, null, "the stop released the display layer");
+  assert.deepEqual(host.videoView.values, { aspect: null, fit: "keep", zoom: 1, panX: 0, panY: 0 });
 });
 
 test("E11: 自定义比例… only accepts a valid ratio, joins the menu and the Shift+F6 cycle, and is saved", async () => {
@@ -1678,8 +1680,9 @@ test("E16: tone mapping, 目标亮度 and peak detection reach the render option
     assert.equal(host.osd.at(-1), "HDR 色调映射: Hable");
     await stop();
     // SDK 1.11: nothing is sent after `runtime.stop`; the player releases the render options
-    // itself (the test host does not model that release, so the owner is not checked here).
+    // itself, and the test host does as the player (SDK 1.11.0-rc.3).
     assert.deepEqual(host.sent("video.render.release"), [], "no request after runtime.stop");
+    assert.equal(host.videoRender.owner, null, "the stop released the render options");
     assert.deepEqual(JSON.parse(await readFile(join(data, "settings.json"), "utf8")).render, {
       toneMapping: "hable",
       targetPeak: 300,
