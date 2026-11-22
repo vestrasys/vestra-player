@@ -80,7 +80,7 @@ test("从文件安装…: cancel, an invalid file, a built-in id, replacing a re
   }
 });
 
-test("从链接安装…: https only, 64 MB at most, the permissions come from the package", async () => {
+test("从链接安装…: https only, 64 MB at most, the package is read after the download", async () => {
   const net = new FakeNet();
   publish(net, OFFICIAL, []);
   net.route("https://example.org/x-1.0.0.vxp", { body: vxp({ id: "someone.x", version: "1.0.0" }) });

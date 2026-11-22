@@ -93,7 +93,7 @@ test("scaffold → typecheck → test → check → pack: the template passes ev
     await fs.access(path.join(project, file));
   const manifest = JSON.parse(await fs.readFile(path.join(project, "manifest.json"), "utf8"));
   assert.equal(manifest.id, "octocat.demo");
-  // SDK 1.9.0: no capabilities in the manifest (player 0.9.0 refuses the field; an older one requires it) and no editor plugin in tsconfig.json.
+  // SDK 1.9.0: no declarations in the manifest (player 0.9.0 refuses the field as unknown; an older one requires it) and no editor plugin in tsconfig.json.
   assert.equal("capabilities" in manifest, false);
   assert.equal(manifest.minPlayerVersion, "0.9.0");
   assert.equal(JSON.parse(await fs.readFile(path.join(project, "tsconfig.json"), "utf8")).compilerOptions.plugins, undefined);
@@ -332,7 +332,7 @@ test("parsers: tsc lines and the TAP report", () => {
   assert.deepEqual(parseTap(tap, "/p"), { passed: 3, failed: 1, failures: [{ name: "adds", error: "boom", location: "tests/a.test.ts:2:1" }] });
 });
 
-test("SDK 1.9.0: an SDK call needs no declaration; a manifest that still lists capabilities fails with what to write instead", async () => {
+test("SDK 1.9.0: an SDK call needs no declaration; a manifest field the SDK does not know fails, a former one too", async () => {
   const { session, toolchain } = await setup();
   await toolchain.scaffold(session, { name: "demo" }, "");
   const project = path.join(session.work, "local.demo");
@@ -348,6 +348,7 @@ test("SDK 1.9.0: an SDK call needs no declaration; a manifest that still lists c
     assert.equal(run.ok, false, run.text);
     const report = JSON.parse(run.text.slice(run.text.indexOf("\n") + 1));
     assert.equal(report.undeclared, undefined);
-    assert.match(report.problems.join("\n"), /"capabilities", which SDK 1\.9\.0 \(player 0\.9\.0\) removed: delete the field/);
+    // An unknown field (SDK 1.11.0: no message of its own; before, one that said to delete it).
+    assert.match(report.problems.join("\n"), /"capabilities"/);
   }
 });

@@ -8,7 +8,7 @@
 // card opens its detail page in the same window (the grid stays alive under
 // it with `visible:`, so it keeps its scroll position): ← All Plugins, the
 // header and its buttons, notices, "Where to find it", tabs About (the
-// README) and Details (facts, permissions, Changelog / Versions).
+// README) and Details (facts, Changelog / Versions).
 // The grid is a ListView of rows of cards: the column count follows the
 // grid's width by a binding, TypeScript hands over one flat array and is not
 // told about resizes. Texts built at run time come translated from
@@ -78,12 +78,6 @@ export struct StoreFact {
     label: string,
     text: string,
     link: bool,
-}
-
-export struct StorePermission {
-    // The capability in words.
-    text: string,
-    risky: bool,
 }
 
 // A button as wide as its label (at least `min`), measured in the
@@ -326,9 +320,6 @@ export component StoreWindow inherits Window {
     in property <string> doc-note;
     in property <[StoreVersion]> versions;
     in property <[StoreFact]> facts;
-    in property <[StorePermission]> permissions;
-    // The index has a scan of the version shown: the Permissions heading shows (even over an empty list).
-    in property <bool> scanned;
     // Status line: one message, or a text per repository.
     in property <string> status;
     in property <bool> status-warn;
@@ -788,7 +779,7 @@ export component StoreWindow inherits Window {
                                 vertical-alignment: center;
                             }
                         }
-                        // Details: facts and permissions, then the changelog and the version history.
+                        // Details: the facts, then the changelog and the version history.
                         if root.tab == 1: HorizontalLayout {
                             spacing: 12px;
                             VerticalLayout {
@@ -815,21 +806,7 @@ export component StoreWindow inherits Window {
                                         }
                                     }
                                 }
-                                Rectangle { height: 6px; }
-                                // Only with a scan of the version shown: without one the store has nothing to say, not "(0)".
-                                if root.scanned: Cell { text: @tr("Permissions ({})", root.permissions.length); color: Theme.text; }
-                                if root.scanned: Rectangle { height: 1px; background: Theme.line; }
-                                ListView {
-                                    vertical-stretch: 1;
-                                    for p in root.permissions: Text {
-                                        height: self.preferred-height + 3px;
-                                        text: "· " + p.text;
-                                        color: p.risky ? Tone.warn : Theme.text-list;
-                                        font-size: Theme.font-body;
-                                        wrap: word-wrap;
-                                        line-height-factor: 1.25;
-                                    }
-                                }
+                                Rectangle { vertical-stretch: 1; }
                             }
                             VerticalLayout {
                                 horizontal-stretch: 1;

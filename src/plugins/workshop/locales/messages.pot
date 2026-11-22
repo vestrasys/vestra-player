@@ -1,6 +1,6 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: vestra.workshop 2.2.43\n"
+"Project-Id-Version: vestra.workshop 2.2.46\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
@@ -68,7 +68,7 @@ msgstr ""
 msgid "Pack"
 msgstr ""
 
-#: ai.slint:183 ai.slint:403 ai.slint:733 delivery.ts:243
+#: ai.slint:183 ai.slint:403 ai.slint:733 delivery.ts:204
 msgid "Install"
 msgstr ""
 
@@ -540,76 +540,23 @@ msgstr ""
 msgid "Custom · Anthropic format"
 msgstr ""
 
-#: delivery.ts:65
-msgid "Change your player settings (shortcuts, theme, language, rendering) or control the playback engine directly"
-msgstr ""
-
-#: delivery.ts:65
-msgid "Install, uninstall, disable or reload other plugins, or run any command"
-msgstr ""
-
-#: delivery.ts:65
-msgid "Read and write the clipboard"
-msgstr ""
-
-#: delivery.ts:65
-msgid "Store sign-in details in the system keychain"
-msgstr ""
-
-#: delivery.ts:65
-msgid "Use the camera"
-msgstr ""
-
-#: delivery.ts:65
-msgid "Record from the microphone"
-msgstr ""
-
-#: delivery.ts:65
-msgid "Capture the screen or other windows"
-msgstr ""
-
-#: delivery.ts:65
-msgid "Show system notifications"
-msgstr ""
-
-#: delivery.ts:66
-msgid "Unknown permission: {}"
-msgstr ""
-
-#: delivery.ts:68
-msgid "· {}"
-msgstr ""
-
-#: delivery.ts:69
-msgid ""
-"It will be able to:\n"
-"{}"
-msgstr ""
-
-#: delivery.ts:241
+#: delivery.ts:202
 msgid "Install the AI-generated plugin “{}”?"
 msgstr ""
 
-#: delivery.ts:242
-msgid ""
-"{1} {2}\n"
-"\n"
-"{3}"
-msgstr ""
-
-#: delivery.ts:242
+#: delivery.ts:203
 msgid "{1} {2}"
 msgstr ""
 
-#: delivery.ts:272
+#: delivery.ts:233
 msgid "Replace the installed {}?"
 msgstr ""
 
-#: delivery.ts:274
+#: delivery.ts:235
 msgid "It was installed from elsewhere (not made by Vestra Player AI). After the replacement the new plugin starts with a new, empty data folder; the original plugin's data is kept and is used again when you reinstall it from its original source."
 msgstr ""
 
-#: delivery.ts:275
+#: delivery.ts:236
 msgid "Replace"
 msgstr ""
 

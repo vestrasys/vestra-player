@@ -287,7 +287,7 @@ test("details: status, package, data folder (opens) and data size", async () => 
     host.window("store").emit("factLink", facts().findIndex((f) => f.label === "数据目录"));
     await until(host, () => host.system.opened.length === 1);
     assert.deepEqual(host.system.opened, [data]);
-    // The Plugin Manager's sentence is gone; the permissions keep their label.
+    // The Plugin Manager's sentence is gone.
     assert.equal(props(host)["manage"], undefined);
 
     await choose(host, "c.bad");
@@ -468,7 +468,6 @@ test("translations in index.json: English limits, invalid values dropped, field 
           {
             version: "1.0.0",
             apiVersion: "vestra/1",
-            capabilities: [],
             downloadUrl: "https://x.test/x.vxp",
             sha256: "0".repeat(64),
             size: 1,
@@ -489,7 +488,6 @@ test("translations in index.json: English limits, invalid values dropped, field 
           {
             version: "1.0.0",
             apiVersion: "vestra/1",
-            capabilities: [],
             downloadUrl: "https://x.test/u.vxp",
             sha256: "0".repeat(64),
             size: 1,
@@ -546,7 +544,7 @@ test("buttons keep their places: Disable and Enable swap only their words (VS Co
 });
 
 test("plugins the player set aside at start (no directory, no version) keep their own names", async () => {
-  // Player 0.9.0 lists an installed record it set aside (a package with `capabilities`) without a directory or a
+  // Player 0.9.0 lists an installed record it set aside (a package whose manifest it refuses) without a directory or a
   // version; the display cache was keyed by those two only, so every such row showed the first one's name.
   const aside = (id: string, name: string | null) =>
     info(id, {

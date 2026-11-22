@@ -27,7 +27,7 @@ import {
 import { clean } from "./index-format.ts";
 import { Icons } from "./icons.ts";
 import * as installer from "./installer.ts";
-import { addedBy, categories, day, hostOf, reasonOf, sourceName } from "./labels.ts";
+import { day, hostOf, reasonOf, sourceName } from "./labels.ts";
 import { get, NetError } from "./net.ts";
 import { Revocations, revocationKey } from "./revocations.ts";
 import { Repos, type Deps } from "./repos.ts";
@@ -125,7 +125,7 @@ const REMOTE_IMAGE = /!\[[^\]]*\]\(\s*<?(https?:\/\/[^)\s>]+)/g;
  */
 const CARD_ICON = 80;
 const DETAIL_ICON = 112;
-/** The detail page's tabs (Store v3): About (the README), Details (facts, permissions, changelog and versions). */
+/** The detail page's tabs (Store v3): About (the README), Details (facts, changelog and versions). */
 export const ABOUT = 0;
 export const DETAILS = 1;
 /** A reload that never reports back (the player starts it within 20 s). */
@@ -491,7 +491,7 @@ export class Store {
       this.#commands = commands.map(({ id, path, label }) => ({ id, path, label }));
       this.changed();
     } catch (error) {
-      if ((error as { code?: string }).code === "capability") this.#noCommands = true;
+      if ((error as { code?: string }).code === "builtin-only") this.#noCommands = true;
       else this.deps.log(`commands.list: ${(error as Error).message}`);
     }
   }
@@ -743,14 +743,6 @@ export class Store {
       searchReset: this.#clearSearch,
     };
     if (!item) return base;
-    // The scanned categories of the version shown (the one to install, else the installed one as the index lists
-    // it, else the newest); without a scan nothing: declared capabilities are not shown (user ruling 2026-11-13).
-    // Only the official repository's scan: another repository's is its own claim, and its install confirmation
-    // says that the permissions were not checked (user ruling 2026-11-13).
-    const indexed = item.installed
-      ? item.entry?.versions.find((v) => v.version === item.installed?.version)
-      : item.entry?.versions[0];
-    const scan = item.repo?.official ? ((item.best ?? indexed)?.scan ?? null) : null;
     const detail = this.#detailActions(item);
     return {
       ...base,
@@ -772,8 +764,6 @@ export class Store {
         text: shown(text),
         link: url !== null || act !== undefined,
       })),
-      permissions: scan ? categories(scan.uses).map((text) => ({ text: shown(text), risky: true })) : [],
-      scanned: scan !== null,
     };
   }
 
@@ -1139,12 +1129,6 @@ export class Store {
     if (item.repo && !item.repo.official) {
       add(msg("Unofficial repository: not reviewed by Vestra Player; plugins may read your files or use the network"), 2);
       if (item.repo.local) add(msg("This is a test repository on this machine, without encryption"), 2);
-    }
-    if (item.state === "update" && item.best && info && item.repo?.official) {
-      // As the update confirmation compares them (scanned categories when both versions have them; the official
-      // repository's only).
-      const added = addedBy(item.entry?.versions ?? [], info, item.best);
-      if (added.length) add(msg("The new version needs new permissions: {}", list(added)), 2);
     }
     if (item.state === "otherSource" && info)
       add(

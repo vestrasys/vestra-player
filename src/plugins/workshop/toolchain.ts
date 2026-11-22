@@ -70,7 +70,7 @@ export function checkOwner(text: string): string {
   return owner;
 }
 
-export const TIMEOUTS = { typecheck: 90_000, test: 90_000, check: 120_000, pack: 120_000, scan: 30_000 };
+export const TIMEOUTS = { typecheck: 90_000, test: 90_000, check: 120_000, pack: 120_000 };
 /** Text returned to the model at most per call. */
 const MAX_RESULT = 12_000;
 
@@ -358,11 +358,11 @@ export class Toolchain {
    * (ui/main.slint), and fails. They run the same check first, on the same
    * fixed arguments.
    */
-  private async confined(directory: string, session: SessionPaths, tmp: string, children: boolean): Promise<string[]> {
+  private async confined(directory: string, session: SessionPaths, tmp: string): Promise<string[]> {
     const read = [await fs.realpath(this.packageDir), await fs.realpath(path.join(this.dataDir, "node_modules")), directory, tmp];
     const config = path.join(await fs.realpath(session.dir), "tsconfig.json");
     if (existsSync(config)) read.push(config);
-    return ["--permission", ...read.map((p) => `--allow-fs-read=${p}`), `--allow-fs-write=${tmp}`, ...(children ? ["--allow-child-process"] : [])];
+    return ["--permission", ...read.map((p) => `--allow-fs-read=${p}`), `--allow-fs-write=${tmp}`, "--allow-child-process"];
   }
 
   private async cli(command: string, directory: string, session: SessionPaths, extra: string[], signal?: AbortSignal): Promise<RunResult> {
@@ -370,9 +370,7 @@ export class Toolchain {
     try {
       // Trusted code on fixed arguments; it never runs the project's code
       // (bundling and npm installs are refused before, see packageProblems()).
-      // The scan (scan()) reads the source and runs the type checker in its
-      // own process: confined the same way, without child processes.
-      const permissions = command === "check" || command === "scan" ? await this.confined(directory, session, tmp, command === "check") : [];
+      const permissions = command === "check" ? await this.confined(directory, session, tmp) : [];
       // ES module imports in the SDK find vendor/ too (see worker/vendor-resolve.ts).
       const resolver = pathToFileURL(await fs.realpath(path.join(this.packageDir, "worker", "vendor-resolve.ts"))).href;
       // The flags go in NODE_OPTIONS, each quoted. Given as arguments, Node
@@ -478,28 +476,6 @@ export class Toolchain {
       files: Object.keys(files),
       next: "Edit main.ts, ui/main.slint and tests/main.test.ts, then typecheck → test → check",
       ...(owner ? {} : { note: "No GitHub name in the settings: the id has the local. prefix (for this computer only)" }),
-    });
-  }
-
-  /**
-   * What the project's code uses of the player's sensitive features: the
-   * `uses` of this Workshop's own vendored `vestra-plugin scan` (category
-   * words such as "clipboard", each once). It reads the source; it runs no
-   * project code and changes nothing. `null` when the scan gave no answer
-   * (it failed, timed out, was cancelled or printed something else).
-   */
-  scan(session: SessionPaths, id: string, signal?: AbortSignal): Promise<string[] | null> {
-    return this.locked(id, async () => {
-      try {
-        const directory = await this.project(session, id);
-        const run = await this.cli("scan", directory, session, [], signal);
-        if (run.code !== 0 || run.timedOut || run.cancelled || run.truncated) return null;
-        const found = JSON.parse(run.stdout) as { scan?: unknown; uses?: unknown };
-        if (found?.scan !== 1 || !Array.isArray(found.uses) || !found.uses.every((word) => typeof word === "string")) return null;
-        return [...new Set(found.uses as string[])];
-      } catch {
-        return null;
-      }
     });
   }
 
@@ -883,7 +859,7 @@ export function template(id: string, name: string, title: string, sdkVersion: st
     apiVersion: "vestra/1",
     entry: "main.ts",
     name: title,
-    // A player without manifest capabilities (SDK 1.9.0): an older one requires the field.
+    // A player without manifest declarations (SDK 1.9.0): an older one requires them.
     minPlayerVersion: "0.9.0",
   };
   return {

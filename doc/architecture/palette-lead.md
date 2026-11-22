@@ -11,7 +11,7 @@ Ask Vestra, so a calculator, a library search or a jump-to-time row can use them
 `Info::builtin_only` (`capabilities/mod.rs`) marks an area of the API (`commands_run.rs`:
 `commands.list`, `commands.run`; `palette_lead.rs`: `palette.lead.*`) that only built-in
 plugins may use. Since player 0.9.0 (SDK 1.9.0) manifests declare nothing, so this is the only
-refusal by who is asking; until then these were the two built-in-only manifest capabilities. Built-in means **by provenance**: `Host::is_builtin` (listed in `builtin.json`,
+refusal by who is asking; until then they were two built-in-only manifest declarations. Built-in means **by provenance**: `Host::is_builtin` (listed in `builtin.json`,
 running from that directory, recorded built-in in the store). A manifest field or a load mode never
 makes a plugin built-in, so a development load of a built-in's id is refused too (PROPOSAL Q10 A).
 
@@ -23,7 +23,7 @@ flowchart TB
     D --> B{"its area builtin_only?"}
     B -- "no" --> H["area handle"]
     B -- "yes, Host::is_builtin" --> H
-    B -- "yes, not built-in" --> E["error capability: for built-in plugins only"]
+    B -- "yes, not built-in" --> E["error builtin-only: for built-in plugins only"]
     P["recorded call at start-up"] --> RP["capabilities::replay"]
     RP --> RB{"builtin_only and not is_builtin_package(origin)?"}
     RB -- "yes" --> E
@@ -31,12 +31,12 @@ flowchart TB
 ```
 
 Until player 0.9.0 `packages.validate` also refused a third-party package whose manifest declared
-one of the two capabilities; with the field gone there is nothing to refuse at install, and the
+one of the two; with the field gone there is nothing to refuse at install, and the
 requests themselves are refused as above. TestHost refuses them the same way (`TestHost.builtin`).
 
 ## 2. `commands.run` (built-in only)
 
-`capabilities/commands_run.rs`. Holds nothing for standby; in the scan's `plugins` category.
+`capabilities/commands_run.rs`. Holds nothing for standby.
 
 | Method | Params | Result | Errors |
 | --- | --- | --- | --- |
@@ -252,7 +252,7 @@ first-use consent in the player; every other main-window confirmation too, as a 
   for it): its title and the request. `destructive` draws nothing: no reason label and no colour (user
   ruling 2 of 2026-11-12; the approval sheet marks no destructive step either); Enter confirms
   either way, as the system dialog's default button did. The panel ends 16px above the window's
-  bottom at most: a longer detail (a store install's permission list, up to 2000 characters)
+  bottom at most: a longer detail (up to 2000 characters)
   scrolls in a std-widgets `ScrollView` (at least 48px of it shown), and the footer (checkbox and
   buttons) stays in view. When the window cannot keep the message and 48px of detail (the
   smallest window, 320×182, with a long message), the message scrolls with the detail; a plan's

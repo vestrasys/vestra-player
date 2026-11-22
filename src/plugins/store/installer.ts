@@ -5,11 +5,11 @@ import type { PackageCandidate, PackageChange, PackageSource, PluginInfo } from 
 import type { Item } from "./catalog.ts";
 import type { IndexVersion } from "./index-format.ts";
 import { MAX_PACKAGE } from "./index-format.ts";
-import { addedBy, bulletList, categoryList, reservedId, reservedText, sourceName } from "./labels.ts";
+import { reservedId, reservedText, sourceName } from "./labels.ts";
 import { get, isHttps, NetError } from "./net.ts";
 import { compareVersions, isVersion } from "./semver.ts";
 import type { Store } from "./store.ts";
-import { joined, msg, raw, type Arg, type Msg } from "./text.ts";
+import { msg, raw, type Msg } from "./text.ts";
 
 /**
  * Installing (design §3.8, §3.9): every path asks first, downloads with
@@ -62,8 +62,8 @@ export function failureText(store: Store, error: unknown, id?: string): Msg {
         : msg("“{}” has the same id as a built-in plugin and cannot be installed", id);
     case "busy":
       return msg("Plugins are being installed or cleaned up; try again later");
-    case "capability":
-      return msg("The Plugin Store lacks the “Manage plugins” permission");
+    case "builtin-only":
+      return msg("This player does not let the Plugin Store manage plugins");
     case "missing":
       return msg("This plugin no longer exists");
     default:
@@ -92,31 +92,11 @@ function replaceDetail(info: PluginInfo, name: string): Msg {
 }
 
 /**
- * What the plugin will be able to do: the categories the official
- * repository's scan found in its code (`scan`, from its signed index).
- * Without a scan (an index from before it): `null`, nothing is said; the
- * capabilities a package declares are not shown.
+ * Said of every plugin from the official repository, a file or a link (an
+ * unofficial repository's own text says it already). Nothing lists what a
+ * plugin uses (user ruling 2026-11-16: no capability disclosure).
  */
-function willBeAble(scan: { uses: string[] } | null): Msg | null {
-  if (!scan) return null;
-  return scan.uses.length
-    ? msg("It will be able to:\n{}", categoryList(scan.uses))
-    : msg("It uses none of the player's sensitive features.");
-}
-
-/**
- * Said in place of what it will be able to do for every package not from
- * the official repository (another repository, a file, a link; user ruling
- * 2026-11-13): nothing checked its code. Another repository's own scan is
- * its claim, so it is not shown.
- */
-const UNCHECKED = msg("It is not from the official repository, so its permissions were not checked.");
-
-/** Said of every plugin, before what it will be able to do (an unofficial repository's own text says it already). */
-function withAccess(able: Msg | null): Arg {
-  const access = msg("Plugins may read your files or use the network.");
-  return able ? joined([access, able], "{}\n\n{}") : access;
-}
+const ACCESS = msg("Plugins may read your files or use the network.");
 
 // ------------------------------------------------------------ repository
 
@@ -141,57 +121,33 @@ export async function installFromRepository(store: Store, item: Item, version: I
         repo.label,
         repo.url,
       );
-  // Only the official repository's scan is shown; another repository's package gets the note instead.
-  const perms = repo.official ? willBeAble(version.scan) : null;
   let question: Question;
   if (replace) {
     question = {
       message: msg("Replace the installed “{}”?", name),
       detail: repo.official
-        ? msg("{1}\n\nWill install {2} from the official repository.\n\n{3}", replaceDetail(info, name), version.version, withAccess(perms))
-        : msg(
-            "{1}\n\nWill install {2} from the unofficial repository.\n\n{3}",
-            replaceDetail(info, name),
-            version.version,
-            joined([unofficial, UNCHECKED], "{}\n\n{}"),
-          ),
+        ? msg("{1}\n\nWill install {2} from the official repository.\n\n{3}", replaceDetail(info, name), version.version, ACCESS)
+        : msg("{1}\n\nWill install {2} from the unofficial repository.\n\n{3}", replaceDetail(info, name), version.version, unofficial),
       confirm: "Replace",
       destructive: true,
     };
   } else if (sameSource && info.version && isVersion(info.version)) {
     const order = compareVersions(version.version, info.version);
-    // What the window's notice names too (labels.ts); another repository's scans are not compared.
-    const lines = repo.official ? addedBy(entry.versions, info, version) : [];
-    // Another repository's update or reinstall: the sentence and the note, after the current version.
-    const note = repo.official ? null : withAccess(UNCHECKED);
-    const added = lines.length ? bulletList(lines) : null;
+    // Another repository's update or reinstall: the files-and-network sentence, after the current version.
+    const note = repo.official ? null : ACCESS;
     const current = info.version;
     if (order > 0)
-      question = added
-        ? {
-            message: msg("Update “{}” to {}? The new version needs more permissions", name, version.version),
-            detail: msg(
-              "Added:\n{2}\n\nCurrent: {3}.",
-              added,
-              current,
-            ),
-            confirm: "Update",
-          }
-        : {
-            message: msg("Update “{}” to {}?", name, version.version),
-            detail: note ? msg("Current: {2}.\n\n{3}", current, note) : msg("Current: {2}.", current),
-            confirm: "Update",
-          };
+      question = {
+        message: msg("Update “{}” to {}?", name, version.version),
+        detail: note ? msg("Current: {2}.\n\n{3}", current, note) : msg("Current: {2}.", current),
+        confirm: "Update",
+      };
     // Never older than the installed version from the same source (the Versions tab offers none): uninstall, then install a .vxp.
     else if (order < 0) return;
     else
       question = {
         message: msg("Install “{}” {} (reinstall)?", name, version.version),
-        detail: added
-          ? msg("Current: {2}.\n\nThis version needs more permissions:\n{3}", current, added)
-          : note
-            ? msg("Current: {2}.\n\n{3}", current, note)
-            : msg("Current: {2}.", current),
+        detail: note ? msg("Current: {2}.\n\n{3}", current, note) : msg("Current: {2}.", current),
         confirm: "Install",
       };
   } else
@@ -201,13 +157,13 @@ export async function installFromRepository(store: Store, item: Item, version: I
           detail: msg(
             "From the Vestra Player official repository, author {2}.\n\n{3}",
             item.author ?? msg("Unknown"),
-            withAccess(perms),
+            ACCESS,
           ),
           confirm: "Install",
         }
       : {
           message: msg("Install “{}” {} from an unofficial repository?", name, version.version),
-          detail: msg("{2}\n\n{3}", unofficial, UNCHECKED),
+          detail: msg("{2}", unofficial),
           confirm: "Install Anyway",
           destructive: true,
         };
@@ -464,8 +420,8 @@ function sideloadQuestion(store: Store, candidate: PackageCandidate, from: { fil
   const manifest = candidate.manifest;
   const name = manifest.name ?? manifest.id;
   const info = installedOf(store, manifest.id);
-  // A package from a file or a link has no scan: the sentence and the note.
-  const perms = withAccess(UNCHECKED);
+  // A package from a file or a link: the files-and-network sentence after the warning.
+  const perms = ACCESS;
   const warning =
     "file" in from
       ? msg(
@@ -528,7 +484,7 @@ export async function installFile(store: Store, path: string) {
   }
 }
 
-/** "Install from Link…": https only, at most 64 MB; the permissions are known only after the download. */
+/** "Install from Link…": https only, at most 64 MB; the package is known only after the download. */
 export async function installFromLink(store: Store, text: string) {
   let url: string;
   try {
