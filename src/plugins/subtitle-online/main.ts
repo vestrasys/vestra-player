@@ -591,7 +591,12 @@ export default async function activate(plugin: Plugin) {
   // `source.opening` and `source.ready` (they wake the plugin from standby). The source
   // open at start sends no `source.ready`, so it is not searched automatically.
   let autoDone: number | null = null;
-  player.on("source.opening", () => {
+  // Only a new source clears the results: a restart of the same source (playing it again after its
+  // end) keeps its id, and what was found for it still applies.
+  let seenSource = player.state.sourceId;
+  player.on("source.opening", ({ state }) => {
+    if (state.sourceId === seenSource) return;
+    seenSource = state.sourceId;
     // Requests for the old source must not load into the new one.
     abortOperation(operation ? one(line("sourceChanged")) : null);
     results = [];
