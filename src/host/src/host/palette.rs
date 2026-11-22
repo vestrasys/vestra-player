@@ -4,7 +4,7 @@
 //! like a menu. The listing, matching and rows are `ui::command_palette`.
 //!
 //! A built-in plugin may hold the palette's first row (`palette.lead`,
-//! capabilities/palette_lead.rs): drawn above the commands in view, it
+//! api/palette_lead.rs): drawn above the commands in view, it
 //! receives what is typed on Enter. The cursor indexes the rows with the
 //! lead first (0) while there is one; without one nothing changes.
 use super::*;
@@ -405,7 +405,7 @@ impl Core {
         // (`lead_request`; before plan step S2f(1) it closed before it).
         self.send(
             owner,
-            json!({"event": crate::capabilities::LEAD_EVENT,
+            json!({"event": crate::api::LEAD_EVENT,
                 "data": {"query": query, "keep": keep, "ticket": ticket, "status": status}}),
         );
     }

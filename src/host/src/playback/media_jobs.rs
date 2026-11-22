@@ -197,7 +197,7 @@ impl Mutation {
     }
 }
 /// A mutation's params, read as [`Mutation`], and the host's `store` key.
-/// `store` (`capabilities/media_control.rs`) comes only with a parts
+/// `store` (`api/media_control.rs`) comes only with a parts
 /// export (`jobs.start { parts }`, whose source references it reads) and is
 /// read only there; the published forms keep their shape, so a `store` in
 /// them is an unknown field (`invalid`), as is `parts: null`.

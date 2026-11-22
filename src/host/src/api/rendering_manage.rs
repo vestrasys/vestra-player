@@ -1,7 +1,7 @@
 //! `rendering.manage`: choosing GPU or software rendering for the next start
 //! and restarting the player (host/rendering.rs; doc/architecture/README.md
 //! §4.3). Reading the state, `rendering.state`, needs no
-//! capability (uncapable.rs).
+//! capability (open.rs).
 use super::{Capability, Handled, Info, Recorded};
 use crate::host::{Core, Reply};
 use serde_json::Value;

@@ -175,7 +175,7 @@ fn a_core_turn_runs_on_a_core_without_a_host() {
         (step.run)(&mut core);
     }
     // A capability on the core alone (`Capability::handle` takes `Core`).
-    let route = capabilities::lookup("window.state").unwrap();
+    let route = api::lookup("window.state").unwrap();
     let reply = Reply { owner: 42, id: 2 };
     let state = route
         .handle(&mut core, &reply, "window.state", &Value::Null)

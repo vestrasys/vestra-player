@@ -14,7 +14,7 @@
 //! is what is read back, a removal is never undone by an older write, and
 //! the quit writes its checkpoints after them.
 use super::probe;
-use crate::capabilities::Call;
+use crate::api::Call;
 use crate::host::Event;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};

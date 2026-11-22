@@ -740,9 +740,8 @@ impl Host {
                     params,
                     prepared,
                 } = op;
-                let result = crate::capabilities::ui_mount::write_mount(
-                    self, &reply, key, &params, prepared,
-                );
+                let result =
+                    crate::api::ui_mount::write_mount(self, &reply, key, &params, prepared);
                 self.ui_report(UiReport::Answered {
                     reply,
                     result,

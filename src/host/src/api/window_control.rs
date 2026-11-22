@@ -1,6 +1,6 @@
 //! `window.control`: the main window's video area, always-on-top, cursor
 //! hiding and picture-in-picture. `window.state` needs no capability
-//! (uncapable.rs).
+//! (open.rs).
 use super::{Capability, Handled, Info, Recorded};
 use crate::host::{Core, Reply, RpcError, string};
 use serde_json::Value;

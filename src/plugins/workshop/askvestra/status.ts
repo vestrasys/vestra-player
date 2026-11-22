@@ -2,7 +2,7 @@
 // strip (Ask Vestra UX PROPOSAL §4.2), fitted to the player's limit: 1–80
 // characters as shown while working, 1–160 for an end state (the strip's two
 // lines; SDK 1.8.0), translated and filled in, counted as Unicode scalar
-// values (host `capabilities/palette_lead.rs` `text`: `chars().count()`;
+// values (host `api/palette_lead.rs` `text`: `chars().count()`;
 // JavaScript's string iterator counts the same). A longer text is refused
 // (`invalid`) and the user would see nothing, so the data in it (labels,
 // the model's sentence, error messages) is cut with a trailing "…".

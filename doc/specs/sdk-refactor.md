@@ -199,7 +199,7 @@ plugin.commands.add({
 });
 ```
 
-`plugin.player.on(event, listener)` is a plain subscription: `event` is the literal union `HostEvent` (`"source.state" | "window.state" | "timeline.changed" | …`, `src/wire.ts:429-439`), the listener's parameter type is `EventPayload<typeof event>` (the wire payload, `SourceState` here), so the IDE completes both. No mirror is created for it (Step 2: the mirror subscribes on first read of `plugin.player.state`, not in the constructor), and the subscription is sent with `why` so the player's lazy-activation log names the listener (`src/wire.ts:790-800`; host `src/host/src/capabilities/events.rs:66-71`). `bar.set({...})` after Step 2 goes to the L1 writer: value limits checked, one `Latest` write in flight per property, `more` chunking for large arrays, but **no diff against the last sent value and no pass registry**: the panel joins the passes only if something calls `bind()` on it. A command with no function fields (`enabled` omitted) is registered once and never re-evaluated.
+`plugin.player.on(event, listener)` is a plain subscription: `event` is the literal union `HostEvent` (`"source.state" | "window.state" | "timeline.changed" | …`, `src/wire.ts:429-439`), the listener's parameter type is `EventPayload<typeof event>` (the wire payload, `SourceState` here), so the IDE completes both. No mirror is created for it (Step 2: the mirror subscribes on first read of `plugin.player.state`, not in the constructor), and the subscription is sent with `why` so the player's lazy-activation log names the listener (`src/wire.ts:790-800`; host `src/host/src/api/events.rs:66-71`). `bar.set({...})` after Step 2 goes to the L1 writer: value limits checked, one `Latest` write in flight per property, `more` chunking for large arrays, but **no diff against the last sent value and no pass registry**: the panel joins the passes only if something calls `bind()` on it. A command with no function fields (`enabled` omitted) is registered once and never re-evaluated.
 
 ### 3.3 Style C: direct messages through `plugin.wire` (unstable)
 
@@ -218,7 +218,7 @@ void plugin.wire.request("ui.setMount", { property: "rate", value: "1.00×" });
 
 ### 3.4 Call chain per style
 
-Pressing **C**, up to the panel showing the new speed. "Skipped" marks a step a style does not take. Wire lines are JSON lines over stdio (`host-and-node.md:134-192`). The host handler for a **panel** write is `ui.setMount` → `src/host/src/capabilities/ui_mount.rs:61` → `set_mount` (`:182`); for a **tool window** the same chain ends in `ui.set` → `src/host/src/capabilities/ui_window.rs:24` (method table) → `change` (`:116-137`, `prop_value` then `ui_values::reconcile_in`/`set`).
+Pressing **C**, up to the panel showing the new speed. "Skipped" marks a step a style does not take. Wire lines are JSON lines over stdio (`host-and-node.md:134-192`). The host handler for a **panel** write is `ui.setMount` → `src/host/src/api/ui_mount.rs:61` → `set_mount` (`:182`); for a **tool window** the same chain ends in `ui.set` → `src/host/src/api/ui_window.rs:24` (method table) → `change` (`:116-137`, `prop_value` then `ui_values::reconcile_in`/`set`).
 
 | # | Step | A `bind()` | B `player.on` + `set` | C `plugin.wire` |
 | --- | --- | --- | --- | --- |

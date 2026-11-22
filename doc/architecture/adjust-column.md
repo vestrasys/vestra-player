@@ -32,7 +32,7 @@ flowchart LR
 | `host/mounts.rs` | `apply_mounts`, `compile_shell` per column (`ColumnPlan`, `ColumnStrip`); `compiles` |
 | `host/window.rs` | `column_memory`, `remember_column`, `tab_order`, `sync_column`, `tab_keys`, `tab_demand` per column; the tick writes `adjust-visible/overlay/popped` |
 | `ui/bar_buttons.rs`, `ui/bar-strip.slint`, `ui/vestra/bar-buttons.slint` | the Adjust cell |
-| `capabilities/ui_mount.rs`, `host/state.rs` | the slot on the wire, `layout.state.adjust`, `layout.set` (no detach), menus, recordings and placeholders |
+| `api/ui_mount.rs`, `host/state.rs` | the slot on the wire, `layout.state.adjust`, `layout.set` (no detach), menus, recordings and placeholders |
 
 ## On demand (open question 1)
 

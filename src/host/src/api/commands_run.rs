@@ -1,7 +1,7 @@
 //! `commands.run` (built-in only, risky): the palette's command table
 //! (`commands.list`) and running one of its commands the way the palette
 //! runs it (`commands.run`), with a one-time ticket the palette minted for
-//! a user's action (`palette.lead`, capabilities/palette_lead.rs).
+//! a user's action (`palette.lead`, api/palette_lead.rs).
 //!
 //! The boundary is the player's, not the plugin's (plugin processes are not
 //! sandboxed): a run needs a live ticket of the caller's, the rates are

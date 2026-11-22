@@ -46,8 +46,8 @@
 //! waits at least 30 s without a member before it exits.
 use super::revised::Revised;
 use super::*;
+use crate::api;
 use crate::binding_manager::KEYS_EVENT;
-use crate::capabilities;
 use crate::supervisor::{Action, Delivery, Trigger, Tunables, UnitId, WorkKind};
 use std::collections::BTreeSet;
 
@@ -82,7 +82,7 @@ pub(crate) const TRIGGERS: &[&str] = &[
     "source.resolveRequest",
     "drops.drop",
     "ui.callback",
-    // The command palette's first row activated (capabilities/palette_lead.rs).
+    // The command palette's first row activated (api/palette_lead.rs).
     "palette.lead",
 ];
 
@@ -198,7 +198,7 @@ pub(crate) struct OnDemand {
     /// Names for notices, by manifest id (as held).
     names: BTreeMap<String, String>,
     /// Holders' recorded listeners of wake events
-    /// (`capabilities::events::WAKE_EVENTS`): such an event wakes the unit,
+    /// (`api::events::WAKE_EVENTS`): such an event wakes the unit,
     /// which receives it at its ready.
     pub wakes: BTreeMap<u64, BTreeSet<String>>,
     /// Set around an announcement that wakes no unit in standby: the first
@@ -217,7 +217,7 @@ pub(crate) struct OnDemand {
     pub seen: BTreeMap<u64, BTreeMap<String, Option<u64>>>,
     /// The mute of start-up ended and `wake_missed` ran (once per run).
     pub caught_up: bool,
-    /// Source events (`capabilities::SOURCE_EVENTS`) the start-up mute kept
+    /// Source events (`api::SOURCE_EVENTS`) the start-up mute kept
     /// from plugins in standby that listen to them, in order, one per event
     /// name and source (`wake_trigger`'s key): delivered when the mute ends
     /// (`wake_missed`). A file opened at launch opens during the mute; a
@@ -301,7 +301,7 @@ struct Recording {
     serial: u64,
     /// What it holds: compared with the registrations once it is written
     /// (a plugin still runs meanwhile and may change them).
-    calls: Vec<capabilities::Call>,
+    calls: Vec<api::Call>,
     resident: bool,
     after: AfterRecording,
 }
@@ -646,7 +646,7 @@ impl Core {
         }
         let now = self.now_ms();
         self.supervisor.set_now(now);
-        let trigger = capabilities::wake_trigger(event, data);
+        let trigger = api::wake_trigger(event, data);
         let delivery = self.supervisor.wake(Pid(owner), &trigger);
         if delivery == Delivery::Started {
             self.wake_started(owner);
@@ -654,7 +654,7 @@ impl Core {
         if delivery == Delivery::Dropped
             && !self.on_demand.caught_up
             && self.supervisor.events_muted()
-            && capabilities::SOURCE_EVENTS.contains(&event)
+            && api::SOURCE_EVENTS.contains(&event)
         {
             self.mute_source_event(owner, event, data);
         }
@@ -860,7 +860,7 @@ impl Core {
     /// A held owner's registrations go (it is disabled, uninstalled,
     /// reloaded or could not start).
     pub(super) fn forget_entries(&mut self, owner: u64) {
-        capabilities::revoke(self, owner, false);
+        api::revoke(self, owner, false);
         self.plugin_shaders_gone(owner);
         let _ = self.backend.commands.send(Command {
             reply: Reply { owner, id: 0 },
@@ -893,13 +893,13 @@ impl Core {
                 .map(|root| process::DataKey::Instance(key.guid.clone()).directory(&root)),
         };
         for call in &recording.calls {
-            if let Err(error) = capabilities::replay(self, owner, &origin, call) {
+            if let Err(error) = api::replay(self, owner, &origin, call) {
                 self.forget_entries(owner);
                 bail!("{}: {}: {}", call.method, error.code, error.message);
             }
         }
         // Everything replayed is recorded (live registrations replace it).
-        capabilities::revoke(self, owner, true);
+        api::revoke(self, owner, true);
         let name = crate::packages::package_manager::display_name(&manifest, catalog.as_deref());
         diag!(
             "lazy: {id} replayed ({} calls) as owner {owner}, not started",
@@ -984,7 +984,7 @@ impl Core {
         let mut classified = false;
         for action in actions {
             match action {
-                Action::Prune { pid, .. } => capabilities::prune(self, pid.0),
+                Action::Prune { pid, .. } => api::prune(self, pid.0),
                 Action::Deliver { pid, payload, .. } => {
                     if !classified {
                         classified = true;
@@ -1060,7 +1060,7 @@ impl Core {
             self.class_known(owner, None, Value::Null);
             return;
         }
-        if let Err(reason) = capabilities::record(self, owner, &Value::Null) {
+        if let Err(reason) = api::record(self, owner, &Value::Null) {
             self.class_known(owner, Some(reason.to_owned()), Value::Null);
             return;
         }
@@ -1088,7 +1088,7 @@ impl Core {
             return;
         }
         let id = plugin.manifest.id.clone();
-        match capabilities::record(self, owner, &Value::Null) {
+        match api::record(self, owner, &Value::Null) {
             Err(reason) => diag!(
                 "plugin {id}: keeps running while idle: {reason}{}",
                 self.resident_listeners(owner)
@@ -1269,7 +1269,7 @@ impl Core {
     fn record_ahead(
         &mut self,
         owner: u64,
-        calls: Vec<capabilities::Call>,
+        calls: Vec<api::Call>,
         resident: bool,
         after: AfterRecording,
     ) {
@@ -1881,9 +1881,7 @@ impl Core {
         let listeners = plugin
             .subscriptions
             .iter()
-            .filter(|(event, active)| {
-                **active && !capabilities::WAKE_EVENTS.contains(&event.as_str())
-            })
+            .filter(|(event, active)| **active && !api::WAKE_EVENTS.contains(&event.as_str()))
             .map(|(event, _)| match plugin.listeners.get(event) {
                 Some(whys) => format!("{event}: {}", whys.join(" | ")),
                 None => event.clone(),
