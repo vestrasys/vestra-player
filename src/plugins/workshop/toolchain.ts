@@ -894,8 +894,10 @@ import test from "node:test";
 import { startPlugin } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
 
-test("the menu command opens the window", async () => {
+test("the menu command opens the window; idle, nothing keeps the plugin running", async () => {
   const { host, stop } = await startPlugin(activate, { directory: new URL("..", import.meta.url) });
+  // Idle: the player may stop the plugin and start it again on its next use.
+  assert.deepEqual(host.keepsRunning, []);
   await host.command("${name}.open").run();
   assert.equal(host.window("main").props.message, "Hello");
   await stop();
