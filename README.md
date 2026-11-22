@@ -76,6 +76,10 @@ flowchart LR
 
 **The interface is the core's client.** The two exchange only messages, so a stalled UI thread (a window compiling or dragged, a GPU wait) freezes only the window: plugins, triggers and playback control carry on. Only requests that need an interface result (opening a window, mounting a panel) wait for it; the rest never queue behind.
 
+**The core loop.** Everything reaches the core as an event on one queue: plugin lines from the reader threads, playback worker results and state, interface reports. The core sleeps on that queue and wakes for the first event, or at a 16 ms deadline for its periodic steps. A turn handles the interface's reports first, then the other events in order: at least 128, then as many as fit in 4 ms. The rest wait for the next turn, so a cheap burst drains fast and the periodic steps keep their deadline. A flood is refused before it reaches the queue: once a plugin has 320 requests or 4 MiB unanswered, its reader thread answers `limit` itself. A plugin that leaves 1024 messages unread is stopped.
+
+**Changing the interface.** The core never touches a window. It pushes numbered commands into one queue for the UI thread; a last-value-wins snapshot replaces a waiting one of its kind in place, so repeated state cannot pile up. It then wakes Slint's event loop with `invoke_from_event_loop`, behind a flag that keeps at most one wake pending. Each wake applies everything waiting, in order, and reports `Applied(n)`, which releases the answers that waited on the interface. The interface's own 16 ms tick ends with `FactsSettled` when window facts changed, and the core broadcasts one `window.state`.
+
 **Plugin supervisor.** Part of the core decides when each process exists: pure logic, tested by deterministic simulation.
 
 - **On-demand start.** A plugin's first run is recorded (commands, keys, settings pages, event subscriptions). These then appear without a process; first use starts it.
