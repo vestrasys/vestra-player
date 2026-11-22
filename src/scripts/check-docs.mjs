@@ -21,15 +21,37 @@
  *   node scripts/check-docs.mjs     (npm run docs:check; src/tests/sdk runs it)
  */
 import { readdirSync, readFileSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { createRequire } from "node:module";
+import ts from "typescript";
 import * as runtime from "@vestra-player/sdk/runtime";
 
-// Every member of the plugin API, `Interface.member`: the capability scan
-// lists each one once, under a category or under `none`.
-const scan = createRequire(import.meta.url)(
-  "@vestra-player/sdk/capability-scan.json",
-);
+// Every member of the plugin API, `Interface.member`: the members of the
+// interfaces and classes the SDK's entry point exports, read from its
+// declarations.
+function apiMembers() {
+  const entry = join(
+    dirname(
+      createRequire(import.meta.url).resolve("@vestra-player/sdk/package.json"),
+    ),
+    "dist/index.d.ts",
+  );
+  const program = ts.createProgram([entry], { noEmit: true, types: [] });
+  const checker = program.getTypeChecker();
+  const module = checker.getSymbolAtLocation(program.getSourceFile(entry));
+  const members = [];
+  for (let symbol of checker.getExportsOfModule(module)) {
+    if (symbol.flags & ts.SymbolFlags.Alias)
+      symbol = checker.getAliasedSymbol(symbol);
+    if (!(symbol.flags & (ts.SymbolFlags.Interface | ts.SymbolFlags.Class)))
+      continue;
+    for (const member of checker
+      .getDeclaredTypeOfSymbol(symbol)
+      .getProperties())
+      members.push(`${symbol.name}.${member.name}`);
+  }
+  return members;
+}
 
 const repo = resolve(import.meta.dirname, "../..");
 const doc = join(repo, "doc");
@@ -64,11 +86,7 @@ const leading = (cell) => {
     ? Number(match[1].replace(/[_,]/g, "")) * (UNITS[match[2]] ?? 1)
     : NaN;
 };
-const apis = new Set(
-  [...Object.values(scan.categories), scan.none].flatMap(
-    (list) => list.members,
-  ),
-);
+const apis = new Set(apiMembers());
 const interfaces = new Set([...apis].map((api) => api.split(".")[0]));
 
 const cells = (line) =>

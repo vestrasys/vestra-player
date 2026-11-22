@@ -69,7 +69,7 @@ msgstr "检查"
 msgid "Pack"
 msgstr "打包"
 
-#: ai.slint:183 ai.slint:403 ai.slint:733 delivery.ts:243
+#: ai.slint:183 ai.slint:403 ai.slint:733 delivery.ts:204
 msgid "Install"
 msgstr "安装"
 
@@ -568,83 +568,24 @@ msgstr "自定义 · OpenAI 格式"
 msgid "Custom · Anthropic format"
 msgstr "自定义 · Anthropic 格式"
 
-#: delivery.ts:65
-msgid "Change your player settings (shortcuts, theme, language, rendering) or control the playback engine directly"
-msgstr "修改你的播放器设置（快捷键、主题、语言、渲染方式），或直接控制播放引擎"
-
-#: delivery.ts:65
-msgid "Install, uninstall, disable or reload other plugins, or run any command"
-msgstr "安装、卸载、停用或重新加载其它插件，或运行任意命令"
-
-#: delivery.ts:65
-msgid "Read and write the clipboard"
-msgstr "读写剪贴板"
-
-#: delivery.ts:65
-msgid "Store sign-in details in the system keychain"
-msgstr "在系统钥匙串保存登录信息"
-
-#: delivery.ts:65
-msgid "Use the camera"
-msgstr "使用摄像头"
-
-#: delivery.ts:65
-msgid "Record from the microphone"
-msgstr "用麦克风录音"
-
-#: delivery.ts:65
-msgid "Capture the screen or other windows"
-msgstr "捕获屏幕或其它窗口"
-
-#: delivery.ts:65
-msgid "Show system notifications"
-msgstr "显示系统通知"
-
-#: delivery.ts:66
-msgid "Unknown permission: {}"
-msgstr "未知权限：{}"
-
-#: delivery.ts:68
-msgid "· {}"
-msgstr "· {}"
-
-#: delivery.ts:69
-msgid ""
-"It will be able to:\n"
-"{}"
-msgstr ""
-"它将可以：\n"
-"{}"
-
-#: delivery.ts:241
+#: delivery.ts:202
 msgid "Install the AI-generated plugin “{}”?"
 msgstr "安装 AI 生成的插件「{}」？"
 
-#: delivery.ts:242
-#, x-machine
-msgid ""
-"{1} {2}\n"
-"\n"
-"{3}"
-msgstr ""
-"{1} {2}\n"
-"\n"
-"{3}"
-
-#: delivery.ts:242
+#: delivery.ts:203
 #, x-machine
 msgid "{1} {2}"
 msgstr "{1} {2}"
 
-#: delivery.ts:272
+#: delivery.ts:233
 msgid "Replace the installed {}?"
 msgstr "替换已安装的 {}？"
 
-#: delivery.ts:274
+#: delivery.ts:235
 msgid "It was installed from elsewhere (not made by Vestra Player AI). After the replacement the new plugin starts with a new, empty data folder; the original plugin's data is kept and is used again when you reinstall it from its original source."
 msgstr "它是从别处安装的（不是 Vestra Player AI 生成的）。替换后新插件使用新的空数据目录；原插件的数据保留，以后从原来源重新安装时接上。"
 
-#: delivery.ts:275
+#: delivery.ts:236
 msgid "Replace"
 msgstr "替换"
 
@@ -925,17 +866,3 @@ msgstr "你的 GitHub 用户名（插件 id 的前缀）"
 #: settings.slint:313
 msgid "The key is kept only in the system keychain (macOS) or Credential Manager (Windows), never in a file, log or conversation record."
 msgstr "key 只保存在系统钥匙串（macOS）或凭据管理器（Windows）里，不写入任何文件、日志或会话记录。"
-
-#~ msgid ""
-#~ "{1} {2}\n"
-#~ "Capabilities: {3}"
-#~ msgstr ""
-#~ "{1} {2}\n"
-#~ "能力：{3}"
-
-#~ msgid ""
-#~ "{1} {2}\n"
-#~ "Capabilities: none"
-#~ msgstr ""
-#~ "{1} {2}\n"
-#~ "能力：无"

@@ -295,9 +295,23 @@ test("TestHost answers processing changes like the player", async () => {
   }
 });
 
-// Player 0.9.0 (SDK 1.9.0): manifests declare nothing, so the player's
-// capability table (host/capabilities.json) and the SDK's copy of it are
-// gone; apiVersion is the runner's constant.
+/** Whether the installed SDK is older than `major.minor.patch`. */
+function sdkBefore(major: number, minor: number, patch: number): boolean {
+  const version = JSON.parse(
+    readFileSync(
+      new URL(
+        "../../node_modules/@vestra-player/sdk/package.json",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  ).version as string;
+  const [a, b, c] = version.split(".").map(Number);
+  return a! * 1e6 + b! * 1e3 + c! < major * 1e6 + minor * 1e3 + patch;
+}
+
+// Player 0.9.0 (SDK 1.9.0): manifests declare nothing; apiVersion is the
+// runner's constant.
 test("apiVersion is the player's (host/src/process/mod.rs API)", () => {
   const api = /pub const API: &str = "([^"]+)";/.exec(
     host("src/process/mod.rs"),
@@ -306,22 +320,24 @@ test("apiVersion is the player's (host/src/process/mod.rs API)", () => {
   assert.equal(api, API_VERSION);
 });
 
-test("a manifest with capabilities is refused with the SDK's words (packages/manifest.rs CAPABILITIES_REMOVED; SDK 1.9.0)", () => {
-  const rust = /pub const CAPABILITIES_REMOVED: &str = r#"([^]*?)"#;/.exec(
+// User ruling 2026-11-21 (option A): a field an older player knew
+// (`capabilities`) is refused like any other unknown field, by the player
+// (serde's deny_unknown_fields, packages/manifest.rs) and by the SDK
+// (manifestProblems, SDK 1.11.0), with no message of its own.
+test("a former manifest field is an ordinary unknown field on both sides (option A; SDK 1.11.0)", (t) => {
+  assert.doesNotMatch(
     host("src/packages/manifest.rs"),
-  )?.[1];
-  assert.ok(rust, "CAPABILITIES_REMOVED in packages/manifest.rs");
-  // The SDK keeps it in src/manifest.ts (not exported from ./runtime).
-  const sdk =
-    /export const CAPABILITIES_REMOVED = ('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*");/.exec(
-      sdkFile("manifest.js"),
-    )?.[1];
-  assert.ok(sdk, "CAPABILITIES_REMOVED in the SDK's dist/manifest.js");
-  assert.equal(rust, (0, eval)(sdk) as string);
+    /CAPABILITIES_REMOVED|rename = "capabilities"/,
+  );
   assert.ok(!MANIFEST_FIELDS.includes("capabilities"));
+  if (/CAPABILITIES_REMOVED/.test(sdkFile("manifest.js")))
+    return t.skip(
+      "the installed SDK is older than 1.11.0: it still has a message of its own",
+    );
+  assert.doesNotMatch(sdkFile("manifest.js"), /"capabilities"/);
 });
 
-test("the built-in-only requests are TestHost's (capabilities/commands_run.rs, palette_lead.rs: code capability)", async () => {
+test("the built-in-only requests are TestHost's (capabilities/commands_run.rs, palette_lead.rs: code builtin-only; SDK 1.11.0)", async (t) => {
   // The player: the areas marked builtin_only, and their methods.
   const only = (file: string) => {
     const rust = host(`src/capabilities/${file}`);
@@ -361,19 +377,21 @@ test("the built-in-only requests are TestHost's (capabilities/commands_run.rs, p
   ]);
   assert.match(
     host("src/capabilities/mod.rs"),
-    /"capability",\s*"this capability is for built-in plugins only"/,
+    /"builtin-only",\s*"this is for built-in plugins only"/,
   );
-  // TestHost: the same requests fail `capability` for a plugin that is
+  if (sdkBefore(1, 11, 0))
+    return t.skip("the installed SDK is older than 1.11.0 (code builtin-only)");
+  // TestHost: the same requests fail `builtin-only` for a plugin that is
   // not built-in, whatever else it does.
   const { plugin, stop } = await startPlugin(() => {});
   try {
     await assert.rejects(
       plugin.palette.lead({ title: "Ask", icon: "ai" }).ready,
-      { code: "capability" },
+      { code: "builtin-only" },
     );
     await assert.rejects(
       (plugin.commands as unknown as { list(): Promise<unknown> }).list(),
-      { code: "capability" },
+      { code: "builtin-only" },
     );
   } finally {
     await stop();
@@ -1490,7 +1508,9 @@ const SDK_UNREACHABLE_CODES = new Map<
   ["staleDigest", { method: "packages.validate", param: "digest" }],
 ]);
 
-test("the error codes the player returns are PluginError codes", () => {
+test("the error codes the player returns are PluginError codes", (t) => {
+  if (sdkBefore(1, 11, 0))
+    return t.skip("the installed SDK is older than 1.11.0 (code builtin-only)");
   const types = sdkTypes();
   const table = types.slice(
     types.indexOf("| code | meaning |"),
@@ -1502,7 +1522,7 @@ test("the error codes the player returns are PluginError codes", () => {
     ),
   );
   assert.ok(
-    documented.has("capability"),
+    documented.has("builtin-only"),
     "the PluginError table in the SDK's plugin types",
   );
   const root = new URL("../../host/src/", import.meta.url);

@@ -69,7 +69,7 @@ pub struct Info {
     /// Its name, the manifest capability it once was: "commands", "ui.mount", ...
     pub name: &'static str,
     /// Only built-in plugins may use it: `Core::dispatch` and `replay`
-    /// refuse its methods to any other plugin with `capability`, built-in
+    /// refuse its methods to any other plugin with `builtin-only`, built-in
     /// by provenance (`Core::is_builtin`), never by a manifest field or a
     /// load mode.
     pub builtin_only: bool,
@@ -262,8 +262,8 @@ impl Route {
     pub fn check_caller(&self, builtin: bool) -> std::result::Result<(), RpcError> {
         if self.builtin_only() && !builtin {
             return Err(RpcError::new(
-                "capability",
-                "this capability is for built-in plugins only",
+                "builtin-only",
+                "this is for built-in plugins only",
             ));
         }
         Ok(())
@@ -404,11 +404,8 @@ mod tests {
             let route = lookup(method).unwrap();
             assert!(route.builtin_only(), "{method}");
             let refused = route.check_caller(false).unwrap_err();
-            assert_eq!(refused.code, "capability", "{method}");
-            assert_eq!(
-                refused.message,
-                "this capability is for built-in plugins only"
-            );
+            assert_eq!(refused.code, "builtin-only", "{method}");
+            assert_eq!(refused.message, "this is for built-in plugins only");
             assert!(route.check_caller(true).is_ok(), "{method}");
         }
         // The `commands` area's own methods stay open to everyone, as does

@@ -2,11 +2,10 @@
 //! loads and packages, one rule table shared with `vestra-plugin check`
 //! (`tests/sdk/host-agreement.test.ts` compares the limits).
 //!
-//! Unknown fields are rejected. `minPlayerVersion` is read before the strict
+//! Unknown fields are rejected, whatever their name (a field an older
+//! player knew included). `minPlayerVersion` is read before the strict
 //! parse, so a manifest written for a newer player reports the version it
-//! needs instead of an unknown field. `capabilities` (removed in player
-//! 0.9.0, SDK 1.9.0) is refused with [`CAPABILITIES_REMOVED`], the SDK's
-//! wording.
+//! needs instead of an unknown field.
 #![forbid(unsafe_code)]
 
 use anyhow::{Context, Result, bail, ensure};
@@ -28,31 +27,12 @@ pub const ID_MAX: usize = 128;
 pub const PATH_MAX: usize = 1024;
 pub const PATH_DEPTH_MAX: usize = 12;
 
-/// Why a manifest with `capabilities` is refused: the SDK's
-/// `CAPABILITIES_REMOVED` (src/manifest.ts), word for word
-/// (`tests/sdk/host-agreement.test.ts` compares them).
-pub const CAPABILITIES_REMOVED: &str = r#"manifest.json has "capabilities", which SDK 1.9.0 (player 0.9.0) removed: delete the field. What it switched on is now a call, first in activate(): plugin.player.subscribe() for "events", await plugin.player.read() for "playback.read"; everything else needs nothing (the store shows what the code uses, from its scan)"#;
-
-/// The removed `capabilities` field: never present, never written. Reading
-/// a manifest that has it (a `manifest.json`, or a library record an older
-/// player wrote) fails with [`CAPABILITIES_REMOVED`].
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct Removed;
-impl<'de> Deserialize<'de> for Removed {
-    fn deserialize<D: serde::Deserializer<'de>>(_: D) -> std::result::Result<Self, D::Error> {
-        Err(serde::de::Error::custom(CAPABILITIES_REMOVED))
-    }
-}
-
 #[derive(Clone, Debug, Default, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Manifest {
     pub id: String,
     pub api_version: String,
     pub entry: String,
-    /// Refused (`Removed`); `#[serde(default)]` reads its absence.
-    #[serde(default, rename = "capabilities", skip_serializing)]
-    pub(crate) removed_capabilities: Removed,
     /// Required in packages; a development load may leave it out.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
@@ -145,8 +125,6 @@ pub fn parse(bytes: &[u8], player: &str) -> Result<Manifest> {
         let min = min.as_str().context("minPlayerVersion must be a string")?;
         check_player(min, player)?;
     }
-    // The SDK's wording on its own, not after "manifest.json: ".
-    ensure!(value.get("capabilities").is_none(), CAPABILITIES_REMOVED);
     serde_json::from_value(value).context("manifest.json")
 }
 
@@ -464,27 +442,31 @@ mod tests {
         check(&manifest, root.path(), false).unwrap();
     }
 
-    /// Player 0.9.0 (SDK 1.9.0): `capabilities` is gone; a manifest that
-    /// still has it, even empty, is refused with the SDK's words, from
-    /// `manifest.json` and from a library record alike.
+    /// A field an older player knew (`capabilities`, gone since player
+    /// 0.9.0) is refused like any other unknown field (user ruling
+    /// 2026-11-21, option A): the same error as for a made-up field, from
+    /// `manifest.json` and from a library record alike, with no message of
+    /// its own.
     #[test]
-    fn a_manifest_with_capabilities_is_refused_with_the_sdks_words() {
-        for capabilities in [json!([]), json!(["events"]), json!(null)] {
-            let value = json!({"id":"someone.demo","apiVersion":crate::process::API,
-                "version":"1.0.0","entry":"main.js","capabilities":capabilities});
-            let error = parse(&serde_json::to_vec(&value).unwrap(), "9.0.0").unwrap_err();
-            assert_eq!(error.to_string(), CAPABILITIES_REMOVED);
-            let record = serde_json::from_value::<Manifest>(value).unwrap_err();
-            assert_eq!(record.to_string(), CAPABILITIES_REMOVED);
+    fn a_former_field_is_refused_as_an_ordinary_unknown_field() {
+        let unknown = |field: &str, value: serde_json::Value| {
+            let mut manifest = json!({"id":"someone.demo","apiVersion":crate::process::API,
+                "version":"1.0.0","entry":"main.js"});
+            manifest[field] = value;
+            let error = parse(&serde_json::to_vec(&manifest).unwrap(), "9.0.0").unwrap_err();
+            let record = serde_json::from_value::<Manifest>(manifest).unwrap_err();
+            (format!("{error:#}"), record.to_string())
+        };
+        let (made_up, made_up_record) = unknown("madeUp", json!([]));
+        for value in [json!([]), json!(["events"]), json!(null)] {
+            let (error, record) = unknown("capabilities", value);
+            assert_eq!(error, made_up.replace("madeUp", "capabilities"));
+            assert_eq!(record, made_up_record.replace("madeUp", "capabilities"));
+            assert!(error.contains("unknown field `capabilities`"), "{error}");
+            assert!(
+                !error.contains("SDK") && !error.contains("subscribe"),
+                "{error}"
+            );
         }
-        // Not written either.
-        let (_, manifest) = package(json!({}));
-        assert!(
-            serde_json::to_value(&manifest)
-                .unwrap()
-                .get("capabilities")
-                .is_none()
-        );
-        assert!(CAPABILITIES_REMOVED.contains("plugin.player.subscribe()"));
     }
 }

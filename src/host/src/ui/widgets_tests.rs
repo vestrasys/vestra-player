@@ -2022,21 +2022,21 @@ fn render_confirm_sheet_states() {
     }
 }
 
-/// A store install's detail at `dialogs.confirm`'s limit (2000
-/// characters): the repository warning and a long permission list.
+/// A store detail at `dialogs.confirm`'s limit (2000 characters): the
+/// revocation notice and a long list of revoked versions with reasons.
 fn long_detail() -> String {
     let mut detail = String::from(
-        "Repository: Foo (https://foo.example/). This repository is not reviewed by Vestra Player; its plugins may read your files or use the network. Only install plugins from authors you trust.\n\nIt will be able to:",
+        "The repository revoked these versions. To keep using one anyway, choose “Enable Anyway…” on its page in the Plugin Store. Reasons:",
     );
     let lines = [
-        "Control playback",
-        "Read the playlist",
-        "Read and write the clipboard",
-        "Use the network",
-        "Read files you open",
-        "Show windows",
-        "Add video shaders",
-        "Process audio",
+        "“Viz” 1.0.0: crashes on start",
+        "“Clip” 0.2.0: deletes the wrong file",
+        "“Tube” 0.3.1: the service changed",
+        "“Marks” 0.1.4: corrupts its data",
+        "“Lyrics” 2.0.0: sends data to a third party",
+        "“Audio” 0.5.0: too loud at start",
+        "“Shader” 1.2.0: hangs the GPU",
+        "“Skip” 0.2.0: skips the wrong parts",
     ];
     for at in 0.. {
         let line = format!("\n· {} ({})", lines[at % lines.len()], at + 1);

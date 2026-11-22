@@ -10,7 +10,7 @@ const YT = {
   id: "zysilm.youtube",
   name: "YouTube",
   author: "zysilm",
-  versions: [{ version: "0.2.0", capabilities: ["commands", "ui.window", "playback.control", "clipboard"] }],
+  versions: [{ version: "0.2.0" }],
 };
 
 async function ready(net: FakeNet, packages = [BUILTIN]) {
@@ -23,7 +23,7 @@ async function ready(net: FakeNet, packages = [BUILTIN]) {
 type Call = { method: string; id: string; source?: unknown; replace?: boolean };
 const installs = (host: { packageCalls: readonly Call[] }) => host.packageCalls.filter((c) => c.method === "install");
 
-test("official install: confirm with permissions, download through a redirect, check, install from the repository", async () => {
+test("official install: confirm, download through a redirect, check, install from the repository", async () => {
   const net = new FakeNet();
   publish(net, OFFICIAL, [YT]);
   // GitHub Releases answer with a redirect to their asset host.
@@ -39,17 +39,18 @@ test("official install: confirm with permissions, download through a redirect, c
     // The repository is official; the plugin is a third-party one hosted there.
     assert.equal(props(host)["d-meta"], "zysilm · 官方仓库");
     assert.deepEqual(actions(host).map((a) => a.text), ["安装 0.2.0"]);
-    // The window counts them ("Permissions ({})", in Slint).
-    assert.equal((props(host)["permissions"] as unknown[]).length, 0);
+    // Nothing on the page lists what the plugin uses (user ruling 2026-11-16).
+    assert.equal(props(host)["permissions"], undefined);
+    assert.equal(props(host)["scanned"], undefined);
     host.dialogAnswers.push(yes);
     host.window("store").emit("act", "install");
     await until(host, () => installs(host).length === 1, "install");
     const confirm = host.confirmTexts.at(-1)!;
     assert.equal(confirm.message, "安装「YouTube」0.2.0？");
     assert.match(String(confirm.detail), /来自 Vestra Player 官方仓库，作者 zysilm。/);
-    assert.doesNotMatch(String(confirm.detail), /· 读写剪贴板/);
-    // It ends with the permission list: no closing note (user ruling 2026-11-08).
-    assert.doesNotMatch(String(confirm.detail), /· [^\n]*$/);
+    // It ends with the files-and-network sentence: no list, no closing note (user rulings 2026-11-08, 2026-11-16).
+    assert.match(String(confirm.detail), /\n\n插件可能读取你的文件或联网。$/);
+    assert.doesNotMatch(String(confirm.detail), /· /);
     assert.doesNotMatch(String(confirm.detail), /完整的程序/);
     assert.deepEqual(installs(host)[0], {
       method: "install",
@@ -114,9 +115,10 @@ for (const [what, served, text] of [
   });
 }
 
-test("an entry's legacy capabilities are never compared with the package (SDK 1.9.0): it installs", async () => {
+test("an entry's legacy keys (capabilities before SDK 1.9.0, scan before 1.11.0) are ignored: nothing is shown or compared, it installs", async () => {
   const net = new FakeNet();
-  publish(net, OFFICIAL, [{ ...YT, versions: [{ version: "0.2.0", capabilities: ["commands", "secrets"] }] }]);
+  const legacy = { capabilities: ["commands", "secrets"], scan: { uses: ["credentials", "plugins"], method: "types", sdk: "1.10.1" } };
+  publish(net, OFFICIAL, [{ ...YT, versions: [{ version: "0.2.0", legacy }] }]);
   const { host, store, stop } = await ready(net);
   try {
     await choose(host, "YouTube");
@@ -126,7 +128,10 @@ test("an entry's legacy capabilities are never compared with the package (SDK 1.
     await until(host, () => host.osd.includes("已安装 YouTube 0.2.0"), "osd");
     await until(host, () => !store.busy);
     assert.ok(!host.osd.some((line) => line.includes("插件包与仓库描述不符")), host.osd.join(" | "));
-    assert.doesNotMatch(String(host.confirmTexts.at(-1)!.detail), /· 在系统钥匙串保存登录信息/);
+    assert.equal(
+      String(host.confirmTexts.at(-1)!.detail),
+      "来自 Vestra Player 官方仓库，作者 zysilm。\n\n插件可能读取你的文件或联网。",
+    );
   } finally {
     await stop();
   }
@@ -246,7 +251,7 @@ test("vestra. ids in any repository: refused before downloading (reserved for bu
 test("the player refuses the package (versionMismatch) or the install degrades", async () => {
   const net = new FakeNet();
   publish(net, OFFICIAL, [
-    { ...YT, versions: [{ version: "0.2.0", capabilities: ["commands"], minPlayerVersion: null, packageMinPlayerVersion: "9.0.0" }] },
+    { ...YT, versions: [{ version: "0.2.0", minPlayerVersion: null, packageMinPlayerVersion: "9.0.0" }] },
     { id: "a.two", name: "Two", versions: [{ version: "1.0.0" }] },
   ]);
   const { host, store, stop } = await ready(net);
@@ -281,9 +286,9 @@ test("update and uninstall from the same repository; no rollback and no older ve
     {
       ...YT,
       versions: [
-        { version: "0.3.0", capabilities: ["commands", "clipboard"] },
-        { version: "0.2.0", capabilities: ["commands"] },
-        { version: "0.1.0", capabilities: ["commands"] },
+        { version: "0.3.0", legacy: { scan: { uses: ["clipboard"] } } },
+        { version: "0.2.0", legacy: { scan: { uses: [] } } },
+        { version: "0.1.0" },
       ],
     },
   ]);
@@ -296,7 +301,8 @@ test("update and uninstall from the same repository; no rollback and no older ve
     const row = await choose(host, "YouTube");
     assert.equal(row.state, "有更新");
     assert.deepEqual(actions(host).map((a) => a.text), ["更新到 0.3.0", "停用", "卸载…", "重新加载"]);
-    assert.ok(!banners(host).includes("新版本需要新的权限：读写剪贴板"));
+    // No notice compares what the versions use (user ruling 2026-11-16).
+    assert.ok(!banners(host).some((text) => text.includes("权限")), banners(host).join(" | "));
     // The Updates chip shows the count ("Updates {}", in Slint).
     assert.equal(props(host)["updates"], 1);
     type Version = { version: string; status: string; canInstall: boolean };
@@ -348,9 +354,9 @@ test("older player: updating a disabled plugin keeps it disabled (VS Code); a fa
     {
       ...YT,
       versions: [
-        { version: "0.4.0", capabilities: ["commands"] },
-        { version: "0.3.0", capabilities: ["commands"] },
-        { version: "0.2.0", capabilities: ["commands"] },
+        { version: "0.4.0" },
+        { version: "0.3.0" },
+        { version: "0.2.0" },
       ],
     },
   ]);
@@ -404,7 +410,7 @@ test("third-party repository: warning banner, unofficial confirmation, remote RE
       id: "someone.viz",
       name: "Viz",
       readme: "# Viz\n\n![shot](https://img.example/shot.png)\n",
-      versions: [{ version: "1.0.0", capabilities: ["commands", "processing.video", "playback.read"] }],
+      versions: [{ version: "1.0.0" }],
     },
   ]);
   const { host, store, stop } = await start({ net });
@@ -430,8 +436,77 @@ test("third-party repository: warning banner, unofficial confirmation, remote RE
     assert.equal(confirm.message, "安装来自非官方仓库的「Viz」1.0.0？");
     assert.equal(confirm.confirm, "仍然安装");
     assert.equal(host.confirms.at(-1)!["destructive"], true);
-    assert.match(String(confirm.detail), /这个仓库未经 Vestra Player 审核/);
+    // The repository's warning alone: no note about what was or was not checked (user ruling 2026-11-16).
+    assert.match(
+      String(confirm.detail),
+      /^仓库：[^\n]*（https:\/\/third\.example\/repo\/index\.json）。这个仓库未经 Vestra Player 审核，插件可能读取你的文件或联网。只安装你信任的作者的插件。$/,
+    );
     assert.deepEqual(installs(host)[0]!.source, { kind: "repository", url: THIRD });
+  } finally {
+    await stop();
+  }
+});
+
+// The confirmations of another repository's update, reinstall and replace: the current version and the
+// files-and-network sentence, or the repository's warning; nothing about what the code uses or what was checked
+// (user ruling 2026-11-16), even when the index still carries a legacy `scan`.
+const ACCESS = "插件可能读取你的文件或联网。";
+const WARNING =
+  /仓库：[^\n]*（https:\/\/third\.example\/repo\/index\.json）。这个仓库未经 Vestra Player 审核，插件可能读取你的文件或联网。只安装你信任的作者的插件。$/;
+const VIZ = {
+  id: "someone.viz",
+  name: "Viz",
+  versions: [
+    { version: "1.1.0", legacy: { scan: { uses: ["clipboard", "plugins"] } } },
+    { version: "1.0.0", legacy: { scan: { uses: [] } } },
+  ],
+};
+
+async function third(installed: ReturnType<typeof info>) {
+  const net = new FakeNet();
+  publish(net, OFFICIAL, []);
+  publish(net, THIRD, [VIZ]);
+  const started = await start({ net, packages: [BUILTIN, installed] });
+  started.store.settings.save({ ...started.store.settings.value, repos: [THIRD] });
+  started.store.repos.sync([THIRD]);
+  await openStore(started.host);
+  await until(started.host, () => started.store.items.some((i) => i.entry?.id === "someone.viz"), "the repository's entry");
+  return started;
+}
+
+test("another repository's update and reinstall: the current version, then the files-and-network sentence", async () => {
+  const { host, store, stop } = await third(info("someone.viz", { version: "1.0.0", source: { kind: "repository", url: THIRD } }));
+  try {
+    await choose(host, "Viz");
+    host.dialogAnswers.push(no);
+    host.window("store").emit("act", "update");
+    await until(host, () => host.confirms.length === 1, "update question");
+    assert.equal(host.confirmTexts.at(-1)!.message, "更新「Viz」到 1.1.0？");
+    assert.equal(host.confirmTexts.at(-1)!.detail, `当前 1.0.0。\n\n${ACCESS}`);
+
+    const item = store.items.find((i) => i.entry?.id === "someone.viz" && i.repo?.url === THIRD)!;
+    const same = item.entry!.versions.find((v) => v.version === "1.0.0")!;
+    host.dialogAnswers.push(no);
+    await installFromRepository(store, item, same);
+    assert.equal(host.confirmTexts.at(-1)!.message, "安装「Viz」1.0.0（重新安装）？");
+    assert.equal(host.confirmTexts.at(-1)!.detail, `当前 1.0.0。\n\n${ACCESS}`);
+    assert.equal(installs(host).length, 0);
+  } finally {
+    await stop();
+  }
+});
+
+test("another repository's replace: the replace notice, then the repository's warning", async () => {
+  const { host, store, stop } = await third(info("someone.viz", { version: "0.9.0", source: { kind: "file" } }));
+  try {
+    const item = store.items.find((i) => i.entry?.id === "someone.viz" && i.repo?.url === THIRD)!;
+    host.dialogAnswers.push(no);
+    await installFromRepository(store, item, item.entry!.versions[0]!);
+    const confirm = host.confirmTexts.at(-1)!;
+    assert.equal(confirm.message, "替换已安装的「Viz」？");
+    assert.match(String(confirm.detail), /^当前的「Viz」0\.9\.0 来自本地文件。[^\n]*\n\n将安装非官方仓库的 1\.1\.0。\n\n/);
+    assert.match(String(confirm.detail), WARNING);
+    assert.equal(installs(host).length, 0);
   } finally {
     await stop();
   }
@@ -463,7 +538,7 @@ test("README links: web addresses open in the browser, anchors are ignored, othe
 
 test("player 0.6.4 (keeps the disabled flag): updating a disabled plugin keeps it disabled and says so", async () => {
   const net = new FakeNet();
-  publish(net, OFFICIAL, [{ ...YT, versions: [{ version: "0.3.0", capabilities: ["commands"] }, { version: "0.2.0", capabilities: ["commands"] }] }]);
+  publish(net, OFFICIAL, [{ ...YT, versions: [{ version: "0.3.0" }, { version: "0.2.0" }] }]);
   const installed = info("zysilm.youtube", {
     version: "0.2.0",
     state: "disabled",

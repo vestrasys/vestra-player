@@ -280,7 +280,7 @@ plugin.bindings.reset(command?)           // restore defaults (one command or al
 plugin.bindings.onChange(listener)
 ```
 
-This needs a new capability (such as `bindings.manage`), because it can change other plugins' shortcuts.
+This needs a new core API (`plugin.bindings`), because it can change other plugins' shortcuts.
 
 **Basic operations need core "actions" that do not depend on any plugin.** Operations such as previous / next frame, play / pause and previous / next should still be bindable by the shortcut plugin even if the user uninstalls the playback plugin. Current state:
 

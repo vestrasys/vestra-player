@@ -1,5 +1,7 @@
 # Feature requirements: one chapter per plugin
 
+> Requirements record of 2026-10-20. Its "Manifest capabilities" lines and "New capability" columns are the manifest declarations of that time; player 0.9.0 removed them, and since the user ruling of 2026-11-16 nothing lists what a plugin uses.
+
 Date: 2026-10-20. Source: the items in the [feature catalog](feature-catalog.md) that are not implemented (✗) or partly implemented (◐); after the cut review, 78 items remain. Interface language (H14) is handled separately and is out of scope here.
 
 One chapter per plugin. Each chapter gives, in order:

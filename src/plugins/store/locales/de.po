@@ -6,7 +6,7 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: manifest.json settings-page.ts:24 ui/store.slint:268
+#: manifest.json settings-page.ts:24 ui/store.slint:262
 #, x-machine
 msgid "Plugin Store"
 msgstr "Plugin-Store"
@@ -19,10 +19,10 @@ msgstr "Plugins durchsuchen, installieren und aktualisieren"
 #: manifest.json
 #, x-machine
 msgid ""
-"Browse plugins from the official Vestra Player plugin repository: descriptions, changelogs, version history and the permissions they need. Install, update or uninstall in one click; add third-party repositories (clearly marked as unofficial), install from a link or a local .vxp file, or drop a .vxp file on the video area. The official repository's index is digitally signed, and the store checks the signature and every package's checksum; versions revoked by a repository are disabled, with the reason.\n"
+"Browse plugins from the official Vestra Player plugin repository: descriptions, changelogs and version history. Install, update or uninstall in one click; add third-party repositories (clearly marked as unofficial), install from a link or a local .vxp file, or drop a .vxp file on the video area. The official repository's index is digitally signed, and the store checks the signature and every package's checksum; versions revoked by a repository are disabled, with the reason.\n"
 "→ Menu: Tools ▸ Plugin Store"
 msgstr ""
-"Durchsuchen Sie Plugins aus dem offiziellen Plugin-Repository von Vestra Player: Beschreibungen, Änderungsprotokolle, Versionsverlauf und benötigte Berechtigungen. Mit einem Klick installieren, aktualisieren oder deinstallieren; Repositorys von Drittanbietern hinzufügen (deutlich als inoffiziell gekennzeichnet), über einen Link oder eine lokale .vxp-Datei installieren oder eine .vxp-Datei auf den Videobereich ziehen. Der Index des offiziellen Repositorys ist digital signiert; der Store prüft die Signatur und die Prüfsumme jedes Pakets. Von einem Repository zurückgezogene Versionen werden mit Angabe des Grundes deaktiviert.\n"
+"Durchsuchen Sie Plugins aus dem offiziellen Plugin-Repository von Vestra Player: Beschreibungen, Änderungsprotokolle und Versionsverlauf. Mit einem Klick installieren, aktualisieren oder deinstallieren; Repositorys von Drittanbietern hinzufügen (deutlich als inoffiziell gekennzeichnet), über einen Link oder eine lokale .vxp-Datei installieren oder eine .vxp-Datei auf den Videobereich ziehen. Der Index des offiziellen Repositorys ist digital signiert; der Store prüft die Signatur und die Prüfsumme jedes Pakets. Von einem Repository zurückgezogene Versionen werden mit Angabe des Grundes deaktiviert.\n"
 "→ Menü: Werkzeuge ▸ Plugin-Store"
 
 #: manifest.json
@@ -35,1217 +35,1202 @@ msgstr "Plugins"
 msgid "store"
 msgstr "Store"
 
-#: store.ts:523
+#: store.ts:526
 #, x-machine
 msgid "Plugins"
 msgstr "Plugins"
 
-#: store.ts:525
+#: store.ts:528
 #, x-machine
 msgid "Plugin Store…"
 msgstr "Plugin-Store…"
 
-#: store.ts:525
+#: store.ts:528
 #, x-machine
 msgid "Plugin Store ({} updates)…"
 msgstr "Plugin-Store ({} Updates)…"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Another install is in progress; wait for it to finish"
 msgstr "Eine andere Installation läuft; warten Sie, bis sie abgeschlossen ist"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "This system does not support confirmation dialogs; cannot continue"
 msgstr "Dieses System unterstützt keine Bestätigungsdialoge; Fortfahren nicht möglich"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Another dialog is open; close it first"
 msgstr "Ein anderer Dialog ist geöffnet; schließen Sie ihn zuerst"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Couldn't open the link: {}"
 msgstr "Der Link konnte nicht geöffnet werden: {}"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "This kind of link cannot be opened"
 msgstr "Diese Art von Link kann nicht geöffnet werden"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "The downloaded file does not match the repository's description (size); deleted"
 msgstr "Die heruntergeladene Datei entspricht nicht der Beschreibung des Repositorys (Größe); gelöscht"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "The downloaded file does not match the repository's description (checksum); deleted"
 msgstr "Die heruntergeladene Datei entspricht nicht der Beschreibung des Repositorys (Prüfsumme); gelöscht"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "The plugin package exceeds 64 MB; download stopped"
 msgstr "Das Plugin-Paket ist größer als 64 MB; Download gestoppt"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "The download address is insecure or redirects too often; stopped"
 msgstr "Die Downloadadresse ist unsicher oder leitet zu oft weiter; gestoppt"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Download cancelled"
 msgstr "Download abgebrochen"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Couldn't write the download file: {}"
 msgstr "Die Downloaddatei konnte nicht geschrieben werden: {}"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Download failed: {}"
 msgstr "Download fehlgeschlagen: {}"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "This is not a valid plugin package: {}"
 msgstr "Dies ist kein gültiges Plugin-Paket: {}"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "This plugin needs Vestra Player ≥ {} (current {})"
 msgstr "Dieses Plugin benötigt Vestra Player ≥ {} (aktuell {})"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "This plugin needs a newer Vestra Player (current {})"
 msgstr "Dieses Plugin benötigt eine neuere Version von Vestra Player (aktuell {})"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "“{}” has the same id as a built-in plugin and cannot be installed"
 msgstr "„{}“ hat dieselbe ID wie ein integriertes Plugin und kann nicht installiert werden"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "This plugin has the same id as a built-in plugin and cannot be installed"
 msgstr "Dieses Plugin hat dieselbe ID wie ein integriertes Plugin und kann nicht installiert werden"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Plugins are being installed or cleaned up; try again later"
 msgstr "Plugins werden gerade installiert oder aufgeräumt; versuchen Sie es später erneut"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
-msgid "The Plugin Store lacks the “Manage plugins” permission"
-msgstr "Dem Plugin-Store fehlt die Berechtigung „Plugins verwalten“"
+msgid "This player does not let the Plugin Store manage plugins"
+msgstr "Dieser Player erlaubt dem Plugin-Store nicht, Plugins zu verwalten"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "This plugin no longer exists"
 msgstr "Dieses Plugin existiert nicht mehr"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "The plugin package does not match the repository's description (id); not installed"
 msgstr "Das Plugin-Paket entspricht nicht der Beschreibung des Repositorys (ID); nicht installiert"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "The plugin package does not match the repository's description (version); not installed"
 msgstr "Das Plugin-Paket entspricht nicht der Beschreibung des Repositorys (Version); nicht installiert"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
-#, x-machine
-msgid "The plugin package does not match the repository's description (permissions); not installed"
-msgstr "Das Plugin-Paket entspricht nicht der Beschreibung des Repositorys (Berechtigungen); nicht installiert"
-
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "You can only install from https:// links"
 msgstr "Installation nur über https://-Links möglich"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Not installed"
 msgstr "Nicht installiert"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Installed {} {}"
 msgstr "{} {} installiert"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Updated {} to {}"
 msgstr "{} auf {} aktualisiert"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Installed {} {} (still disabled)"
 msgstr "{} {} installiert (weiterhin deaktiviert)"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Updated {} to {} (still disabled)"
 msgstr "{} auf {} aktualisiert (weiterhin deaktiviert)"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Installed {} {}, but couldn't keep it disabled: {}"
 msgstr "{} {} installiert, konnte aber nicht deaktiviert bleiben: {}"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Updated {} to {}, but couldn't keep it disabled: {}"
 msgstr "{} auf {} aktualisiert, konnte aber nicht deaktiviert bleiben: {}"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 msgid "Installed {} {}, but couldn't enable it: {}"
 msgstr "{} {} installiert, konnte aber nicht aktiviert werden: {}"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 msgid "Updated {} to {}, but couldn't enable it: {}"
 msgstr "{} auf {} aktualisiert, konnte aber nicht aktiviert werden: {}"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Uninstalled {} (data deleted)"
 msgstr "{} deinstalliert (Daten gelöscht)"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Uninstalled {} (data kept)"
 msgstr "{} deinstalliert (Daten behalten)"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Built-in plugins cannot be uninstalled"
 msgstr "Integrierte Plugins können nicht deinstalliert werden"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Enabled “{}” again"
 msgstr "„{}“ wieder aktiviert"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Couldn't enable “{}”: {}"
 msgstr "„{}“ konnte nicht aktiviert werden: {}"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Can no longer cancel; the installation continues"
 msgstr "Abbrechen nicht mehr möglich; die Installation wird fortgesetzt"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Can no longer cancel; the uninstallation continues"
 msgstr "Abbrechen nicht mehr möglich; die Deinstallation wird fortgesetzt"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Installation failed; the previous version was restored"
 msgstr "Installation fehlgeschlagen; die vorherige Version wurde wiederhergestellt"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Installation cancelled"
 msgstr "Installation abgebrochen"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Uninstallation cancelled"
 msgstr "Deinstallation abgebrochen"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Installation failed: {}"
 msgstr "Installation fehlgeschlagen: {}"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Uninstallation failed: {}"
 msgstr "Deinstallation fehlgeschlagen: {}"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Downloading {} {}"
 msgstr "{} {} wird heruntergeladen"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Downloading {} {} ({}%)"
 msgstr "{} {} wird heruntergeladen ({} %)"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Downloading the plugin package"
 msgstr "Plugin-Paket wird heruntergeladen"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Downloading the plugin package ({}%)"
 msgstr "Plugin-Paket wird heruntergeladen ({} %)"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Checking {}…"
 msgstr "{} wird geprüft…"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Checking the plugin package…"
 msgstr "Plugin-Paket wird geprüft…"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Installing {}…"
 msgstr "{} wird installiert…"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Uninstalling {}…"
 msgstr "{} wird deinstalliert…"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Installing… (preparing)"
 msgstr "Wird installiert… (Vorbereitung)"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Installing… (activating)"
 msgstr "Wird installiert… (Aktivierung)"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Uninstalling… (preparing)"
 msgstr "Wird deinstalliert… (Vorbereitung)"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Uninstalling… (activating)"
 msgstr "Wird deinstalliert… (Aktivierung)"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Updating {}…"
 msgstr "{} wird aktualisiert…"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "{0}: up to date at {1}"
 msgstr "{0}: aktuell (Stand {1})"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "{0}: updated at {1}"
 msgstr "{0}: aktualisiert (Stand {1})"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "{0}: data from {1}"
 msgstr "{0}: Daten mit Stand {1}"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "The official repository has no signature file; this update was ignored"
 msgstr "Das offizielle Repository hat keine Signaturdatei; diese Aktualisierung wurde ignoriert"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "The official repository's signature check failed (it may have been tampered with); this update was ignored"
 msgstr "Die Signaturprüfung des offiziellen Repositorys ist fehlgeschlagen (es wurde möglicherweise manipuliert); diese Aktualisierung wurde ignoriert"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "The official repository returned an old index; this update was ignored"
 msgstr "Das offizielle Repository hat einen veralteten Index geliefert; diese Aktualisierung wurde ignoriert"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "{} uses a newer format; please update Vestra Player"
 msgstr "{} verwendet ein neueres Format; bitte aktualisieren Sie Vestra Player"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "{}'s index is malformed"
 msgstr "Der Index von {} ist fehlerhaft"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "{0}'s index is malformed; showing the data from {1}"
 msgstr "Der Index von {0} ist fehlerhaft; es werden die Daten mit Stand {1} angezeigt"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "{0} returned error {1}"
 msgstr "{0} meldet Fehler {1}"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "{0} returned error {1}; showing the data from {2}"
 msgstr "{0} meldet Fehler {1}; es werden die Daten mit Stand {2} angezeigt"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "{}'s index exceeds 4 MB; refused"
 msgstr "Der Index von {} ist größer als 4 MB; abgelehnt"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "{0}'s index exceeds 4 MB; refused; showing the data from {1}"
 msgstr "Der Index von {0} ist größer als 4 MB; abgelehnt; es werden die Daten mit Stand {1} angezeigt"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "{0}: {1}"
 msgstr "{0}: {1}"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "{0}: {1}; showing the data from {2}"
 msgstr "{0}: {1}; es werden die Daten mit Stand {2} angezeigt"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Can't connect to {0} ({1}); its plugins are not available for now"
 msgstr "Keine Verbindung zu {0} ({1}); seine Plugins sind vorerst nicht verfügbar"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Can't connect to {0} ({1}); showing the cache from {2}"
 msgstr "Keine Verbindung zu {0} ({1}); es wird der Zwischenspeicher mit Stand {2} angezeigt"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "This repository has already been added"
 msgstr "Dieses Repository wurde bereits hinzugefügt"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "At most {} repositories can be added"
 msgstr "Es können höchstens {} Repositorys hinzugefügt werden"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Reading {}…"
 msgstr "{} wird gelesen…"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Couldn't read this repository: {}. Check the address (the repository's root address or the full address of index.json)"
 msgstr "Dieses Repository konnte nicht gelesen werden: {}. Prüfen Sie die Adresse (Stammadresse des Repositorys oder vollständige Adresse von index.json)"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Added {}"
 msgstr "{} hinzugefügt"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Removed {}"
 msgstr "{} entfernt"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "No plugins match"
 msgstr "Keine passenden Plugins"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "1 built-in plugin matches, but built-in plugins are hidden"
 msgstr "1 integriertes Plugin passt, aber integrierte Plugins sind ausgeblendet"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "{} built-in plugins match, but built-in plugins are hidden"
 msgstr "{} integrierte Plugins passen, aber integrierte Plugins sind ausgeblendet"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "All plugins are up to date"
 msgstr "Alle Plugins sind aktuell"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "No plugins installed yet"
 msgstr "Noch keine Plugins installiert"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 msgid "No plugins installed besides the built-in ones, which are hidden"
 msgstr "Außer den integrierten Plugins ist nichts installiert (sie sind ausgeblendet)"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Reading repositories…"
 msgstr "Repositorys werden gelesen…"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 msgid "Can't reach the repositories. Showing nothing until you're online; click Refresh to retry."
 msgstr "Die Repositorys sind nicht erreichbar. Hier erscheint nichts, bis Sie online sind; zum Wiederholen auf „Neu laden“ klicken."
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "The repositories have no plugins yet"
 msgstr "Die Repositorys enthalten noch keine Plugins"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "There are no more plugins to install"
 msgstr "Es gibt keine weiteren Plugins zum Installieren"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 msgid "Can't reach the repositories; only installed plugins are shown. Click Refresh to retry."
 msgstr "Die Repositorys sind nicht erreichbar; nur installierte Plugins werden angezeigt. Zum Wiederholen auf „Neu laden“ klicken."
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "{} · {}"
 msgstr "{} · {}"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Installed"
 msgstr "Installiert"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 msgid "✓ {}"
 msgstr "✓ {}"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Update available"
 msgstr "Update verfügbar"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Installing…"
 msgstr "Wird installiert…"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Installing… {}%"
 msgstr "Wird installiert… {} %"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Comes with the player"
 msgstr "Im Player enthalten"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Revoked"
 msgstr "Zurückgezogen"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Installed from {}"
 msgstr "Installiert aus: {}"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Incompatible"
 msgstr "Inkompatibel"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Cannot be installed"
 msgstr "Nicht installierbar"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 msgid "Disabled"
 msgstr "Deaktiviert"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 msgid "Failed"
 msgstr "Fehler"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 msgid "Development load"
 msgstr "Entwicklungsmodus"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "by {}"
 msgstr "von {}"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Unofficial"
 msgstr "Inoffiziell"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Menu: {}"
 msgstr "Menü: {}"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Command palette: {}"
 msgstr "Befehlspalette: {}"
 
-#: store.ts:580 store.ts:595 store.ts:596 store.ts:597 store.ts:598 store.ts:600 text.ts:441 ui/store.slint:399 ui/store.slint:530 ui/store.slint:904
+#: store.ts:583 store.ts:598 store.ts:599 store.ts:600 store.ts:601 store.ts:603 text.ts:427 ui/store.slint:390 ui/store.slint:521 ui/store.slint:881
 #, x-machine
 msgid "Install"
 msgstr "Installieren"
 
-#: store.ts:580 store.ts:595 store.ts:596 store.ts:597 store.ts:598 store.ts:600 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 store.ts:600 store.ts:601 store.ts:603 text.ts:427
 #, x-machine
 msgid "Update"
 msgstr "Aktualisieren"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 msgid "Enable"
 msgstr "Aktivieren"
 
-#: store.ts:580 store.ts:595 store.ts:596 store.ts:597 store.ts:598 store.ts:600 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 store.ts:600 store.ts:601 store.ts:603 text.ts:427
 #, x-machine
 msgid "Disable"
 msgstr "Deaktivieren"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 msgid "Reload"
 msgstr "Neu laden"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 msgid "Open Data Folder"
 msgstr "Datenordner öffnen"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 msgid "Working…"
 msgstr "In Arbeit…"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 msgid "Enabled “{}”"
 msgstr "„{}“ aktiviert"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 msgid "Disabled “{}”"
 msgstr "„{}“ deaktiviert"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 msgid "Reloaded “{}”"
 msgstr "„{}“ neu geladen"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 msgid "Couldn't disable “{}”: {}"
 msgstr "„{}“ konnte nicht deaktiviert werden: {}"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 msgid "Couldn't reload “{}”: {}"
 msgstr "„{}“ konnte nicht neu geladen werden: {}"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 msgid "Built-in plugins cannot be disabled"
 msgstr "Integrierte Plugins können nicht deaktiviert werden"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 msgid "Disabled “{}” until the player quits"
 msgstr "„{}“ bis zum Beenden des Players deaktiviert"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 msgid "“{}” is being installed or reloaded; try again later"
 msgstr "„{}“ wird gerade installiert oder neu geladen; versuchen Sie es später erneut"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 msgid "“{}” is disabled; enable it instead of reloading it"
 msgstr "„{}“ ist deaktiviert; aktivieren Sie es, statt es neu zu laden"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 msgid "Its data folder does not exist yet"
 msgstr "Der Datenordner existiert noch nicht"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 msgid "Couldn't open the data folder: {}"
 msgstr "Der Datenordner konnte nicht geöffnet werden: {}"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Install {}"
 msgstr "{} installieren"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Update to {}"
 msgstr "Auf {} aktualisieren"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Enable Anyway…"
 msgstr "Trotzdem aktivieren…"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Replace…"
 msgstr "Ersetzen…"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 msgid "Replace with {0} from {1}…"
 msgstr "Durch {0} aus {1} ersetzen…"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Uninstall…"
 msgstr "Deinstallieren…"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Load"
 msgstr "Laden"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Show Images"
 msgstr "Bilder anzeigen"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Retry"
 msgstr "Wiederholen"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "This version has been revoked: {}."
 msgstr "Diese Version wurde zurückgezogen: {}."
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "This version has been revoked: {}. You confirmed the risk and enabled it again; the store will not disable it again."
 msgstr "Diese Version wurde zurückgezogen: {}. Sie haben das Risiko bestätigt und sie wieder aktiviert; der Store deaktiviert sie nicht erneut."
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "This version has been revoked: {}. The store has disabled it."
 msgstr "Diese Version wurde zurückgezogen: {}. Der Store hat sie deaktiviert."
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Unofficial repository: not reviewed by Vestra Player; plugins may read your files or use the network"
 msgstr "Inoffizielles Repository: nicht von Vestra Player geprüft; Plugins können Ihre Dateien lesen oder auf das Netzwerk zugreifen"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "This is a test repository on this machine, without encryption"
 msgstr "Dies ist ein Test-Repository auf diesem Computer, ohne Verschlüsselung"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 msgid "Also in {}"
 msgstr "Auch in {}"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Installed {1} from {0}. Replacing it continues with the data from an earlier install from this source, if there was one, otherwise with new, empty data; the current data is kept"
 msgstr "{1} installiert aus: {0}. Beim Ersetzen werden die Daten einer früheren Installation aus dieser Quelle weiterverwendet, falls vorhanden, sonst neue, leere Daten; die aktuellen Daten bleiben erhalten"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Same id as a built-in plugin of the player; cannot be installed from here"
 msgstr "Dieselbe ID wie ein integriertes Plugin des Players; kann von hier nicht installiert werden"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Built-in plugins are updated with the player and cannot be uninstalled or disabled"
 msgstr "Integrierte Plugins werden mit dem Player aktualisiert und können weder deinstalliert noch deaktiviert werden"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "The repository no longer offers this plugin; the store no longer checks it for updates (it still checks for revocations)"
 msgstr "Das Repository bietet dieses Plugin nicht mehr an; der Store sucht nicht mehr nach Updates dafür (prüft aber weiterhin, ob es zurückgezogen wurde)"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Its repository was removed from the store; the store no longer checks it for updates or revocations"
 msgstr "Sein Repository wurde aus dem Store entfernt; der Store prüft nicht mehr auf Updates oder Rückzüge"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Sideloaded plugin: not reviewed; the store does not check it for updates"
 msgstr "Manuell installiertes Plugin: nicht geprüft; der Store sucht nicht nach Updates dafür"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "This run uses the development-loaded version"
 msgstr "Diese Sitzung verwendet die im Entwicklungsmodus geladene Version"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 msgid "Loaded for development (--plugin) in this run: disabling it lasts until the player quits, and it cannot be uninstalled here"
 msgstr "In dieser Sitzung im Entwicklungsmodus geladen (--plugin): Deaktivieren gilt bis zum Beenden des Players, und hier lässt es sich nicht deinstallieren"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 msgid "Its bottom bar is not shown: “{}” holds the bottom bar"
 msgstr "Seine untere Leiste wird nicht angezeigt: „{}“ belegt die untere Leiste"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 msgid "Its sidebar tab is not shown: “{}” holds that place"
 msgstr "Sein Seitenleisten-Tab wird nicht angezeigt: „{}“ belegt diesen Platz"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 msgid "Its sidebar tab is not shown: the sidebar is full"
 msgstr "Sein Seitenleisten-Tab wird nicht angezeigt: Die Seitenleiste ist voll"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 msgid "Its backdrop is not shown: “{}” holds the backdrop"
 msgstr "Sein Hintergrund wird nicht angezeigt: „{}“ belegt den Hintergrund"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 msgid "Its panel is not shown: “{}” holds that place"
 msgstr "Sein Bereich wird nicht angezeigt: „{}“ belegt diesen Platz"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 msgid "Its panel is not shown: that place is full"
 msgstr "Sein Bereich wird nicht angezeigt: Dieser Platz ist voll"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 msgid "Its Previous/Next is not used: “{}” provides them"
 msgstr "Sein Zurück/Weiter wird nicht verwendet: „{}“ stellt es bereit"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 msgid "It does not open {}: “{}” does"
 msgstr "Es öffnet {} nicht: Das übernimmt „{}“"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 msgid "Part of it was refused because another plugin holds it ({})"
 msgstr "Ein Teil wurde abgelehnt, weil ein anderes Plugin ihn belegt ({})"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "The description is on another website ({}); not loaded automatically"
 msgstr "Die Beschreibung liegt auf einer anderen Website ({}); nicht automatisch geladen"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Remote images blocked (unofficial source): {}"
 msgstr "Externe Bilder blockiert (inoffizielle Quelle): {}"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 msgid "From the installed version"
 msgstr "Aus der installierten Version"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Loading…"
 msgstr "Wird geladen…"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Loading the description…"
 msgstr "Beschreibung wird geladen…"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Loading the changelog…"
 msgstr "Änderungsprotokoll wird geladen…"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "The author provided no description"
 msgstr "Der Autor hat keine Beschreibung angegeben"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "The author provided no changelog"
 msgstr "Der Autor hat kein Änderungsprotokoll angegeben"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "The description is on another website; not loaded automatically"
 msgstr "Die Beschreibung liegt auf einer anderen Website; nicht automatisch geladen"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "The changelog is on another website; not loaded automatically"
 msgstr "Das Änderungsprotokoll liegt auf einer anderen Website; nicht automatisch geladen"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Couldn't load the description: {}"
 msgstr "Die Beschreibung konnte nicht geladen werden: {}"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Couldn't load the changelog: {}"
 msgstr "Das Änderungsprotokoll konnte nicht geladen werden: {}"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Couldn't show the description: {}"
 msgstr "Die Beschreibung kann nicht angezeigt werden: {}"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Couldn't show the changelog: {}"
 msgstr "Das Änderungsprotokoll kann nicht angezeigt werden: {}"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Current"
 msgstr "Aktuell"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Current, {}"
 msgstr "Aktuell, {}"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Incompatible: {}"
 msgstr "Inkompatibel: {}"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Latest"
 msgstr "Neueste"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441 ui/store.slint:397 ui/store.slint:879
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427 ui/store.slint:388 ui/store.slint:856
 #, x-machine
 msgid "Version"
 msgstr "Version"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Updated"
 msgstr "Aktualisiert"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Source"
 msgstr "Quelle"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "License"
 msgstr "Lizenz"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Code"
 msgstr "Quellcode"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Open ↗"
 msgstr "Öffnen ↗"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 msgid "Status"
 msgstr "Status"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 msgid "Running"
 msgstr "Läuft"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 msgid "Starting"
 msgstr "Startet"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 msgid "Stopped"
 msgstr "Gestoppt"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 msgid "Failed: {}"
 msgstr "Fehler: {}"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 msgid "Package"
 msgstr "Paket"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 msgid "Data folder"
 msgstr "Datenordner"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 msgid "Data size"
 msgstr "Datengröße"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Category: All"
 msgstr "Kategorie: Alle"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Picture"
 msgstr "Bild"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Sound"
 msgstr "Ton"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Subtitles"
 msgstr "Untertitel"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Online video"
 msgstr "Online-Video"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Library and playlists"
 msgstr "Mediathek und Wiedergabelisten"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Tools"
 msgstr "Werkzeuge"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Games"
 msgstr "Spiele"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Other"
 msgstr "Sonstiges"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
-#, x-machine
-msgid "The new version needs new permissions: {}"
-msgstr "Die neue Version benötigt neue Berechtigungen: {}"
-
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Official repository"
 msgstr "Offizielles Repository"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "{} ({})"
 msgstr "{} ({})"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Unnamed repository ({})"
 msgstr "Unbenanntes Repository ({})"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Unofficial: {} ({})"
 msgstr "Inoffiziell: {} ({})"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Unofficial: Unnamed repository ({})"
 msgstr "Inoffiziell: Unbenanntes Repository ({})"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Vestra Player official repository"
 msgstr "Offizielles Repository von Vestra Player"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Built-in"
 msgstr "Integriert"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Local file"
 msgstr "Lokale Datei"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Link"
 msgstr "Link"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Plugin Workshop"
 msgstr "Plugin-Werkstatt"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Repository {}"
 msgstr "Repository {}"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Unknown source"
 msgstr "Unbekannte Quelle"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Unknown author"
 msgstr "Unbekannter Autor"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Cancelled"
 msgstr "Abgebrochen"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Only https:// addresses are supported"
 msgstr "Nur https://-Adressen werden unterstützt"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Redirected to an insecure address"
 msgstr "Weiterleitung an eine unsichere Adresse"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Redirect without a target address ({})"
 msgstr "Weiterleitung ohne Zieladresse ({})"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Too many redirects"
 msgstr "Zu viele Weiterleitungen"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Size does not match the description"
 msgstr "Größe entspricht nicht der Beschreibung"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "File exceeds the size limit"
 msgstr "Datei überschreitet die Größenbeschränkung"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Checksum does not match the description"
 msgstr "Prüfsumme entspricht nicht der Beschreibung"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Connection timed out"
 msgstr "Zeitüberschreitung der Verbindung"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Server not found"
 msgstr "Server nicht gefunden"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Connection refused"
 msgstr "Verbindung abgelehnt"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Connection reset"
 msgstr "Verbindung zurückgesetzt"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Secure connection failed"
 msgstr "Sichere Verbindung fehlgeschlagen"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "File exceeds 256 KB"
 msgstr "Datei ist größer als 256 KB"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Not JSON"
 msgstr "Kein JSON"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "The top level is not an object"
 msgstr "Die oberste Ebene ist kein Objekt"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Wrong schema"
 msgstr "Falsches Schema"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "plugins is not an array"
 msgstr "plugins ist kein Array"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "revoked is not an array"
 msgstr "revoked ist kein Array"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "revoked has more than {} entries"
 msgstr "revoked hat mehr als {} Einträge"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Needs a newer plugin API ({})"
 msgstr "Benötigt eine neuere Plugin-API ({})"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Needs Vestra Player ≥ {} (current {})"
 msgstr "Benötigt Vestra Player ≥ {} (aktuell {})"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Revoked: {}"
 msgstr "Zurückgezogen: {}"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "This plugin has been revoked: {}"
 msgstr "Dieses Plugin wurde zurückgezogen: {}"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "“{}”: ids starting with vestra. are reserved for the player's built-in plugins and cannot be installed or loaded for testing"
 msgstr "„{}“: IDs, die mit vestra. beginnen, sind den integrierten Plugins des Players vorbehalten und können weder installiert noch zum Testen geladen werden"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "This plugin: ids starting with vestra. are reserved for the player's built-in plugins and cannot be installed or loaded for testing"
 msgstr "Dieses Plugin: IDs, die mit vestra. beginnen, sind den integrierten Plugins des Players vorbehalten und können weder installiert noch zum Testen geladen werden"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Enter a repository address starting with https://"
 msgstr "Geben Sie eine Repository-Adresse ein, die mit https:// beginnt"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "The address cannot contain a user name or password"
 msgstr "Die Adresse darf keinen Benutzernamen und kein Passwort enthalten"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "The repository address is too long"
 msgstr "Die Repository-Adresse ist zu lang"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
-#, x-machine
-msgid "Unknown permission: {}"
-msgstr "Unbekannte Berechtigung: {}"
-
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Plugin Store: plugin updates available ({})"
 msgstr "Plugin-Store: Plugin-Updates verfügbar ({})"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Disabled the revoked plugin “{}”"
 msgstr "Zurückgezogenes Plugin „{}“ deaktiviert"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Replace the installed “{}”?"
 msgstr "Installiertes „{}“ ersetzen?"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid ""
 "{1}\n"
@@ -1260,7 +1245,7 @@ msgstr ""
 "\n"
 "{3}"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid ""
 "{1}\n"
@@ -1275,35 +1260,17 @@ msgstr ""
 "\n"
 "{3}"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
-#, x-machine
-msgid "Update “{}” to {}? The new version needs more permissions"
-msgstr "„{}“ auf {} aktualisieren? Die neue Version benötigt mehr Berechtigungen"
-
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
-#, x-machine
-msgid ""
-"Added:\n"
-"{2}\n"
-"\n"
-"Current: {3}."
-msgstr ""
-"Neu:\n"
-"{2}\n"
-"\n"
-"Aktuell: {3}."
-
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Update “{}” to {}?"
 msgstr "„{}“ auf {} aktualisieren?"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Current: {2}."
 msgstr "Aktuell: {2}."
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid ""
 "Current: {2}.\n"
@@ -1314,30 +1281,17 @@ msgstr ""
 "\n"
 "{3}"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Install “{}” {} (reinstall)?"
 msgstr "„{}“ {} installieren (Neuinstallation)?"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
-#, x-machine
-msgid ""
-"Current: {2}.\n"
-"\n"
-"This version needs more permissions:\n"
-"{3}"
-msgstr ""
-"Aktuell: {2}.\n"
-"\n"
-"Diese Version benötigt mehr Berechtigungen:\n"
-"{3}"
-
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Install “{}” {}?"
 msgstr "„{}“ {} installieren?"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid ""
 "From the Vestra Player official repository, author {2}.\n"
@@ -1348,12 +1302,12 @@ msgstr ""
 "\n"
 "{3}"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Install “{}” {} from an unofficial repository?"
 msgstr "„{}“ {} aus einem inoffiziellen Repository installieren?"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid ""
 "{2}\n"
@@ -1364,81 +1318,61 @@ msgstr ""
 "\n"
 "{3}"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
+msgid "{2}"
+msgstr "{2}"
+
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "{1}"
 msgstr "{1}"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "This plugin has already been installed from another source. Replacing it continues with the data from an earlier install from this source, if there was one, otherwise with new, empty data. The original plugin's data is kept and is used again when you reinstall it from the original source."
 msgstr "Dieses Plugin wurde bereits aus einer anderen Quelle installiert. Beim Ersetzen werden die Daten einer früheren Installation aus dieser Quelle weiterverwendet, falls vorhanden, sonst neue, leere Daten. Die Daten des ursprünglichen Plugins bleiben erhalten und werden wieder verwendet, wenn Sie es aus der ursprünglichen Quelle neu installieren."
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "The current “{}” {} comes from {}. Replacing it continues with the data from an earlier install from this source, if there was one, otherwise with new, empty data. The original plugin's data is kept and is used again when you reinstall it from the original source."
 msgstr "Das aktuelle „{}“ {} stammt aus: {}. Beim Ersetzen werden die Daten einer früheren Installation aus dieser Quelle weiterverwendet, falls vorhanden, sonst neue, leere Daten. Die Daten des ursprünglichen Plugins bleiben erhalten und werden wieder verwendet, wenn Sie es aus der ursprünglichen Quelle neu installieren."
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Repository: {} ({}). This repository is not reviewed by Vestra Player; its plugins may read your files or use the network. Only install plugins from authors you trust."
 msgstr "Repository: {} ({}). Dieses Repository wird nicht von Vestra Player geprüft; seine Plugins können Ihre Dateien lesen oder auf das Netzwerk zugreifen. Installieren Sie nur Plugins von Autoren, denen Sie vertrauen."
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Repository: {} ({}). This repository is not reviewed by Vestra Player; its plugins may read your files or use the network. Only install plugins from authors you trust. This is a test repository on this machine, without encryption."
 msgstr "Repository: {} ({}). Dieses Repository wird nicht von Vestra Player geprüft; seine Plugins können Ihre Dateien lesen oder auf das Netzwerk zugreifen. Installieren Sie nur Plugins von Autoren, denen Sie vertrauen. Dies ist ein Test-Repository auf diesem Computer, ohne Verschlüsselung."
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
-#, x-machine
-msgid ""
-"It will be able to:\n"
-"{}"
-msgstr ""
-"Es kann dann:\n"
-"{}"
-
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Plugins may read your files or use the network."
 msgstr "Plugins können Ihre Dateien lesen oder auf das Netzwerk zugreifen."
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
-#, x-machine
-msgid "It uses none of the player's sensitive features."
-msgstr "Es verwendet keine sensiblen Funktionen des Players."
-
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
-#, x-machine
-msgid "It is not from the official repository, so its permissions were not checked."
-msgstr "Es stammt nicht aus dem offiziellen Repository, daher wurden seine Berechtigungen nicht geprüft."
-
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Unknown"
 msgstr "Unbekannt"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "· {}"
 msgstr "· {}"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
-#, x-machine
-msgid "· Uses none of the player's features"
-msgstr "· Verwendet keine Funktionen des Players"
-
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "{} in total"
 msgstr "insgesamt {}"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Replace the installed version with the plugin package “{}” {}?"
 msgstr "Installierte Version durch das Plugin-Paket „{}“ {} ersetzen?"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid ""
 "{2}\n"
@@ -1453,12 +1387,12 @@ msgstr ""
 "\n"
 "{4}"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Install the plugin package “{}” {}?"
 msgstr "Plugin-Paket „{}“ {} installieren?"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid ""
 "{2}\n"
@@ -1473,37 +1407,37 @@ msgstr ""
 "\n"
 "{4}"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "From the file {}; not reviewed by any repository and not updated automatically. Only install plugins from authors you trust."
 msgstr "Aus der Datei {}; von keinem Repository geprüft und nicht automatisch aktualisiert. Installieren Sie nur Plugins von Autoren, denen Sie vertrauen."
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "From the link {}; not reviewed by any repository and not updated automatically. Only install plugins from authors you trust."
 msgstr "Über den Link {}; von keinem Repository geprüft und nicht automatisch aktualisiert. Installieren Sie nur Plugins von Autoren, denen Sie vertrauen."
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Uninstall “{}”?"
 msgstr "„{}“ deinstallieren?"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Its menus, windows and processing effects are removed immediately."
 msgstr "Seine Menüs, Fenster und Effekte werden sofort entfernt."
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Add the unofficial repository “{}”?"
 msgstr "Inoffizielles Repository „{}“ hinzufügen?"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Add the unofficial repository “Unnamed repository”?"
 msgstr "Inoffizielles Repository „Unbenanntes Repository“ hinzufügen?"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid ""
 "Address: {1}\n"
@@ -1514,7 +1448,7 @@ msgstr ""
 "\n"
 "Seine Plugins werden nicht von Vestra Player geprüft und können Ihre Dateien lesen oder auf das Netzwerk zugreifen. Der Store zeigt die Plugins dieses Repositorys an, beurteilt aber nicht für Sie, ob sie vertrauenswürdig sind."
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid ""
 "Address: {1}\n"
@@ -1529,32 +1463,32 @@ msgstr ""
 "\n"
 "Dies ist ein Test-Repository auf diesem Computer, ohne Verschlüsselung."
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Remove the repository “{} ({})”?"
 msgstr "Repository „{} ({})“ entfernen?"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Remove the repository “Unnamed repository ({1})”?"
 msgstr "Repository „Unbenanntes Repository ({1})“ entfernen?"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "The store will stop reading this repository. Plugins installed from it stay, but the store no longer checks them for updates and revocations."
 msgstr "Der Store liest dieses Repository nicht mehr. Daraus installierte Plugins bleiben erhalten, werden aber nicht mehr auf Updates und Rückzüge geprüft."
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Disabled the revoked plugin “{}” {}"
 msgstr "Zurückgezogenes Plugin „{}“ {} deaktiviert"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Disabled {} revoked plugins"
 msgstr "{} zurückgezogene Plugins deaktiviert"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid ""
 "The repository revoked these versions. Reasons:\n"
@@ -1569,12 +1503,12 @@ msgstr ""
 "\n"
 "Um eine davon trotzdem weiter zu verwenden, wählen Sie auf ihrer Seite im Plugin-Store „Trotzdem aktivieren…“."
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "“{}” {}: {}"
 msgstr "„{}“ {}: {}"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid ""
 "“{}” {}: {}\n"
@@ -1583,7 +1517,7 @@ msgstr ""
 "„{}“ {}: {}\n"
 "Sie können im Plugin-Store auf {} aktualisieren."
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid ""
 "{}\n"
@@ -1594,12 +1528,12 @@ msgstr ""
 "\n"
 "{}"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "Enable the revoked “{}” {} anyway?"
 msgstr "Zurückgezogenes „{}“ {} trotzdem aktivieren?"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid ""
 "The repository's reason for revoking this version: {2}\n"
@@ -1610,7 +1544,7 @@ msgstr ""
 "\n"
 "Die Verwendung kann riskant sein. Nach Ihrer Bestätigung deaktiviert der Store sie nicht mehr automatisch, und ihre Seite zeigt weiterhin eine Warnung."
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid ""
 "The repository's reason for revoking this version: {2}\n"
@@ -1625,12 +1559,12 @@ msgstr ""
 "\n"
 "Empfohlen wird stattdessen ein Update auf {3}."
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid "“{}” {} has been revoked. Keep using it?"
 msgstr "„{}“ {} wurde zurückgezogen. Weiter verwenden?"
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid ""
 "It was just enabled again. The repository's reason for revoking this version: {2}\n"
@@ -1641,7 +1575,7 @@ msgstr ""
 "\n"
 "Die Verwendung kann riskant sein. Nach Ihrer Bestätigung deaktiviert der Store sie nicht mehr automatisch, und ihre Seite zeigt weiterhin eine Warnung."
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
+#: store.ts:583 store.ts:598 store.ts:599 text.ts:427
 #, x-machine
 msgid ""
 "It was just enabled again. The repository's reason for revoking this version: {2}\n"
@@ -1656,247 +1590,62 @@ msgstr ""
 "\n"
 "Empfohlen wird stattdessen ein Update auf {3}."
 
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
-#, x-machine
-msgid "Add menu commands and shortcuts"
-msgstr "Menübefehle und Tastenkürzel hinzufügen"
-
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
-#, x-machine
-msgid "Open tool windows"
-msgstr "Werkzeugfenster öffnen"
-
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
-#, x-machine
-msgid "Show panels in the bottom bar, the sidebar or behind the video"
-msgstr "Bereiche in der unteren Leiste, der Seitenleiste oder hinter dem Video anzeigen"
-
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
-#, x-machine
-msgid "Show file pickers and confirmations"
-msgstr "Dateiauswahl- und Bestätigungsdialoge anzeigen"
-
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
-#, x-machine
-msgid "Show messages on the video"
-msgstr "Meldungen auf dem Video anzeigen"
-
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
-#, x-machine
-msgid "Receive files dropped on the player"
-msgstr "Auf den Player gezogene Dateien empfangen"
-
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
-#, x-machine
-msgid "Change the player's palette"
-msgstr "Farbschema des Players ändern"
-
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
-#, x-machine
-msgid "Add pages to the Options window"
-msgstr "Seiten zum Optionsfenster hinzufügen"
-
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
-#, x-machine
-msgid "Read what is playing and the position"
-msgstr "Aktuelle Wiedergabe und Position lesen"
-
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
-#, x-machine
-msgid "Receive playback changes as they happen"
-msgstr "Wiedergabeänderungen in Echtzeit empfangen"
-
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
-#, x-machine
-msgid "Open media, control playback, keep the computer awake"
-msgstr "Medien öffnen, Wiedergabe steuern, Ruhezustand verhindern"
-
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
-#, x-machine
-msgid "Provide audio and video it generates itself"
-msgstr "Selbst erzeugtes Audio und Video bereitstellen"
-
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
-#, x-machine
-msgid "Process the picture (filters, shaders)"
-msgstr "Bild bearbeiten (Filter, Shader)"
-
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
-#, x-machine
-msgid "Process the sound"
-msgstr "Ton bearbeiten"
-
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
-#, x-machine
-msgid "Read subtitles"
-msgstr "Untertitel lesen"
-
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
-#, x-machine
-msgid "Load and change subtitles"
-msgstr "Untertitel laden und ändern"
-
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
-#, x-machine
-msgid "Take snapshots and export clips"
-msgstr "Schnappschüsse aufnehmen und Clips exportieren"
-
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
-#, x-machine
-msgid "Remember videos you add and export from them later"
-msgstr "Hinzugefügte Videos merken und später daraus exportieren"
-
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
-#, x-machine
-msgid "Resolve online video addresses"
-msgstr "Adressen von Online-Videos auflösen"
-
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
-#, x-machine
-msgid "Show marks on the progress bar"
-msgstr "Markierungen auf der Fortschrittsleiste anzeigen"
-
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
-#, x-machine
-msgid "Adjust the main window (size, on top, picture-in-picture)"
-msgstr "Hauptfenster anpassen (Größe, Vordergrund, Bild-in-Bild)"
-
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
-#, x-machine
-msgid "Read and write the clipboard"
-msgstr "Zwischenablage lesen und schreiben"
-
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
-#, x-machine
-msgid "Change all shortcuts"
-msgstr "Alle Tastenkürzel ändern"
-
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
-#, x-machine
-msgid "Store sign-in details in the system keychain"
-msgstr "Anmeldedaten im Schlüsselbund des Systems speichern"
-
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
-#, x-machine
-msgid "Install, uninstall and disable other plugins"
-msgstr "Andere Plugins installieren, deinstallieren und deaktivieren"
-
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
-#, x-machine
-msgid "Choose GPU or software rendering and restart the player"
-msgstr "GPU- oder Software-Rendering wählen und den Player neu starten"
-
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
-#, x-machine
-msgid "Upscale the video with the GPU's video upscaler"
-msgstr "Das Video mit dem Video-Upscaler der GPU hochskalieren"
-
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
-#, x-machine
-msgid "Smooth motion with the GPU's frame-rate converter"
-msgstr "Bewegungen mit dem Bildratenwandler der GPU glätten"
-
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
-#, x-machine
-msgid "Run any player or plugin command"
-msgstr "Beliebige Befehle des Players oder von Plugins ausführen"
-
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
-#, x-machine
-msgid "Add the first row of the command palette"
-msgstr "Die erste Zeile der Befehlspalette hinzufügen"
-
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
-#, x-machine
-msgid "Control the playback engine (mpv) directly: send its commands and change its options"
-msgstr "Die Wiedergabe-Engine (mpv) direkt steuern: ihre Befehle senden und ihre Optionen ändern"
-
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
-#, x-machine
-msgid "Change your player settings (shortcuts, theme, language, rendering) or control the playback engine directly"
-msgstr "Ihre Player-Einstellungen ändern (Tastenkürzel, Design, Sprache, Rendering) oder die Wiedergabe-Engine direkt steuern"
-
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
-#, x-machine
-msgid "Install, uninstall, disable or reload other plugins, or run any command"
-msgstr "Andere Plugins installieren, deinstallieren, deaktivieren oder neu laden oder beliebige Befehle ausführen"
-
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
-#, x-machine
-msgid "Use the camera"
-msgstr "Die Kamera verwenden"
-
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
-#, x-machine
-msgid "Record from the microphone"
-msgstr "Über das Mikrofon aufnehmen"
-
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
-#, x-machine
-msgid "Capture the screen or other windows"
-msgstr "Den Bildschirm oder andere Fenster aufnehmen"
-
-#: store.ts:580 store.ts:595 store.ts:596 text.ts:441
-#, x-machine
-msgid "Show system notifications"
-msgstr "Systembenachrichtigungen anzeigen"
-
-#: store.ts:597 store.ts:598 store.ts:600
+#: store.ts:600 store.ts:601 store.ts:603
 #, x-machine
 msgid "Replace"
 msgstr "Ersetzen"
 
-#: store.ts:597 store.ts:598 store.ts:600 ui/settings.slint:45 ui/settings.slint:134
+#: store.ts:600 store.ts:601 store.ts:603 ui/settings.slint:45 ui/settings.slint:134
 #, x-machine
 msgid "Add"
 msgstr "Hinzufügen"
 
-#: store.ts:597 store.ts:598 store.ts:600 ui/settings.slint:44 ui/settings.slint:92
+#: store.ts:600 store.ts:601 store.ts:603 ui/settings.slint:44 ui/settings.slint:92
 #, x-machine
 msgid "Remove"
 msgstr "Entfernen"
 
-#: store.ts:597 store.ts:598 store.ts:600
+#: store.ts:600 store.ts:601 store.ts:603
 #, x-machine
 msgid "Install Anyway"
 msgstr "Trotzdem installieren"
 
-#: store.ts:597 store.ts:598 store.ts:600
+#: store.ts:600 store.ts:601 store.ts:603
 #, x-machine
 msgid "Uninstall"
 msgstr "Deinstallieren"
 
-#: store.ts:597 store.ts:598 store.ts:600
+#: store.ts:600 store.ts:601 store.ts:603
 #, x-machine
 msgid "Also delete its settings and data?"
 msgstr "Auch Einstellungen und Daten löschen?"
 
-#: store.ts:597 store.ts:598 store.ts:600
+#: store.ts:600 store.ts:601 store.ts:603
 #, x-machine
 msgid "Open Plugin Store"
 msgstr "Plugin-Store öffnen"
 
-#: store.ts:597 store.ts:598 store.ts:600
+#: store.ts:600 store.ts:601 store.ts:603
 #, x-machine
 msgid "OK"
 msgstr "OK"
 
-#: store.ts:597 store.ts:598 store.ts:600
+#: store.ts:600 store.ts:601 store.ts:603
 #, x-machine
 msgid "Enable Anyway"
 msgstr "Trotzdem aktivieren"
 
-#: store.ts:597 store.ts:598 store.ts:600
+#: store.ts:600 store.ts:601 store.ts:603
 #, x-machine
 msgid "Keep Using"
 msgstr "Weiter verwenden"
 
-#: store.ts:1460
+#: store.ts:1447
 #, x-machine
 msgid "Choose a plugin package (.vxp)"
 msgstr "Plugin-Paket auswählen (.vxp)"
 
-#: ui/settings.slint:46 ui/settings.slint:138 ui/store.slint:944
+#: ui/settings.slint:46 ui/settings.slint:138 ui/store.slint:921
 #, x-machine
 msgid "Cancel"
 msgstr "Abbrechen"
@@ -1931,132 +1680,127 @@ msgstr "Stammadresse des Repositorys oder vollständige Adresse von index.json (
 msgid "Third-party repositories are not reviewed by Vestra Player; their plugins may read your files or use the network. Only add repositories you trust. The official repository cannot be removed; to keep the store offline until you open it, turn off automatic update checks above."
 msgstr "Repositorys von Drittanbietern werden nicht von Vestra Player geprüft; ihre Plugins können Ihre Dateien lesen oder auf das Netzwerk zugreifen. Fügen Sie nur Repositorys hinzu, denen Sie vertrauen. Das offizielle Repository kann nicht entfernt werden; um den Store offline zu halten, bis Sie ihn öffnen, schalten Sie oben die automatische Suche nach Updates aus."
 
-#: ui/store.slint:246
+#: ui/store.slint:240
 #, x-machine
 msgid "Manage"
 msgstr "Verwalten"
 
-#: ui/store.slint:395 ui/store.slint:518
+#: ui/store.slint:386 ui/store.slint:509
 #, x-machine
 msgid "Sort: Name"
 msgstr "Nach Name"
 
-#: ui/store.slint:395 ui/store.slint:518
+#: ui/store.slint:386 ui/store.slint:509
 #, x-machine
 msgid "Sort: Updated"
 msgstr "Nach Datum"
 
-#: ui/store.slint:398 ui/store.slint:880
+#: ui/store.slint:389 ui/store.slint:857
 #, x-machine
 msgid "Published"
 msgstr "Veröffentlicht"
 
-#: ui/store.slint:426
+#: ui/store.slint:417
 msgid "All ({})"
 msgstr "Alle ({})"
 
-#: ui/store.slint:427
+#: ui/store.slint:418
 #, x-machine
 msgid "Not installed ({})"
 msgstr "Nicht installiert ({})"
 
-#: ui/store.slint:428
+#: ui/store.slint:419
 msgid "Installed ({})"
 msgstr "Installiert ({})"
 
-#: ui/store.slint:429
+#: ui/store.slint:420
 msgid "Updates ({})"
 msgstr "Updates ({})"
 
-#: ui/store.slint:444
+#: ui/store.slint:435
 #, x-machine
 msgid "Search names, authors, tags…"
 msgstr "Namen, Autoren, Tags durchsuchen…"
 
-#: ui/store.slint:455
+#: ui/store.slint:446
 #, x-machine
 msgid "Refresh"
 msgstr "Neu laden"
 
-#: ui/store.slint:471 ui/store.slint:693
+#: ui/store.slint:462 ui/store.slint:684
 msgid "More"
 msgstr "Mehr"
 
-#: ui/store.slint:473
+#: ui/store.slint:464
 #, x-machine
 msgid "Install from File…"
 msgstr "Aus Datei…"
 
-#: ui/store.slint:474
+#: ui/store.slint:465
 #, x-machine
 msgid "Install from Link…"
 msgstr "Über Link…"
 
-#: ui/store.slint:475
+#: ui/store.slint:466
 #, x-machine
 msgid "Repositories…"
 msgstr "Repositorys…"
 
-#: ui/store.slint:477
+#: ui/store.slint:468
 msgid "Store Settings…"
 msgstr "Store-Einstellungen…"
 
-#: ui/store.slint:501
+#: ui/store.slint:492
 #, x-machine
 msgid "Show built-in plugins ({})"
 msgstr "Integrierte Plugins anzeigen ({})"
 
-#: ui/store.slint:529
+#: ui/store.slint:520
 #, x-machine
 msgid "Plugin package link (https://…/name-version.vxp)"
 msgstr "Link zum Plugin-Paket (https://…/name-version.vxp)"
 
-#: ui/store.slint:597
+#: ui/store.slint:588
 #, x-machine
 msgid "Clear Search"
 msgstr "Suche löschen"
 
-#: ui/store.slint:602
+#: ui/store.slint:593
 #, x-machine
 msgid "Show Built-in Plugins"
 msgstr "Integrierte Plugins anzeigen"
 
-#: ui/store.slint:641
+#: ui/store.slint:632
 #, x-machine
 msgid "← All Plugins"
 msgstr "← Alle Plugins"
 
-#: ui/store.slint:738
+#: ui/store.slint:729
 #, x-machine
 msgid "Where to find it"
 msgstr "Wo Sie es finden"
 
-#: ui/store.slint:759
+#: ui/store.slint:750
 #, x-machine
 msgid "About"
 msgstr "Info"
 
-#: ui/store.slint:759
+#: ui/store.slint:750
 #, x-machine
 msgid "Details"
 msgstr "Details"
 
-#: ui/store.slint:820
-#, x-machine
-msgid "Permissions ({})"
-msgstr "Berechtigungen ({})"
-
-#: ui/store.slint:840
+#: ui/store.slint:817
 #, x-machine
 msgid "Changelog"
 msgstr "Änderungen"
 
-#: ui/store.slint:840
+#: ui/store.slint:817
 #, x-machine
 msgid "Versions"
 msgstr "Versionen"
 
-#: ui/store.slint:881
+#: ui/store.slint:858
 #, x-machine
 msgid "Minimum player"
 msgstr "Mindestversion"

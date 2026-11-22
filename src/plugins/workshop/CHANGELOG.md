@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.2.47
+
+- No capability disclosure (user ruling 2026-11-16): the install dialog for an AI-generated plugin shows the plugin's name, id and version only; the "It will be able to:" list from the Workshop's own run of `vestra-plugin scan` is gone, and with it `Toolchain.scan` (the type check's confinement no longer has a variant without child processes). `capability-scan.json` is no longer vendored (`SDK_FILES`); the rest of the scanner leaves `vendor/` with the next SDK (1.11.0, `npm run vendor:sdk`), and nothing calls it. The system prompt says that any other manifest field is refused, without naming a removed one. The catalogs drop the scan's texts and their obsolete entries. Tests: the install dialog test checks that code using the clipboard and another plugin's package gets the plain dialog; the toolchain test accepts either SDK's refusal of a `capabilities` field. Who must change: nobody.
+- Ask Vestra reads the player's refusal of a built-in-only call by its new code `builtin-only` (SDK 1.11.0) and says, as before, that this player does not let Vestra run commands.
+
 ## 2.2.46
 
 - The vendored SDK is 1.10.1 as published on npm (`npm run vendor:sdk`), the version the player now uses. 1.10.1 adds `AppInfo.temporary`, `App.openWindow` (built-in plugins only) and `TestHost.openedWindows`, documents `unavailable` in a temporary window, and adds the playlist's Play in New Window to `BUILTIN_COMMANDS`; the documentation tree and `capability-scan.json` follow. The Workshop uses none of them. Who must change: nobody.

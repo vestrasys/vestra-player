@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { CAPABILITIES } from "../labels.ts";
 import { HOST, LABELS, PART, WINDOW } from "../text.ts";
 import { allRows, BUILTIN, FakeNet, OFFICIAL, openStore, props, publish, rows, showBuiltins, start, until } from "./helpers.ts";
 
@@ -12,10 +11,10 @@ const po = readFileSync(new URL("../locales/zh-Hans.po", import.meta.url), "utf8
 const formatOnly = (template: string) => !/\p{L}/u.test(template.replace(/\{[^{}]*\}/g, ""));
 const quoted = (text: string) => `msgid ${JSON.stringify(text)}`;
 
-test("every template and capability is in messages.pot and translated in zh-Hans.po", () => {
+test("every template is in messages.pot and translated in zh-Hans.po", () => {
   // The templates of the three tables are distinct.
   assert.equal(new Set([...WINDOW, ...PART, ...HOST]).size, WINDOW.length + PART.length + HOST.length);
-  const all = [...WINDOW, ...PART, ...HOST, ...LABELS, ...Object.values(CAPABILITIES).map((c) => c.text)];
+  const all = [...WINDOW, ...PART, ...HOST, ...LABELS];
   for (const text of all.filter((each) => !formatOnly(each) && !each.includes("\n"))) {
     assert.ok(pot.includes(quoted(text)), `messages.pot: ${text}`);
     assert.ok(po.includes(quoted(text)), `zh-Hans.po: ${text}`);

@@ -366,7 +366,7 @@ export function askVestra(plugin: Plugin, model: AskModel) {
       if (code === "missing") throw new Refusal({ source: "{} is no longer there", args: [label] });
       if (code === "limit") throw new Refusal({ source: "Too many commands at once" });
       if (code === "ticket") throw new Refusal({ source: "The request has ended" });
-      if (code === "capability") throw new Refusal({ source: "This player does not let Vestra run commands" });
+      if (code === "builtin-only") throw new Refusal({ source: "This player does not let Vestra run commands" });
       throw new Refusal(cut((error as Error).message));
     }
     if (!result.ran) throw new Declined(label);

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.3
+
+- No capability disclosure (user ruling 2026-11-16): the store no longer says what a plugin's code uses. Gone: the install confirmation's "It will be able to:" list and its "uses none of the player's sensitive features" line, the update confirmation's "needs more permissions" variant and the page's "The new version needs new permissions" notice, the Permissions list on the Details tab, and the sentence that a package not from the official repository had its permissions not checked. Every install and update still asks first: from the official repository, a file or a link the confirmation says that plugins may read your files or use the network; another repository's confirmation is its warning, which says so already. The index's `scan` (and the older `capabilities`) of a version is no longer read; versions that carry them install as before.
+- The refusal the player sends to a plugin that is not built in now has the code `builtin-only` (player with SDK 1.11.0); the store reads it, and its text is "This player does not let the Plugin Store manage plugins" (was "…lacks the “Manage plugins” permission"). The command list falls back the same way on `builtin-only`. The manifest's description drops "and the permissions they need". New text translated: zh-Hans by hand; de, es, fr, ja and ko by machine, marked `x-machine` for review. The catalogs drop their obsolete entries.
+
 ## 0.3.2
 
 - The "how to open" convention puts the sidebar first (owner request 2026-11-21): a plugin with a sidebar tab writes `Sidebar: <tab> tab` (with its key when it has one), and adds its next way in after `; ` only while the line stays within 48 characters, for example `Sidebar: VestraTube tab; Menu: Open ▸ VestraTube`. README and `open-line.ts` say so; the fallback for a plugin without the line still reads menus and palette rows only, since the command table has no tabs. A test checks that every built-in plugin that mounts a sidebar tab (today the Playlist) names the sidebar first. Nothing the store shows changes.
