@@ -165,9 +165,25 @@ const pause = (ms: number) => new Promise<void>((done) => void setTimeout(done, 
  * Picture… is in the menu.
  */
 export default async function activate(plugin: Plugin) {
-  plugin.player.subscribe(); // B3: removed in SDK 1.11; migrate (events-and-triggers.md §7)
+  // Whether the source is ready (phase `ready`): a trigger the player keeps, declared before the
+  // first await. `enter` runs each time a source becomes ready (also after a seek back from its
+  // end); what it does is set further down (`whenReady`), once the functions it calls exist.
+  let ready: boolean | null = null;
+  let whenReady: (() => void) | null = null;
+  plugin
+    .trigger()
+    .firesOn(plugin.when.ready)
+    .enter(() => {
+      ready = true;
+      whenReady?.();
+    })
+    .leave(() => {
+      ready = false;
+    });
   await plugin.player.read(); // was "playback.read"
   const { player } = plugin;
+  // No notification yet (or none to come: the trigger was entered before a standby): the state read.
+  ready ??= player.state.phase === "ready";
   const store = settingsStore(plugin);
   const { advanced: savedAdvanced, ...saved } = parse(store.value);
   const look: Look = { ...defaultLook(), ...saved };
@@ -239,6 +255,8 @@ export default async function activate(plugin: Plugin) {
   });
 
   // E16: the source's transfer (`stats().video.transfer`), read once per source when it is ready.
+  // `player.state.sourceId` here and below is the newest source the source events (or the trigger)
+  // brought: no stream is open, and none is needed for a value that changes once per source.
   let transfer: string | null = null;
   let transferSource = -1;
   let transferRead = false;
@@ -257,7 +275,7 @@ export default async function activate(plugin: Plugin) {
       transferRead = false;
       sourceAspect = null;
     }
-    if (transferRead || reading || player.state.phase !== "ready") return;
+    if (transferRead || reading || ready !== true) return;
     reading = true;
     try {
       for (let attempt = 0; attempt < MEASURE_TRIES && !stopped && player.state.sourceId === source; attempt++) {
@@ -324,7 +342,7 @@ export default async function activate(plugin: Plugin) {
     abandoned = null;
   };
   const wantsMeasure = () =>
-    blendWanted() && player.state.phase === "ready" && measured?.key !== blendKey() && abandoned !== blendKey();
+    blendWanted() && ready === true && measured?.key !== blendKey() && abandoned !== blendKey();
   let measuring = false;
   const measure = async () => {
     if (measuring) return;
@@ -870,9 +888,10 @@ export default async function activate(plugin: Plugin) {
     else shown(plugin.osd.show("Pixel shaders: on ({})", [count]));
   };
 
-  // A new source starts upright and unflipped, silently.
+  // A new source starts upright and unflipped, silently (`source.opening`; a restart of the same
+  // source keeps its id and changes nothing).
   let source = player.state.sourceId;
-  player.onChange((state) => { // B3: Player.onChange is removed in SDK 1.11
+  player.on("source.opening", ({ state }) => {
     if (state.sourceId === source) return;
     source = state.sourceId;
     const g = look.geometry;
@@ -884,15 +903,30 @@ export default async function activate(plugin: Plugin) {
       frame = centred();
       showView();
     }
+    // 倍帧's rate belongs to the source it was read for: the new one has none yet.
+    if (blendRate() !== sentBlend) apply();
+    void readTransfer();
+    plugin.update();
   });
-  // A new source (or one becoming ready) needs its own rate before 倍帧 can add the node,
-  // and its transfer for the HDR note.
-  player.onChange(() => { // B3: Player.onChange is removed in SDK 1.11
+  // A source becoming ready needs its own rate before 倍帧 can add the node, and its transfer
+  // for the HDR note.
+  whenReady = () => {
     if (blendRate() !== sentBlend) apply();
     if (wantsMeasure()) void measure();
     void readTransfer();
+  };
+  // The decoded size and colour came (or changed): the geometry editor's shape at once, and the
+  // transfer if it was not read yet.
+  player.on("video.reconfigured", (video) => {
+    if (video.sourceId !== player.state.sourceId) return;
+    // First: a source it has not read yet starts afresh there (synchronously).
+    void readTransfer();
+    if (video.width > 0 && video.height > 0 && sourceAspect !== video.width / video.height) {
+      sourceAspect = video.width / video.height;
+      plugin.update();
+    }
   });
-  void readTransfer();
+  whenReady();
 
   // E10 field output and E18 倍帧 raise the frame rate on the CPU: when more than 5 % of the
   // frames in 5 seconds are dropped, each says so once per source.
@@ -904,7 +938,13 @@ export default async function activate(plugin: Plugin) {
   ].map((item) => ({ ...item, warned: null as number | null }));
   let counted: (FrameCount & { source: number; watching: string }) | null = null;
   const monitor = setInterval(async () => {
-    const state = player.state;
+    if (!heavy.some((h) => h.active())) {
+      counted = null;
+      return;
+    }
+    // Pause has no event: the state is read once per count, only while something is watched.
+    const state = await player.refresh().catch(() => null);
+    if (!state) return;
     const watching = heavy.filter((h) => h.active() && h.warned !== state.sourceId);
     if (watching.length === 0 || state.phase !== "ready" || state.paused) {
       counted = null;
@@ -1852,7 +1892,7 @@ export default async function activate(plugin: Plugin) {
   panel.onChange(followPanel);
   followPanel(panel.state);
   let renderingSource = player.state.sourceId;
-  player.onChange((state) => { // B3: Player.onChange is removed in SDK 1.11
+  player.on("source.opening", ({ state }) => {
     if (state.sourceId === renderingSource) return;
     renderingSource = state.sourceId;
     void refreshRendering();

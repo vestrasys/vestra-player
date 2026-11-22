@@ -38,7 +38,11 @@ export const PAGE_ID = "window";
  * core undoes its effects on deactivation.
  */
 export default async function activate(plugin: Plugin) {
-  plugin.player.subscribe(); // B3: removed in SDK 1.11; migrate (events-and-triggers.md §7)
+  // The triggers (on top, a source that shows) are declared in the synchronous part of
+  // `activate()`, before any await.
+  const preferences = new Preferences(plugin);
+  const onTop = new OnTop(plugin, preferences);
+  const video = new VideoSize(plugin);
   await plugin.player.read(); // was "playback.read"
   const { player, window } = plugin;
   const { text } = plugin.i18n;
@@ -58,12 +62,9 @@ export default async function activate(plugin: Plugin) {
     quiet(plugin.osd.show(error.message));
   });
 
-  const preferences = new Preferences(plugin);
-  const video = new VideoSize(plugin);
-  const onTop = new OnTop(plugin, preferences);
   const sizer = new Sizer(plugin, video);
   const pip = new PictureInPicture(plugin, video);
-  const auto = new AutoSize(plugin, preferences, sizer, pip);
+  const auto = new AutoSize(plugin, preferences, sizer, pip, video);
   video.onFirstSize = (source, size) => void auto.sized(source, size);
 
   const reason = () => sizeReason(plugin, video);
@@ -99,7 +100,7 @@ export default async function activate(plugin: Plugin) {
     },
   });
   // `supported` needs the main window, which may not exist yet at activation,
-  // so Picture-in-Picture follows `window.onChange`: added while supported (macOS 14+).
+  // so Picture-in-Picture follows `window.changed`: added while supported (macOS 14+).
   const pipCommand = () =>
     plugin.commands.add({
       id: "pip",
@@ -118,14 +119,15 @@ export default async function activate(plugin: Plugin) {
       },
     });
   let pipEntry: Disposable | null = window.state.pictureInPicture.supported ? pipCommand() : null;
-  window.onChange((state) => {
+  player.on("window.changed", (state) => {
     const supported = state.pictureInPicture.supported;
     if (supported && !pipEntry) pipEntry = pipCommand();
     if (!supported && pipEntry) {
       void pipEntry.dispose();
       pipEntry = null;
     }
-    void onTop.apply();
+    // The commands' state reads the window (the size dots, fullscreen); the listener runs no pass.
+    plugin.update();
   });
 
   SCALES.forEach(({ scale, title }, index) =>
@@ -194,7 +196,7 @@ export default async function activate(plugin: Plugin) {
   // Always on Top ▸ (725–729).
   const setMode = (mode: Mode, say = true) => {
     preferences.update({ onTop: mode, onTopChosen: true });
-    void onTop.apply();
+    void onTop.changed();
     if (say) quiet(plugin.osd.show(MODE_OSD[mode]));
   };
   plugin.commands.add({
@@ -249,16 +251,10 @@ export default async function activate(plugin: Plugin) {
   page.on("setTop", (index: number) => ON_TOP[index] !== undefined && setMode(ON_TOP[index]!, false));
   page.on("setHideCursor", (on: boolean) => void setHideCursor(on, false));
 
-  const follow = (state: typeof player.state) => {
-    auto.observe(state.sourceId);
-    video.observe(state);
-  };
-  follow(player.state);
-  player.onChange((state) => { // B3: Player.onChange is removed in SDK 1.11
-    follow(state);
-    void onTop.apply();
-  });
+  // The source events, `video.reconfigured` and `window.changed` follow from here (each wakes
+  // the plugin from standby); the state read once above is where they start.
+  await auto.start(player.state.sourceId);
+  video.start(player.state);
   // Only a change from the core's default is sent: another plugin's last write stays.
   if (preferences.value.hideCursorWhilePlaying) void cursor(true);
-  void onTop.apply();
 }

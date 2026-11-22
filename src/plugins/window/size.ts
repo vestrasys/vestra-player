@@ -28,7 +28,8 @@ export class Sizer {
   constructor(plugin: Plugin, video: VideoSize) {
     this.#plugin = plugin;
     this.#video = video;
-    plugin.window.onChange((state) => {
+    // Once per change: a resize when the gesture ends, a fullscreen flip at once.
+    plugin.player.on("window.changed", (state) => {
       if (!this.mini || this.resizing) return;
       if (state.fullscreen || !near(state.videoArea, this.mini.applied)) this.#endMini();
     });
