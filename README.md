@@ -86,7 +86,7 @@ flowchart LR
 - **Faults.** A crash stops only that plugin, which restarts after a doubling pause; five crashes in ten minutes turn it off, saying why.
 - **Watchdogs.** Five missed heartbeats restart the shared runner. On Windows a stalled GPU renderer restarts the player where it was.
 
-**From a plugin to the core.** The [SDK](https://vestrasys.github.io/vestra-player-sdk/) turns each call into `vestra/1` lines on the plugin's pipes: requests, answers and events. A plugin learns the player's state by a single read, a discrete event (`source.ready`), a trigger or a stream.
+**From a plugin to the core.** The [SDK](https://vestrasys.github.io/vestra-player-sdk/) turns each call into `vestra/1` lines on the plugin's pipes: requests, answers and events. In the blocks below, `→` is a line the plugin sends to the core and `←` one the core sends back. A plugin learns the player's state by a single read, a discrete event (`source.ready`), a trigger or a stream.
 
 A trigger hands the core a condition as data:
 
