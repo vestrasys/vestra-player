@@ -228,6 +228,14 @@ The user handed the remaining technical follow-ups to an unattended loop ([agent
 
 #### Loop log (newest first)
 
+- 11-22 night: **The user is asleep for about 8 h.** Running:
+  - Release B L1/L2;
+  - the T8 experiment (NVIDIA vs RIFE, report at :4181/t8/; the user picks after reading it);
+  - Segment Heap re-measured on segment-heap-2. The PR is not merged: the user does a GPU check first.
+
+  Machine rule: all heavy work (builds, timing runs, ffmpeg) holds C:\vestra\build.lock, at most ~45 min per hold. The README Picture adjustments shot was replaced with a calmer frame (#440).
+
+  **Backlog, lowest priority (user):** a store plugin **Hearth**, a Jellyfin/Plex client that browses the library in a sidebar tab, plays in Vestra and syncs resume points both ways (thought experiment B3). Start it only when nothing else is queued. It needs a local Jellyfin test server, which may be downloaded from the official release. It may use workarounds for start position and keep-alive until K3/K1 exist. Netflix and other DRM services are out of scope (DRM and ToS).
 - 11-22: **0.10.3 published** (GitHub release, six assets, latest). The README has the new banner (variant B4), new screenshots, captions without how-to text, and the current slogan "Next-generation media player. Built to extend, enhanced by AI." (page v2).
   - **User rulings:**
     - `src/host/src/capabilities/` is renamed to `api/` (`uncapable.rs` → `open.rs`). This is a names-only refactor with a differential check, done after the L1 and L2 merges and alongside B3.
