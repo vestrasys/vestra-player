@@ -1,7 +1,7 @@
 import { access, mkdir, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { Plugin, PlayerState, TextArg } from "@vestra-player/sdk";
+import type { Plugin, PlayerState, StateStream, TextArg } from "@vestra-player/sdk";
 import { convert } from "./formats.ts";
 import { archiveKind, keywords, movieHash, unzipSubtitles, urlTitle } from "./media.ts";
 import { DEFAULTS, fileLanguage, isSettingsFile, parseLanguages, parseSettings, rank, row, trackTitle } from "./model.ts";
@@ -48,8 +48,7 @@ const aborted = (e: unknown) =>
 
 /** Online Subtitles (D16): search OpenSubtitles / assrt, download, load as this plugin's tracks. */
 export default async function activate(plugin: Plugin) {
-  plugin.player.subscribe(); // B3: removed in SDK 1.11; migrate (events-and-triggers.md §7)
-  await plugin.player.read(); // was "playback.read"
+  await plugin.player.read();
   const { player, subtitles } = plugin;
   const { text } = plugin.i18n;
   const say = (id: StatusId, args: TextArg[] = []) => void plugin.osd.show(STATUS[id], args).catch(() => {});
@@ -188,7 +187,24 @@ export default async function activate(plugin: Plugin) {
     if (next !== null) status = next;
     plugin.update();
   }
-  // Closing the download window while a request runs aborts it (the window has no close event).
+  // The download window shows whether the source can take a subtitle: it follows the
+  // player's state while it is open (its stream), and the plugin holds nothing otherwise.
+  let feed: StateStream | null = null;
+  const showDownloadWindow = async () => {
+    feed ??= player.stream(() => {});
+    try {
+      await download.show();
+    } catch (error) {
+      if (!download.opened) unfollow();
+      throw error;
+    }
+  };
+  const unfollow = () => {
+    feed?.stop();
+    feed = null;
+  };
+  download.onClose(unfollow);
+  // Closing the download window while a request runs aborts it (also a close by the player).
   const watch = setInterval(() => {
     if (operation?.window && !download.opened && !chooser.opened) abortOperation(NONE);
   }, 500);
@@ -547,7 +563,7 @@ export default async function activate(plugin: Plugin) {
       return showSettings();
     }
     status = NONE;
-    await download.show();
+    await showDownloadWindow();
     if (canLoad()) await searchCurrent();
     else {
       results = [];
@@ -572,23 +588,23 @@ export default async function activate(plugin: Plugin) {
   });
 
   // ------------------------------------------------------------ source changes, automatic search
-  let seenSource = player.state.sourceId;
-  let autoDone = player.state.sourceId; // the source open at start is not searched automatically
-  player.onChange((p) => { // B3: Player.onChange is removed in SDK 1.11
-    if (p.sourceId !== seenSource) {
-      seenSource = p.sourceId;
-      // Requests for the old source must not load into the new one.
-      abortOperation(operation ? one(line("sourceChanged")) : null);
-      results = [];
-      checked.clear();
-      selected = -1;
-      last = null;
-      more = false;
-    }
-    if (p.sourceId !== autoDone && p.phase === "ready") {
-      autoDone = p.sourceId;
-      void autoSearch(p);
-    }
+  // `source.opening` and `source.ready` (they wake the plugin from standby). The source
+  // open at start sends no `source.ready`, so it is not searched automatically.
+  let autoDone: number | null = null;
+  player.on("source.opening", () => {
+    // Requests for the old source must not load into the new one.
+    abortOperation(operation ? one(line("sourceChanged")) : null);
+    results = [];
+    checked.clear();
+    selected = -1;
+    last = null;
+    more = false;
+    plugin.update();
+  });
+  player.on("source.ready", ({ state: p }) => {
+    if (p.sourceId === autoDone) return;
+    autoDone = p.sourceId;
+    void autoSearch(p);
   });
   /** "When opening a video without subtitles": search in the background; act only on a hash match in the first language. */
   async function autoSearch(p: PlayerState) {
@@ -600,7 +616,7 @@ export default async function activate(plugin: Plugin) {
     const best = found[0];
     const first = settings.languages[0]?.toLowerCase();
     if (!best?.hashMatch || best.language.toLowerCase() !== first || player.state.sourceId !== p.sourceId) return;
-    if (settings.afterSearch === "show") return void download.show();
+    if (settings.afterSearch === "show") return void showDownloadWindow();
     await begin(false, async (signal) => {
       await loadResult(best, "primary", signal, p.sourceId);
       say("autoLoaded", [trackTitle(text, best)]);

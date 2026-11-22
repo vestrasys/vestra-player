@@ -83,6 +83,36 @@ export function currentChapter(chapters: readonly Chapter[], position: number | 
 }
 
 /**
+ * The ranges in which each of the first `count` chapters is the current one
+ * (`currentChapter`: from 0.05 s before its start to 0.05 s before the next
+ * one's), for a trigger's `when.position.in`; `chapters[i]` is the chapter of
+ * `ranges[i]`. A chapter that is never the current one (another starts at the
+ * same time) has no range.
+ */
+export function chapterRanges(
+  list: readonly Chapter[],
+  count: number,
+): { ranges: { start: number; end?: number }[]; chapters: number[] } {
+  const ranges: { start: number; end?: number }[] = [];
+  const chapters: number[] = [];
+  for (let i = 0; i < Math.min(list.length, count); i++) {
+    const start = Math.max(0, list[i]!.start - 0.05);
+    const next = list[i + 1];
+    if (!next) {
+      ranges.push({ start });
+      chapters.push(i);
+      continue;
+    }
+    // The last chapter listed ends where the next (unlisted) one begins: no check past it.
+    const end = next.start - 0.05;
+    if (end <= start) continue;
+    ranges.push({ start, end });
+    chapters.push(i);
+  }
+  return { ranges, chapters };
+}
+
+/**
  * B21 previous / next: the point before `position − 1` (so repeated presses move
  * past the point just reached) or after `position + 0.5`; `null` when none.
  */

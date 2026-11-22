@@ -1,4 +1,4 @@
-import type { I18n, PlaybackStats, PlayerState, Plugin, TextArg, TextList, TextValue } from "@vestra-player/sdk";
+import type { Disposable, I18n, PlaybackStats, PlayerState, Plugin, StateStream, TextArg, TextList, TextValue } from "@vestra-player/sdk";
 import { aboutWindow } from "./about.ts";
 import { propertiesWindow } from "./dialog.ts";
 import { Updater } from "./updates.ts";
@@ -183,13 +183,19 @@ const BRIEF_MS = 3000;
  * automatic check (Options ▸ General ▸ Updates) runs at most once a day.
  */
 export default async function activate(plugin: Plugin) {
-  plugin.player.subscribe(); // B3: removed in SDK 1.11; migrate (events-and-triggers.md §7)
-  await plugin.player.read(); // was "playback.read"
+  await plugin.player.read();
   const panel = plugin.osd.panel();
   let shown = false;
   let briefOn = false;
   let stats: PlaybackStats | null = null; // the last successful read
   let timer: ReturnType<typeof setInterval> | undefined;
+  /**
+   * While the overlay or the short information shows: the player's state (what they
+   * print reads it) and the window's (`window.changed` keeps `plugin.window.state`,
+   * whose video width the short information's lines are cut to).
+   */
+  let feed: StateStream | null = null;
+  let windowFeed: Disposable | null = null;
   let briefTimer: ReturnType<typeof setTimeout> | undefined;
   /** IA-INFO-01: the current source's chapters (read once per source) for the short information. */
   let chapters: { sourceId: number; list: readonly { title: string | null; start: number }[] } | null = null;
@@ -230,12 +236,20 @@ export default async function activate(plugin: Plugin) {
     if (shown || briefShown()) draw(); // may have been switched off meanwhile
   };
   const refresh = () => void render().catch(() => {}); // keep the last text; try again next second
-  /** One 1-second refresh while anything is shown. */
+  /** One 1-second refresh, and the state's stream, while anything is shown. */
   const tick = () => {
     if ((shown || briefShown()) && !timer) timer = setInterval(refresh, 1000);
+    if (shown || briefShown()) {
+      feed ??= plugin.player.stream(() => {});
+      windowFeed ??= plugin.player.on("window.changed", () => {});
+    }
     if (!shown && !briefShown()) {
       clearInterval(timer);
       timer = undefined;
+      feed?.stop();
+      feed = null;
+      windowFeed?.dispose();
+      windowFeed = null;
     }
   };
   /**

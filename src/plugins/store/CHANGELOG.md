@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.4
+
+- No late write to the settings page (ruling 2026-11-22): the automatic repository check runs from the store's own timers, work the player does not see, so it can meet an idle stop, and a `settings.set` it caused could leave just before the player stopped the plugin and be dropped. The Options ▸ Plugins ▸ Plugin Store page now writes nothing because of an automatic check: its repository notes keep what they showed and catch up at the next pass something else causes (an action on the page, the store window). The check itself, the store window, updates and revocations are unchanged. A test checks that an automatic check sends no `settings.set`. Who must change: nobody.
+
 ## 0.3.3
 
 - No capability disclosure (user ruling 2026-11-16): the store no longer says what a plugin's code uses. Gone: the install confirmation's "It will be able to:" list and its "uses none of the player's sensitive features" line, the update confirmation's "needs more permissions" variant and the page's "The new version needs new permissions" notice, the Permissions list on the Details tab, and the sentence that a package not from the official repository had its permissions not checked. Every install and update still asks first: from the official repository, a file or a link the confirmation says that plugins may read your files or use the network; another repository's confirmation is its warning, which says so already. The index's `scan` (and the older `capabilities`) of a version is no longer read; versions that carry them install as before.

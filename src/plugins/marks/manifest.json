@@ -1,6 +1,6 @@
 {
   "id": "vestra.marks",
-  "version": "0.1.10",
+  "version": "0.1.12",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "name": "Chapters and Bookmarks",
