@@ -429,7 +429,11 @@ export class AbLoop {
    * layer); with B too the loop span is the player's to draw. Written for the
    * source it belongs to (`ifCurrent`), and only when it changed.
    */
+  /** Called when A or B changed (the commands give their conditions again). */
+  changed: () => void = () => {};
+
   #publish() {
+    this.changed();
     const state = this.#state;
     const a = this.#st.a;
     const show = a !== null && this.#st.b === null && state.duration !== null && a <= state.duration;

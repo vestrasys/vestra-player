@@ -1,4 +1,5 @@
 import type { PlayerState, Scope } from "@vestra-player/sdk";
+import type { Conditions, Gate } from "./commands.ts";
 import type { Playback } from "./controller.ts";
 import { type Reason, sourceFailure, type State } from "./texts.ts";
 
@@ -45,7 +46,11 @@ export class Keyframes {
     if (this.#asking === sourceId) this.#asking = null;
     if (this.#scope.player.state.sourceId !== sourceId) return;
     this.#st.video = { sourceId, video };
+    this.changed();
   }
+
+  /** Called when the answer about video arrives (the commands give their conditions again). */
+  changed: () => void = () => {};
 
   /** Whether the source with this id has video; `null` until `stats()` answered. */
   video(sourceId: number): boolean | null {
@@ -62,6 +67,20 @@ export class Keyframes {
     else if (this.#st.video?.sourceId !== s.sourceId || !this.#st.video.video) reason = NO_VIDEO;
     const busy = this.#st.busy;
     return { enabled: reason === null && !busy, checked: null, busy, reason };
+  }
+
+  /** Whether a keyframe step is running (the commands' `busy`). */
+  get busy() {
+    return this.#st.busy;
+  }
+
+  /** `state()` as a condition and its reason: whether the source has video is this plugin's fact. */
+  gate(c: Conditions): Gate {
+    const s = this.#scope.player.state;
+    const known = this.#st.video;
+    const video = known !== null && known.sourceId === s.sourceId && known.video;
+    const playable = s.kind === "media" && (s.phase === "ready" || s.phase === "ended");
+    return { enabled: video ? c.keyframeable : c.never, reason: video || !playable ? UNSUPPORTED : NO_VIDEO };
   }
 
   async run(direction: "backward" | "forward") {

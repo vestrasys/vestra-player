@@ -2,6 +2,7 @@
 
 ## 0.2.21
 
+- Command states are player conditions (`plugin.when`) instead of functions that read `player.state`: the seek steps, Jump to Time…, Jump to Start, the speeds (checked by `when.rate`), Custom…, the keyframe steps, Copy to Clipboard, Reopen Current/Last File and the A-B Loop commands (A-B Loop On/Off checked by `when.looping`). What a condition cannot say (a video track known, a local path, the loop points, a command at work) is this plugin's fact, and each command's condition is given again when it changes. Behaviour is unchanged; busy still means disabled with no reason, so a key passes on.
 - **Events and triggers (SDK 1.11, release B step B3)**: `plugin.player.subscribe()` and `plugin.player.onChange()` are gone. The bottom bar follows the player with `plugin.player.stream()` for as long as it is mounted (the plugin's whole run), with the same handler the change listener had: the bar, the Playback panel, the commands' states, the A-B loop's passes, the remembered volume and mute, the thumbnails and the last file. The facts the old subscription also kept current now come from their events: the fullscreen button from `window.changed`, the Playback panel's place (Playback… check mark) from `layout.changed`, everyone's marks and ranges on the seek line from `timeline.changed`. Behaviour is unchanged. Who must change: nobody. Tests: Playback… follows the adjust column opened and closed elsewhere.
 
 ## 0.2.20

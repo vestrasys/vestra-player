@@ -981,27 +981,35 @@ export default async function activate(plugin: Plugin) {
     category: CATEGORY.subtitles, home: "tune",
     run: () => busy || announce(message("chooseFile"), load),
   });
-  const hasMedia = () => plugin.player.state.phase === "ready" && !!plugin.player.state.source;
+  // The states the player can evaluate are conditions (`plugin.when`); what has none (the style,
+  // the secondary track, the cues) is read by the update pass as before.
+  const { when } = plugin;
+  const never = when.ready.and(when.ready.not());
   plugin.commands.add({
     id: "load-secondary", path: ["@open", "Add Secondary Subtitle…"], order: 114, group: "open", category: CATEGORY.subtitles,
-    enabled: () => !busy && hasMedia(), busy: () => busy,
-    reason: () => (busy ? BUSY : hasMedia() ? null : NO_MEDIA),
+    enabled: when.phase("ready").and(when.open), busy: () => busy,
+    reason: () => (busy ? BUSY : NO_MEDIA),
     run: () => busy || announce(message("chooseSecondaryFile"), loadAs("secondary")),
   });
   // Menu redesign (step 6): the Subtitles panel replaces Subtitles ▸ and Reset ▸ Subtitle *. The menu
   // keeps Open ▸ Open Subtitle… / Add Secondary Subtitle…, Tools ▸ Subtitle Track ▸ and
   // Subtitles…; every other command is in the command palette ("Category: Title") with its key,
   // and names the panel (`home: "tune"`) when its control is there.
-  plugin.commands.add({
+  /** A primary track is selected: one of the current tracks' conditions (given again when the list changes). */
+  const anyShown = (s: SubtitlesState | null) => {
+    const [first, ...rest] = (s?.tracks ?? []).map((t) => when.subtitleTrack(t.id));
+    return first ? first.or(...rest) : never;
+  };
+  const showCommand = plugin.commands.add({
     id: "show", title: "Show Subtitles", bindings: ["Alt+H"], ...idle, category: CATEGORY.subtitles, home: "tune",
-    checked: () => !!subtitles.state?.selected,
+    checked: anyShown(subtitles.state),
     run: () => busy || announce(message("togglingShown"), toggleShown),
   });
   // Tools ▸ Subtitle Track ▸ (the short menu, user ruling 2026-11-11): Off (302), the tracks (303–310).
-  plugin.commands.add({
+  const offCommand = plugin.commands.add({
     id: "track-off", path: ["@tools", "Subtitle Track", "Off"], order: 302, group: "domain", radio: true, ...idle,
     category: CATEGORY.track, home: "tune",
-    checked: () => !subtitles.state?.selected,
+    checked: anyShown(subtitles.state).not(),
     run: () => busy || announce(message("hiding"), select(null)),
   });
   // A08 secondary subtitle: Off, the tracks, the position (the panel's Secondary and Position rows).
@@ -1062,6 +1070,10 @@ export default async function activate(plugin: Plugin) {
     const key = JSON.stringify(s.tracks.slice(0, MENU_TRACKS).map((t, i) => [t.id, titles[i]!.key, t.text]));
     if (key === trackKey) return;
     trackKey = key;
+    const shown = anyShown(s);
+    showCommand.set({ checked: shown });
+    offCommand.set({ checked: shown.not() });
+    cycleCommand.set({ enabled: s.tracks.length ? when.open : never });
     const tracks = s.tracks.slice(0, MENU_TRACKS);
     // Without any text track the Secondary Subtitle menu is only Off.
     const seconds = s.tracks.some((t) => t.text) ? tracks : [];
@@ -1086,17 +1098,17 @@ export default async function activate(plugin: Plugin) {
         trackMenu.commands.add({
           id: `track-${i + 1}`, path: ["@tools", "Subtitle Track", /* i18n-ignore */ titles[i]!.title], order: 303 + i,
           group: "domain", radio: true, ...idle, category: CATEGORY.track, home: "tune",
-          checked: () => track.id === subtitles.state?.selected?.id,
+          checked: when.subtitleTrack(track.id), // the player keeps the mark current
           run: () => busy || announce(message("switching"), select(track, s.sourceId)),
         }),
       );
     });
   }
-  plugin.commands.add({
+  const cycleCommand = plugin.commands.add({
     id: "track-cycle", title: "Cycle", bindings: ["Alt+L"],
     category: CATEGORY.track, home: "tune",
-    enabled: () => !!subtitles.state?.tracks.length,
-    reason: () => (subtitles.state?.tracks.length ? null : "No subtitle tracks"),
+    enabled: subtitles.state?.tracks.length ? when.open : never,
+    reason: "No subtitle tracks", // shown only while disabled
     run: cycle,
   });
 

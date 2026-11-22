@@ -25,6 +25,8 @@ export class Playback {
    * What the bar, the panel and the commands show of this object, in
    * `plugin.state`: a write re-runs exactly the bindings that read the field.
    */
+  /** Called when `ui.rateBusy` or `ui.restartBusy` changed (the commands give their conditions again). */
+  busyChanged: () => void = () => {};
   readonly ui: {
     /** The Open dialog is up. */
     selecting: boolean;
@@ -213,10 +215,12 @@ export class Playback {
     if (this.state.phase === "ended") {
       this.clearSeek();
       this.ui.restartBusy = true;
+      this.busyChanged();
       try {
         await source(this.#player.restart());
       } finally {
         this.ui.restartBusy = false;
+        this.busyChanged();
       }
     } else if (this.seek(0) === null) return;
     this.notify("Jumped to the start");
@@ -226,11 +230,13 @@ export class Playback {
     if (!Number.isFinite(rate) || rate < MIN_RATE || rate > MAX_RATE) throw new Failure("rate-range");
     this.clearSeek();
     this.ui.rateBusy = true;
+    this.busyChanged();
     try {
       await source(this.#player.setRate(rate, options));
       this.notify("Speed: {}x", [rateText(rate)]);
     } finally {
       this.ui.rateBusy = false;
+      this.busyChanged();
     }
   }
   /** Latest value wins; the target volume is applied before unmuting, never an old loud one. */

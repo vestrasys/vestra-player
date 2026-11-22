@@ -42,6 +42,8 @@ export default async function activate(plugin: Plugin) {
   const reopener = new Reopener(plugin, osd);
   const openUrl = new OpenUrl(plugin, settings, osd);
   const keyframes = new Keyframes(plugin, playback);
+  keyframes.changed = () => commands?.regate();
+  playback.busyChanged = () => commands?.regate();
   const thumbnails = new Thumbnails(plugin, settings, (id) => keyframes.video(id));
   // B29: the host holds the assertion while playing; a failed start is only in its log.
   const sleep = () => plugin.power.preventSleep(settings.value.preventSleep ? "playing" : "off");
@@ -60,7 +62,7 @@ export default async function activate(plugin: Plugin) {
           .run(delta < 0 ? "seek-backward" : "seek-forward", { seconds: Math.abs(delta) })
           .catch((error) => playback.report(error))
       : playback.seekBy(delta);
-  let commands: { setSteps(steps: SeekSteps): Promise<void> } | null = null;
+  let commands: { setSteps(steps: SeekSteps): Promise<void>; regate(): void } | null = null;
   // B06: the seek steps and "Jump to keyframes only", saved and applied at once (the
   // Playback panel's Seek steps): the core's step, and the tier 2–4 titles when they changed.
   const applySteps = async (steps: SeekSteps, seekKeyframes: boolean) => {
@@ -75,7 +77,7 @@ export default async function activate(plugin: Plugin) {
   const jumpToStart = () => playback.jumpToStart();
   const loop = new AbLoop(plugin, settings, osd);
   const panel = new PlaybackPanel(plugin, { playback, keyframes, settings, applySteps, jumpToStart, loop });
-  addLoopCommands(plugin, loop);
+  const loopCommands = addLoopCommands(plugin, loop);
 
   commands = addCommands(plugin, plugin.i18n, playback, {
     openUrl,
@@ -123,6 +125,9 @@ export default async function activate(plugin: Plugin) {
     thumbnails.observe(state);
     output.observe(state);
     panel.observe();
+    // The commands' conditions built from this plugin's facts (a path, loop points) follow them.
+    commands?.regate();
+    loopCommands.regate();
     await Promise.resolve(); // the drag gesture observes the same change first
     if (replaced || playback.gestureLost) {
       playback.clearSeek();
