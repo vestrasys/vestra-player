@@ -562,3 +562,31 @@ test("automatic search: a hash match in the first language is loaded when a vide
     await t.cleanup();
   }
 });
+
+test("idle: it holds nothing unless the download window is open; in standby a video that opens wakes it and is searched", async () => {
+  const fetch = searchAndDownload();
+  const t = await setup({ settings: { autoSearch: "no-subtitles", afterSearch: "load-best" }, ...zh });
+  try {
+    assert.deepEqual(t.host.keepsRunning, []);
+    assert.equal(t.host.listening.has("source.state"), false, "no stream while nothing shows");
+    await t.host.command("search").run();
+    await t.host.settle();
+    assert.equal(t.host.listening.has("source.state"), true, "the download window follows the state while open");
+    t.host.window("subtitle-download").userClose();
+    await t.host.settle();
+    assert.equal(t.host.listening.has("source.state"), false, "the stream ends with the window");
+    const before = fetch.calls.length;
+
+    await t.host.park();
+    assert.equal(t.host.parked, true);
+    t.host.openElsewhere(t.video);
+    t.host.subtitles.selection.stamp = { generation: 2, revision: 1 };
+    await waitFor(() => t.host.osd.at(-1)?.startsWith("已自动载入在线字幕") === true, "auto loaded after the wake");
+    assert.equal(t.host.parked, false);
+    assert.ok(fetch.calls.length > before);
+  } finally {
+    await t.stop();
+    fetch.restore();
+    await t.cleanup();
+  }
+});

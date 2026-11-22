@@ -367,9 +367,25 @@ export class Store {
     });
   }
 
+  /**
+   * An automatic check runs from the store's own timers: work the player does
+   * not see, so it may end in an idle stop. A write it causes on the settings
+   * page could leave just before the player stops the plugin and be dropped
+   * (a `settings.set` after `runtime.stop`). So the page writes nothing because
+   * of it: its repository notes stay as they are (`automatic`) and catch up at
+   * the next pass something else causes. The store's own window, the data and
+   * the menus follow the check as before.
+   */
+  automatic = false;
+
   async autoCheck() {
     if (!this.settings.value.autoCheck || this.#disposed) return;
-    await this.refreshAll(true);
+    this.automatic = true;
+    try {
+      await this.refreshAll(true);
+    } finally {
+      this.automatic = false;
+    }
   }
 
   /** Refresh every repository (or only stale ones), then recompute everything. */

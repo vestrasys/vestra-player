@@ -1,7 +1,7 @@
 import type { I18n, Plugin, Scope, Text } from "@vestra-player/sdk";
 import type { Actions } from "./actions.ts";
 import type { Bookmarks } from "./bookmarks.ts";
-import { type Chapters, currentChapter } from "./chapters.ts";
+import type { Chapters } from "./chapters.ts";
 import { clock, line } from "./format.ts";
 import { timing } from "./store.ts";
 
@@ -83,9 +83,19 @@ export class MarksMenu {
   #timer: ReturnType<typeof setTimeout> | null = null;
   #building: Promise<void> = Promise.resolve();
   #disposed = false;
+  /** The chapter playing (the "chapter" trigger keeps it; -1: none). */
+  readonly #facts: { readonly chapter: number };
 
-  constructor(plugin: Plugin, chapters: Chapters, bookmarks: Bookmarks, actions: Actions, openList: () => unknown) {
+  constructor(
+    plugin: Plugin,
+    chapters: Chapters,
+    bookmarks: Bookmarks,
+    actions: Actions,
+    openList: () => unknown,
+    facts: { readonly chapter: number },
+  ) {
     this.#plugin = plugin;
+    this.#facts = facts;
     this.#chapters = chapters;
     this.#bookmarks = bookmarks;
     this.#actions = actions;
@@ -119,8 +129,8 @@ export class MarksMenu {
       order: 261,
       group: "marks-edit",
       bindings: ["P"],
-      enabled: () => !actions.addBlocked(),
-      reason: () => actions.addBlocked(),
+      enabled: actions.canAdd,
+      reason: () => actions.addReason(),
       run: () => void actions.add(),
     });
     for (const step of STEPS)
@@ -131,8 +141,8 @@ export class MarksMenu {
         order: step.order,
         group: "marks-edit",
         bindings: [step.binding],
-        enabled: () => !actions.jumpBlocked(),
-        reason: () => actions.jumpBlocked(),
+        enabled: actions.canJump,
+        reason: () => actions.jumpReason(),
         run: () => actions.step(step.direction, step.chaptersOnly),
       });
   }
@@ -159,8 +169,8 @@ export class MarksMenu {
     const old = this.#scope;
     const scope = (this.#scope = this.#plugin.scope());
     if (old) await old.dispose();
-    const { player } = this.#plugin;
     const actions = this.#actions;
+    const facts = this.#facts;
 
     chapterTitles.forEach((title, i) =>
       scope.commands.add({
@@ -171,9 +181,9 @@ export class MarksMenu {
         order: 10000 + i,
         group: "marks-chapters",
         radio: true,
-        checked: () => currentChapter(this.#chapters.list, player.state.position) === i,
-        enabled: () => !actions.jumpBlocked(),
-        reason: () => actions.jumpBlocked(),
+        checked: () => facts.chapter === i,
+        enabled: actions.canJump,
+        reason: () => actions.jumpReason(),
         run: () => actions.jumpChapter(i),
       }),
     );
@@ -194,8 +204,8 @@ export class MarksMenu {
         home: LIST_COMMAND,
         order: 20000 + i,
         group: "marks-bookmarks",
-        enabled: () => !actions.jumpBlocked(),
-        reason: () => actions.jumpBlocked(),
+        enabled: actions.canJump,
+        reason: () => actions.jumpReason(),
         run: () => actions.jumpBookmark(bookmark.id),
       }),
     );

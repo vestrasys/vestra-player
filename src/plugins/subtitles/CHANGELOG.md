@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.15
+
+- `subscribe()` and `player.onChange` are gone (SDK 1.11.0): the same-name subtitle scan also runs at `source.ready` (was every player state change); `plugin.player.read()` stays the start-up read. Everything else follows the player as before through `plugin.subtitles.onChange`, which holds the source events and so keeps `player.state` current for the commands' state and the panel; the plugin keeps running as before. Behaviour is unchanged. Who must change: nobody.
+
 ## 0.4.14
 
 - The description's last line, starting with `→ `, says where to open the plugin; Store 0.3.1 shows it on the plugin's card, also before install. Description text and its translations only. Who must change: nobody.
