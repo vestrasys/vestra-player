@@ -12,7 +12,7 @@ import { drops } from "./drops.js";
 import { appearance, appearanceOf } from "./appearance.js";
 import { settings } from "./settings.js";
 import { i18n } from "./language.js";
-import { audioTracksChanged, player } from "./player.js";
+import { audioDevicesChanged, audioTracksChanged, player } from "./player.js";
 import { audioFilters, videoFilters } from "./filters.js";
 import { videoRender, videoView } from "./view.js";
 import { videoShaders } from "./shaders.js";
@@ -43,7 +43,8 @@ const COPIES = {
  * as the player sent them.
  */
 const FACTS = {
-    "audio.tracks.changed": (_, data) => audioTracksChanged(data),
+    "audio.tracks.changed": audioTracksChanged,
+    "audio.devices.changed": audioDevicesChanged,
     "subtitles.changed": subtitlesChanged,
     "window.changed": windowChanged,
     "layout.changed": layoutChanged,
