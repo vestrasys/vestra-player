@@ -48,7 +48,7 @@ const aborted = (e: unknown) =>
 
 /** Online Subtitles (D16): search OpenSubtitles / assrt, download, load as this plugin's tracks. */
 export default async function activate(plugin: Plugin) {
-  plugin.player.subscribe(); // was "events"
+  plugin.player.subscribe(); // B3: removed in SDK 1.11; migrate (events-and-triggers.md §7)
   await plugin.player.read(); // was "playback.read"
   const { player, subtitles } = plugin;
   const { text } = plugin.i18n;
@@ -574,7 +574,7 @@ export default async function activate(plugin: Plugin) {
   // ------------------------------------------------------------ source changes, automatic search
   let seenSource = player.state.sourceId;
   let autoDone = player.state.sourceId; // the source open at start is not searched automatically
-  player.onChange((p) => {
+  player.onChange((p) => { // B3: Player.onChange is removed in SDK 1.11
     if (p.sourceId !== seenSource) {
       seenSource = p.sourceId;
       // Requests for the old source must not load into the new one.

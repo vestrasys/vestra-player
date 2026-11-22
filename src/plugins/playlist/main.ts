@@ -163,7 +163,7 @@ async function pool<T>(items: T[], limit: number, work: (item: T) => Promise<voi
 }
 
 export default async function activate(plugin: Plugin, options: Partial<Options> = {}) {
-  plugin.player.subscribe(); // was "events"
+  plugin.player.subscribe(); // B3: removed in SDK 1.11; migrate (events-and-triggers.md §7)
   await plugin.player.read(); // was "playback.read"
   const random = options.random ?? Math.random;
   const { text } = plugin.i18n;
@@ -1311,7 +1311,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     prober.scan();
     plugin.update();
   });
-  plugin.player.onChange((state) => follow?.check(state));
+  plugin.player.onChange((state) => follow?.check(state)); // B3: Player.onChange is removed in SDK 1.11
   void follow.check();
 
   // Thumbnails never compete with an open: ffmpeg waits while a source loads and for
@@ -1327,5 +1327,5 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     }
   };
   holdThumbs(plugin.player.state.phase);
-  plugin.player.onChange((state) => holdThumbs(state.phase));
+  plugin.player.onChange((state) => holdThumbs(state.phase)); // B3: Player.onChange is removed in SDK 1.11
 }

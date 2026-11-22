@@ -193,6 +193,9 @@ impl Core {
                     // The discrete source events this state adds, after it:
                     // a listener of both reads the state first.
                     let derived = crate::source_events::derive(&previous, &data);
+                    // The audio track list it changed (second batch), after
+                    // the source events: a new source's `opening` first.
+                    let tracks = crate::fact_events::audio_tracks_changed(&previous, &data);
                     self.broadcast(&event, data);
                     for (name, data) in derived {
                         diag!(
@@ -201,6 +204,9 @@ impl Core {
                             self.now_ms()
                         );
                         self.broadcast(name, data);
+                    }
+                    if let Some(tracks) = tracks {
+                        self.broadcast(crate::fact_events::AUDIO_TRACKS_CHANGED, tracks);
                     }
                     return;
                 }

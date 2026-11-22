@@ -32,7 +32,7 @@ const BLUR: VideoNode = {
 };
 
 export default async function activate(plugin: Plugin) {
-  plugin.player.subscribe(); // was "events"
+  plugin.player.subscribe(); // B3: removed in SDK 1.11; migrate (events-and-triggers.md §7)
   await plugin.player.read(); // was "playback.read"
   const name = plugin.id.endsWith("-b") ? "B" : "A";
   const menu = `Primitives Probe ${name}`;

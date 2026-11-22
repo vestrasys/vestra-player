@@ -147,7 +147,7 @@ export function propertiesWindow(plugin: Plugin) {
       // The label column's width: the host lays out this one label, not every row's.
       return { tabIndex: st.tab, rows: rows as unknown as Record<string, string | boolean>[], labelSample: widestLabel(plugin.i18n, rows), status: st.status, statusDetail: st.statusDetail, canRefresh: st.tab !== 0 };
     }));
-    scope.player.onChange((state) => {
+    scope.player.onChange((state) => { // B3: Player.onChange is removed in SDK 1.11
       if (!sourceChanged(state) || !propertiesToolWindow.opened) return;
       probe?.abort();
       probe = null;

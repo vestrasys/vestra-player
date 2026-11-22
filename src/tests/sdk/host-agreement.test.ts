@@ -1905,7 +1905,34 @@ test("the SDK's wake events are the player's (capabilities/events.rs WAKE_EVENTS
   const { WAKE_EVENTS } = (await import(runtime.href)) as {
     WAKE_EVENTS: readonly string[];
   };
-  assert.deepEqual([...WAKE_EVENTS].sort(), [...player].sort());
+  // The second batch of events (player 0.11, SDK 1.11.0): the built-ins
+  // move to SDK 1.11 with their migration (release B, step B3); until
+  // then an older SDK is compared without them.
+  const version = JSON.parse(
+    readFileSync(
+      new URL(
+        "../../node_modules/@vestra-player/sdk/package.json",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  ).version as string;
+  const [major, minor] = version.split(".").map(Number);
+  const second = new Set([
+    "video.reconfigured",
+    "audio.reconfigured",
+    "audio.tracks.changed",
+    "subtitles.changed",
+    "window.changed",
+    "layout.changed",
+    "audio.devices.changed",
+    "app.started",
+  ]);
+  const expected =
+    major! * 1000 + minor! < 1011
+      ? player.filter((event) => !second.has(event!))
+      : player;
+  assert.deepEqual([...WAKE_EVENTS].sort(), [...expected].sort());
 });
 
 test("palette.lead's status states are the player's (palette_lead.rs StatusState::NAMES; SDK 1.7.15)", async (t) => {

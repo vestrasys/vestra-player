@@ -18,7 +18,7 @@ import { Settings } from "./store.ts";
  * Everything follows `player.state`, whoever opened the source.
  */
 export default async function activate(plugin: Plugin) {
-  plugin.player.subscribe(); // was "events"
+  plugin.player.subscribe(); // B3: removed in SDK 1.11; migrate (events-and-triggers.md §7)
   await plugin.player.read(); // was "playback.read"
   const { player } = plugin;
   const osd = osdOf(plugin);
@@ -43,5 +43,5 @@ export default async function activate(plugin: Plugin) {
   };
   observe(player.state);
   void menu.build();
-  player.onChange(observe);
+  player.onChange(observe); // B3: Player.onChange is removed in SDK 1.11
 }

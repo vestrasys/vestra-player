@@ -435,6 +435,10 @@ impl Backend {
                 let mut position = Position::default();
                 // The primary subtitle track the UI thread last had.
                 let mut subtitle_sent: Option<Option<String>> = None;
+                // The second batch of events read here (`media_facts.rs`),
+                // and the source the last `source.state` push was of.
+                let mut media_facts = crate::playback::media_facts::MediaFacts::default();
+                let mut pushed_generation: Option<u64> = None;
                 loop {
                     if stopping.try_recv().is_ok() {
                         break;
@@ -1040,6 +1044,12 @@ impl Backend {
                         let _ = events.send(Event::Reply(command.reply, result));
                     }
                     sources.follow_device(&mpv);
+                    if let Some(data) = sources.take_devices_changed() {
+                        let _ = events.send(Event::Broadcast(
+                            crate::fact_events::AUDIO_DEVICES_CHANGED.into(),
+                            data,
+                        ));
+                    }
                     sources.late_cover_art(&mpv);
                     for (done, result) in actions.poll(&mpv, sources.generation()) {
                         done.send(&events, result);
@@ -1074,6 +1084,7 @@ impl Backend {
                             continue;
                         }
                         processing.hwdec_event(&mpv, &event);
+                        media_facts.event(&event);
                         if let rsmpv::Event::PropertyChange { userdata, .. } = &event
                             && *userdata == crate::playback::processing::HWDEC_OBSERVATION
                         {
@@ -1303,6 +1314,17 @@ impl Backend {
                         warm_gpu(&mpv, &out_render, &mut gpu_warm, state);
                         let _ =
                             events.send(Event::Broadcast("source.state".into(), source_snapshot));
+                        pushed_generation = Some(sources.generation());
+                        // `subtitles.changed` (second batch), after the
+                        // state it belongs to.
+                        if let Some(data) = media_facts
+                            .subtitles(subtitles.change_key(&mpv), || subtitles.state(&mpv))
+                        {
+                            let _ = events.send(Event::Broadcast(
+                                crate::fact_events::SUBTITLES_CHANGED.into(),
+                                data,
+                            ));
+                        }
                         // The primary subtitle track, when it changed (the
                         // `subtitleTrack` condition; not in source.state).
                         let track = subtitles.primary_track();
@@ -1314,6 +1336,20 @@ impl Backend {
                         // anchor while it watches.
                         if position.watching() {
                             position.due = true;
+                        }
+                    }
+                    // A reconfiguration (second batch of events): read once
+                    // the source it belongs to was pushed, so its
+                    // `source.opening` goes first, and once mpv loaded it,
+                    // so the parameters are its own (`media_facts.rs`).
+                    let loaded = matches!(
+                        sources.phase(),
+                        crate::playback::session::Phase::Ready
+                            | crate::playback::session::Phase::Ended
+                    );
+                    if media_facts.readable(pushed_generation, sources.generation(), loaded) {
+                        for (name, data) in media_facts.reconfigured(&mpv, sources.generation()) {
+                            let _ = events.send(Event::Broadcast(name.into(), data));
                         }
                     }
                     // The position model: a read after an anchoring
