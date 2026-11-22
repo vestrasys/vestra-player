@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.7
+
+- **Events and triggers (SDK 1.11, release B step B3)**: `plugin.player.subscribe()` is gone. The Appearance and Language pages follow a switch made elsewhere through a listener of `appearance.changed` (a wake event: it keeps nothing running), which keeps `plugin.appearance` current as the subscription did; the check marks stay player conditions. Behaviour is unchanged. Who must change: nobody. Tests: the pages follow a palette and language set elsewhere.
+
 ## 0.3.6
 
 - The description's last line, starting with `→ `, says where to open the plugin; Store 0.3.1 shows it on the plugin's card, also before install. Description text and its translations only. Who must change: nobody.

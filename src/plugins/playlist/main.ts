@@ -1,6 +1,16 @@
 import { readFile, stat } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
-import type { Command, CommandOptions, ConfirmOptions, ImageRef, Panel, Plugin, PluginError } from "@vestra-player/sdk";
+import type {
+  Command,
+  CommandOptions,
+  ConfirmOptions,
+  ImageRef,
+  Panel,
+  PlayerState,
+  Plugin,
+  PluginError,
+  StateStream,
+} from "@vestra-player/sdk";
 import {
   DROP_EXTENSIONS,
   dropProblems,
@@ -163,7 +173,6 @@ async function pool<T>(items: T[], limit: number, work: (item: T) => Promise<voi
 }
 
 export default async function activate(plugin: Plugin, options: Partial<Options> = {}) {
-  plugin.player.subscribe(); // B3: removed in SDK 1.11; migrate (events-and-triggers.md §7)
   await plugin.player.read(); // was "playback.read"
   const random = options.random ?? Math.random;
   const { text } = plugin.i18n;
@@ -930,6 +939,56 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     if (index < 0 || inView(index, listArea.scroll, listArea.height, rowHeight())) return null;
     return { to: centered(index, listArea.height, shown.length, rowHeight()), force: false };
   };
+  // Thumbnails never compete with an open: ffmpeg waits while a source loads and for
+  // `HOLD_AFTER_OPEN_MS` after (cache hits go on).
+  let opening = false;
+  const holdThumbs = (phase: string) => {
+    if (phase === "loading") {
+      if (!opening) thumbs.hold(Number.POSITIVE_INFINITY);
+      opening = true;
+    } else if (opening) {
+      opening = false;
+      thumbs.hold(Date.now() + HOLD_AFTER_OPEN_MS);
+    }
+  };
+  /**
+   * One change of the player: the bound row's status and its natural end (an adopted
+   * row's), A13's follower (sources other plugins open) and the thumbnails' hold.
+   */
+  const changed = (state: PlayerState) => {
+    player.observe(state);
+    follow?.check(state);
+    holdThumbs(state.phase);
+  };
+  // While the list shows, its rows show the player's state: every change comes from a
+  // stream (an update pass follows each). While it is hidden the source events carry the
+  // changes that matter here (a source opens, is ready, ends; an adopted row's natural
+  // end advances), each followed by an update; the stream's first state catches up when
+  // the list shows again.
+  let feed: StateStream | null = null;
+  const streamWhileShown = (shown: boolean) => {
+    if (shown && !feed) feed = plugin.player.stream(changed);
+    else if (!shown && feed) {
+      feed.stop();
+      feed = null;
+    }
+  };
+  const heard = (state: PlayerState, natural = false) => {
+    if (feed) return;
+    if (natural) player.endedNaturally(state);
+    else player.observe(state);
+    follow?.check(state);
+    holdThumbs(state.phase);
+    plugin.update();
+  };
+  plugin.player.on("source.opening", ({ state }) => heard(state));
+  plugin.player.on("source.ready", ({ state }) => heard(state));
+  plugin.player.on("source.ended", ({ state, reason }) => {
+    if (reason === "natural" || reason === "error") heard(state, reason === "natural");
+    // Closed: the player is empty now, which the ended source's last state does not say.
+    else if (reason === "stopped" && !feed) void plugin.player.refresh().then((now) => heard(now), () => {});
+    // "replaced": the next source's `source.opening` follows; "quit": nothing to do.
+  });
   let wasShown = !hidden();
   // Shown again (F6, its tab, the fullscreen pop-out), hidden (centre it for the next
   // panel), or moved to or from its own window (a new panel too).
@@ -940,6 +999,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     if (shownNow && (!wasShown || moved)) appear();
     else if (shownNow !== wasShown) plugin.update();
     wasShown = shownNow;
+    streamWhileShown(shownNow);
     if (state) detachedNow = state.detached;
   });
 
@@ -1311,21 +1371,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     prober.scan();
     plugin.update();
   });
-  plugin.player.onChange((state) => follow?.check(state)); // B3: Player.onChange is removed in SDK 1.11
   void follow.check();
-
-  // Thumbnails never compete with an open: ffmpeg waits while a source loads and for
-  // `HOLD_AFTER_OPEN_MS` after (cache hits go on).
-  let opening = false;
-  const holdThumbs = (phase: string) => {
-    if (phase === "loading") {
-      if (!opening) thumbs.hold(Number.POSITIVE_INFINITY);
-      opening = true;
-    } else if (opening) {
-      opening = false;
-      thumbs.hold(Date.now() + HOLD_AFTER_OPEN_MS);
-    }
-  };
   holdThumbs(plugin.player.state.phase);
-  plugin.player.onChange((state) => holdThumbs(state.phase)); // B3: Player.onChange is removed in SDK 1.11
+  streamWhileShown(list.state?.effective === true);
 }

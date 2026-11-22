@@ -63,7 +63,8 @@ function fakeProbe() {
 }
 
 /** Checks the texts as a Simplified Chinese user sees them (the plugin's old texts); `"en"` for the English source. */
-async function start(probe = fakeProbe(), locale: "en" | "zh-Hans" = "zh-Hans") {
+/** `hidden`: the list is closed after the start, so the plugin hears the source events, not a stream. */
+async function start(probe = fakeProbe(), locale: "en" | "zh-Hans" = "zh-Hans", hidden = !!process.env.PLAYLIST_TEST_HIDDEN) {
   const directory = await mkdtemp(join(tmpdir(), "vestra-playlist-"));
   const media = join(directory, "media");
   await mkdir(media);
@@ -83,6 +84,11 @@ async function start(probe = fakeProbe(), locale: "en" | "zh-Hans" = "zh-Hans") 
     locale,
   });
   const panel = host.mounted();
+  // `PLAYLIST_TEST_HIDDEN=1` runs every case so.
+  if (hidden) {
+    await host.command("playlist.close").run();
+    await host.settle();
+  }
   const app = {
     host,
     probe,
@@ -1139,39 +1145,40 @@ test("a replay that wins the race against auto-advance keeps the newer source", 
   }
 });
 
-test("errors, stops and other sources never advance; another open of the same path is not taken over or announced", async () => {
-  const app = await start();
-  try {
-    await app.leaveOutsideSources();
-    await app.addFiles([app.a, app.b]);
-    await app.press("Enter");
-    app.host.setSource({ phase: "error", terminalReason: { failed: "broken" } });
-    await app.host.settle();
-    assert.equal(app.rows()[0].failed, true);
-    assert.equal(app.rows()[0].tooltip, `${app.a}\nbroken`);
-    assert.equal(app.osd(), "无法打开 a.mp4：broken");
-    assert.equal(app.opens().length, 1);
+for (const hidden of [false, true])
+  test(`errors, stops and other sources never advance; another open of the same path is not taken over or announced${hidden ? " (list hidden: source events)" : ""}`, async () => {
+    const app = await start(undefined, undefined, hidden);
+    try {
+      await app.leaveOutsideSources();
+      await app.addFiles([app.a, app.b]);
+      await app.press("Enter");
+      app.host.setSource({ phase: "error", terminalReason: { failed: "broken" } });
+      await app.host.settle();
+      assert.equal(app.rows()[0].failed, true);
+      assert.equal(app.rows()[0].tooltip, `${app.a}\nbroken`);
+      assert.equal(app.osd(), "无法打开 a.mp4：broken");
+      assert.equal(app.opens().length, 1);
 
-    await app.press("Enter");
-    app.host.setSource({ phase: "ended", terminalReason: "stopped" });
-    await app.host.settle();
-    assert.equal(app.opens().length, 2);
+      await app.press("Enter");
+      app.host.setSource({ phase: "ended", terminalReason: "stopped" });
+      await app.host.settle();
+      assert.equal(app.opens().length, 2);
 
-    await app.press("Enter");
-    app.host.setSource({ phase: "ready" });
-    await app.host.settle();
-    const notices = app.host.osd.length;
-    app.host.openElsewhere(app.a);
-    await app.host.settle();
-    assert.equal(app.host.osd.length, notices, "UI-PL-20: no notice for an outside source");
-    assert.equal(app.rows()[0].current, false);
-    app.end();
-    await app.host.settle();
-    assert.equal(app.opens().length, 3);
-  } finally {
-    await app.close();
-  }
-});
+      await app.press("Enter");
+      app.host.setSource({ phase: "ready" });
+      await app.host.settle();
+      const notices = app.host.osd.length;
+      app.host.openElsewhere(app.a);
+      await app.host.settle();
+      assert.equal(app.host.osd.length, notices, "UI-PL-20: no notice for an outside source");
+      assert.equal(app.rows()[0].current, false);
+      app.end();
+      await app.host.settle();
+      assert.equal(app.opens().length, 3);
+    } finally {
+      await app.close();
+    }
+  });
 
 test("a failed open stays on its row, keeps the navigation anchor and can be retried", async () => {
   const app = await start();

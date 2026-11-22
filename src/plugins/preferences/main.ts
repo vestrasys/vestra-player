@@ -20,8 +20,11 @@ export const LANGUAGE_PAGE_ID = "language";
  * them, and they stay when this plugin stops.
  */
 export default async function activate(plugin: Plugin) {
-  plugin.player.subscribe(); // B3: removed in SDK 1.11; migrate (events-and-triggers.md §7)
   const { appearance } = plugin;
+  // The pages show the palette and the language in use, also after a switch made
+  // elsewhere: listening to `appearance.changed` keeps `plugin.appearance` current
+  // (the SDK's copy takes each event). A wake event: it keeps nothing running.
+  plugin.player.on("appearance.changed", () => {});
   plugin.onError((error) => {
     // i18n-ignore: the player's (or the SDK's) own message
     void plugin.osd.show(error.message).catch(() => {});

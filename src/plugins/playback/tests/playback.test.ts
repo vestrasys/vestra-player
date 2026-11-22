@@ -1154,6 +1154,13 @@ test("Playback… (Alt+4) toggles the adjust column at the Playback panel; the k
   await eventually(() => [host.layout.adjust?.preferred, command.state.checked], [true, true]);
   await host.press("Alt+4");
   await eventually(() => [host.layout.adjust?.preferred, command.state.checked], [false, false]);
+  // Opened and closed elsewhere (the menu's Adjustments and Effects): the check mark follows.
+  host.layout.adjust!.preferred = true;
+  host.emit("window.state", {});
+  await eventually(() => command.state.checked, true);
+  host.layout.adjust!.preferred = false;
+  host.emit("window.state", {});
+  await eventually(() => command.state.checked, false);
   // Another plugin's tab in front: Alt+4 brings Playback forward instead of closing the column.
   host.mountOther("adjust", "other.wheels", { title: "Wheels" });
   host.selectTab("other.wheels");
