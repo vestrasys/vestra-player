@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
-import { Toolchain, checkOwner, nodeOption, parseTap, parseTsc } from "../toolchain.ts";
+import { Toolchain, checkOwner, minPlayerVersion, nodeOption, parseTap, parseTsc } from "../toolchain.ts";
 import { runTool } from "../toolhost.ts";
 import { dataDirectory } from "./fixture.mjs";
 import { unzip } from "./unzip.mjs";
@@ -95,7 +95,8 @@ test("scaffold → typecheck → test → check → pack: the template passes ev
   assert.equal(manifest.id, "octocat.demo");
   // SDK 1.9.0: no declarations in the manifest (player 0.9.0 refuses the field as unknown; an older one requires it) and no editor plugin in tsconfig.json.
   assert.equal("capabilities" in manifest, false);
-  assert.equal(manifest.minPlayerVersion, "0.9.0");
+  // No player in the test: the floor, the first player with SDK 1.11's events and triggers.
+  assert.equal(manifest.minPlayerVersion, "0.11.0");
   assert.equal(JSON.parse(await fs.readFile(path.join(project, "tsconfig.json"), "utf8")).compilerOptions.plugins, undefined);
   // The SDK copy where the project resolves it, without the CLI.
   await fs.access(path.join(data, "node_modules/@vestra-player/sdk/dist/plugin/testing.js"));
@@ -351,4 +352,13 @@ test("SDK 1.9.0: an SDK call needs no declaration; a manifest field the SDK does
     // An unknown field (SDK 1.11.0: no message of its own; before, one that said to delete it).
     assert.match(report.problems.join("\n"), /"capabilities"/);
   }
+});
+
+test("a new plugin's minPlayerVersion is the running player's version, at least 0.11.0", () => {
+  assert.equal(minPlayerVersion(undefined), "0.11.0");
+  assert.equal(minPlayerVersion("0.10.3"), "0.11.0");
+  assert.equal(minPlayerVersion("0.11.0"), "0.11.0");
+  assert.equal(minPlayerVersion("0.12.4"), "0.12.4");
+  assert.equal(minPlayerVersion("1.0.0-rc.1"), "1.0.0", "a pre-release suffix is dropped");
+  assert.equal(minPlayerVersion("dev"), "0.11.0", "not a version: the floor");
 });

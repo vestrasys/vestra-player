@@ -1017,6 +1017,23 @@ test("G16: a device plugged in later shows up when the player reports it; withou
   await stop();
 });
 
+test("idle with nothing applied it keeps nothing running; in standby a device change wakes it and its device menu follows", async () => {
+  const host = new TestHost();
+  host.audioDevices = [SPEAKERS];
+  const { stop } = await startPlugin(activate, { directory, host });
+  await host.settle();
+  // An empty audio chain and a panel that is not on screen: the player may put it in standby.
+  assert.deepEqual(host.keepsRunning, []);
+  await host.park();
+  assert.equal(host.parked, true);
+  host.audioDevices = [SPEAKERS, PHONES];
+  host.emit("audio.devices.changed", { devices: host.audioDevices, requested: null, active: null });
+  await host.settle();
+  assert.equal(host.parked, false, "audio.devices.changed is a wake event");
+  assert.deepEqual(deviceItems(host).map((item) => item[0]), ["System Default", "MacBook Air 扬声器", "USB 耳机"]);
+  await stop();
+});
+
 // ---------------------------------------------------------------- i18n: a Simplified Chinese user sees the texts of before
 
 test("zh-Hans: the menu, the palette names, the reasons and the on-screen messages read as before the English source", async () => {

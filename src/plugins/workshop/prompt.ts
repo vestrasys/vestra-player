@@ -3,7 +3,7 @@
 // tools (from "/" down by path, docs_search when unsure), and in the
 // read-only SDK package's .d.ts for exact types.
 import path from "node:path";
-import { LOCAL_OWNER } from "./toolchain.ts";
+import { LOCAL_OWNER, minPlayerVersion } from "./toolchain.ts";
 
 /** The interface languages, by name, for the model (instruction text, not shown to the user). */
 const LANGUAGES: Record<string, string> = {
@@ -20,6 +20,8 @@ export interface PromptOptions {
   /** The vendored SDK package (read-only for the agent). */
   sdk: string;
   sdkVersion: string;
+  /** The running player's version (plugin.app.version): what a plugin's minPlayerVersion names, at least MIN_PLAYER. */
+  playerVersion?: string;
   /** The user's GitHub name ("" when unset: ids start with local.). */
   owner: string;
   /** install_plugin is offered (not in the eval runner). */
@@ -49,8 +51,8 @@ export function systemPrompt(o: PromptOptions): string {
 1. Read the documentation before writing code: before using an API, read its page with docs (its declaration in the .d.ts when you need the exact type). Never use an API, field or Slint component that is not in the documentation; do not guess from memory.
 2. A new plugin starts with scaffold_plugin, which creates the official plugin repository's layout: manifest.json, main.ts, ui/*.slint, tests/*.test.ts, README.md, CHANGELOG.md, package.json, tsconfig.json.
 3. The id is <owner>.<name>: owner is the user's GitHub name, currently "${owner}"${o.owner ? "" : " (the user entered none; local. is for this computer only)"}; scaffold_plugin uses it by itself. Never start an id with vestra.
-4. manifest.json: id, version, apiVersion "vestra/1", entry "main.ts", and display fields such as name and minPlayerVersion (0.9.0 or later). Any other field is refused, and nothing is declared.
-   A plugin must be stoppable while idle (read /Guides/Guides/events-and-triggers and /Guides/Guides/command-state): read the state at start with await plugin.player.read(); learn of changes by events (player.on("source.ready", …)) and triggers on plugin.when conditions, declared before the first await; command states are plugin.when conditions; player.stream only while an open window or panel shows the state, never in activate.
+4. manifest.json: id, version, apiVersion "vestra/1", entry "main.ts", and display fields such as name and minPlayerVersion "${minPlayerVersion(o.playerVersion)}" (this player). Any other field is refused, and nothing is declared.
+   A plugin must be stoppable while idle (read /Guides/Guides/events-and-triggers and /Guides/Guides/command-state). In activate declare event listeners (player.on("source.ready", …)) and triggers on plugin.when conditions, then await plugin.player.read(); handlers needing newer state await player.refresh(). Command states are plugin.when conditions; player.stream only while an open window or panel shows the state, never in activate.
 5. The skeleton of main.ts:
    import type { Plugin } from "@vestra-player/sdk";
    export default async function activate(plugin: Plugin) { /* plugin.commands.add(...), plugin.windows.create("ui/x.slint") … */ }

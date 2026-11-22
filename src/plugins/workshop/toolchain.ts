@@ -228,10 +228,14 @@ export class Toolchain {
   /** One tool at a time per project (a build rewrites its dist/). */
   private readonly locks = new Map<string, Promise<unknown>>();
 
-  constructor(packageDir: string, dataDir: string, validate?: Validator) {
+  /** The running player's version (`plugin.app.version`): a new project's `minPlayerVersion`, at least {@link MIN_PLAYER}. */
+  readonly playerVersion: string | undefined;
+
+  constructor(packageDir: string, dataDir: string, validate?: Validator, playerVersion?: string) {
     this.packageDir = packageDir;
     this.dataDir = dataDir;
     this.validate = validate;
+    this.playerVersion = playerVersion;
     this.vendor = path.join(packageDir, "vendor");
     this.sdk = path.join(this.vendor, "@vestra-player", "sdk");
   }
@@ -465,7 +469,7 @@ export class Toolchain {
     const directory = path.join(session.work, id);
     if (existsSync(directory)) return result(false, `work/${id}/ already exists; keep working on it, or choose another name`);
     await this.mirror();
-    const files = template(id, name, title, this.sdkVersion);
+    const files = template(id, name, title, this.sdkVersion, this.playerVersion);
     for (const [rel, text] of Object.entries(files)) {
       await fs.mkdir(path.dirname(path.join(directory, rel)), { recursive: true });
       await fs.writeFile(path.join(directory, rel), text);
@@ -851,16 +855,33 @@ const TSCONFIG = {
  */
 const VSCODE_SETTINGS = { "typescript.tsdk": "node_modules/typescript/lib", "typescript.enablePromptUseWorkspaceTsdk": true };
 
+/** The oldest player a generated plugin may name: the first with the events and triggers of SDK 1.11. */
+export const MIN_PLAYER = "0.11.0";
+
+/**
+ * A generated plugin's `minPlayerVersion`: the running player's version
+ * (`plugin.app.version`, the player it is written and tried in), at least
+ * {@link MIN_PLAYER}. A pre-release suffix is dropped.
+ */
+export function minPlayerVersion(running?: string): string {
+  const parse = (v: string) => /^(\d+)\.(\d+)\.(\d+)/.exec(v)?.slice(1).map(Number);
+  const have = running ? parse(running) : undefined;
+  const floor = parse(MIN_PLAYER)!;
+  if (!have) return MIN_PLAYER;
+  for (let i = 0; i < 3; i++) if (have[i] !== floor[i]) return have[i]! > floor[i]! ? have.join(".") : MIN_PLAYER;
+  return MIN_PLAYER;
+}
+
 /** The starting point of a new project: the official repository's layout, one window and its command, one test. */
-export function template(id: string, name: string, title: string, sdkVersion: string): Record<string, string> {
+export function template(id: string, name: string, title: string, sdkVersion: string, playerVersion?: string): Record<string, string> {
   const manifest = {
     id,
     version: "0.1.0",
     apiVersion: "vestra/1",
     entry: "main.ts",
     name: title,
-    // A player without manifest declarations (SDK 1.9.0): an older one requires them.
-    minPlayerVersion: "0.9.0",
+    // The player it is written in, at least the first with SDK 1.11's events and triggers.
+    minPlayerVersion: minPlayerVersion(playerVersion),
   };
   return {
     "manifest.json": `${JSON.stringify(manifest, null, 2)}\n`,

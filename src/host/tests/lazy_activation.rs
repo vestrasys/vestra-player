@@ -402,11 +402,6 @@ const SETS_AFTER_READY: &str = "vestra.fixture-sets-after-ready";
 #[test]
 #[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]
 fn a_first_run_that_takes_up_a_resource_while_its_class_is_asked_is_not_parked() {
-    // The display layer through the wire, not `plugin.video.view()`: since
-    // SDK 1.11 the view's handle follows the player (a `source.state` hold,
-    // which subscribes), and a subscription that reached the player before
-    // the ready's classification made the plugin resident as a listener at
-    // once, so the late classification this test is about was never asked.
     let root = root_with(|plugins| {
         vec![package(
             plugins,
@@ -416,7 +411,7 @@ fn a_first_run_that_takes_up_a_resource_while_its_class_is_asked_is_not_parked()
                 "export default async function activate(plugin) {{\n\
                  plugin.commands.add({{ id: \"noop\", path: [\"Tools\", \"Noop\"], run: () => {{}} }});\n\
                  setTimeout(() => {{\n\
-                 plugin.wire.request(\"video.view.set\", {{ values: {{ aspect: null, fit: \"keep\", zoom: 1.5, panX: 0, panY: 0 }} }});\n\
+                 plugin.video.view().set({{ zoom: 1.5 }});\n\
                  console.error(`{SETS_AFTER_READY} applied`);\n\
                  }}, 0);\n}}\n"
             ),
