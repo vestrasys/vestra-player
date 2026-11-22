@@ -12,7 +12,7 @@ The API evolves in two directions, with different processes:
 | --- | --- | --- |
 | Trigger | A plugin hits an API gap during implementation | The API itself is hard to use or the architecture needs refactoring |
 | Who starts it | The plugin author submits a request | The maintainer designs and releases the new API |
-| Can plugin authors propose new capabilities | Yes | **No**, they can only report a "migration blocker" |
+| Can plugin authors propose new APIs | Yes | **No**, they can only report a "migration blocker" |
 | Product behavior | Evolves with the plugin | **Stays unchanged** (equivalent migration) |
 
 ## 0. Overview (2026-10-27)
@@ -151,7 +151,7 @@ The source of the plugin SDK `@vestra-player/sdk` exists only in the [vestra-pla
 
 Plugins never bundle the SDK: they import it as types only, and the player builds the `plugin` object with its own copy. A player upgrade therefore needs no plugin change, and plugin authors decide for themselves whether to follow a new SDK. What keeps old plugins working is that the API is changed carefully:
 
-1. **Additions** (new members, new optional fields, new capabilities): the maintainer decides alone and releases them as a patch. A plugin that uses an addition declares the player version it needs in `minPlayerVersion`.
+1. **Additions** (new members, new optional fields): the maintainer decides alone and releases them as a patch. A plugin that uses an addition declares the player version it needs in `minPlayerVersion`.
 2. **Removals, signature changes and changes to existing behaviour** (error codes, defaults, when something happens): the maintainer first writes what changes, why, which plugins are affected and how they migrate, and **the user approves it before any work starts**. After approval the change ships as a deprecation in one SDK patch and the removal in a later one, with at least one published player release in between.
 3. **Plugins are not forced to update.** Every SDK release's CHANGELOG entry opens with who must change and what happens to a plugin that doesn't.
 4. **Later, when third-party plugins exist** (registered as an open item, not done yet): the packing tool records the SDK version a plugin was built with, and the player warns in the store and the plugin details when a plugin was built before a breaking change ("built on an older interface, parts may not work; the author has not updated it"), together with its last update date. Only when a removed API is essential to a plugin is it disabled, with the reason shown to the user.
@@ -160,9 +160,9 @@ Plugins never bundle the SDK: they import it as types only, and the player build
 
 The SDK is the whole surface plugins can reach, and every member added to it is kept, documented and modelled in TestHost for as long as plugins may use it. An API shaped around one feature makes the SDK larger without making it more capable, and every later feature then asks for its own member. **Necessity comes first (user ruling, 2026-11-13).** Before the generality check, ask whether the player is needed at all. If a plugin can do it with Node and the existing members, it is not a host method. If several plugins would repeat the same careful code, it may become an SDK helper that runs in the plugin's own process (as `storage.json` and `tools.run` do): no protocol message, no capability, nothing for TestHost to model. Only what needs the player's state or a capability only the player has (§4.3 item 4) goes on to the rules below. The generality rule alone asks "would several plugins use it?" and never "could they do it themselves?"; `media.sources` (11-10) passed it although a plugin-side table would have done.
 
-**New APIs and capabilities (user ruling, 2026-11-13).** A new member, message or event needs no capability unless it crosses a boundary: it changes the user's own settings or the player beyond the plugin's own contributions, acts on other plugins, or reaches an OS-protected resource (clipboard, keychain, camera, microphone, screen). One that crosses a boundary uses the existing capability for that boundary; a new capability name needs the user's yes. The existing capabilities stay as they are: some declarations also steer behaviour (start-up subscriptions, wake, start-up waits), so renaming or merging them is a behaviour change, not a cleanup.
+**New APIs (user rulings, 2026-11-13 and 2026-11-16).** A new member, message or event is open to every plugin: a plugin declares nothing and the player discloses nothing. Where it crosses a boundary (it changes the user's own settings or the player beyond the plugin's own contributions, acts on other plugins, or reaches an OS-protected resource such as the clipboard, keychain, camera, microphone or screen), the host validates the request when it serves it; the built-in-only areas are refused to other plugins by provenance.
 
-So, before any new member, capability or message is added (bottom-up request §4 or the maintainer's own design):
+So, before any new member or message is added (bottom-up request §4 or the maintainer's own design):
 
 1. **Name at least two or three different plugins that would use it.** They may be existing plugins or plausible ones (a bookmarks plugin, a history plugin, a comparison tool), but each must be a different kind of plugin with a concrete use, written in the request or the design: "plugin X calls it to …". Two variants of the same feature (two exporters, two upscalers) count as one.
 2. **If only one plugin needs it, extend an existing API instead.** In order of preference:
