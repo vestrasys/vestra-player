@@ -254,6 +254,11 @@ pub struct UiState {
     /// Before Plugin Commands; a plugin's entries go when it is uninstalled.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub trusted_plugins: BTreeMap<String, Vec<String>>,
+    /// The player version of the run that last started with this file
+    /// (`app.started`'s `previous`, events-and-triggers.md §4.6): written
+    /// once per run whose version differs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub player_version: Option<String>,
 }
 
 /// The interface's part of [`UiState`] (plan step S2c(7) of
@@ -378,6 +383,10 @@ impl UiState {
             .ok()
             .filter(Frame::valid);
         let window_maximized = field("windowMaximized").as_bool().unwrap_or(false);
+        let player_version = field("playerVersion")
+            .as_str()
+            .filter(|version| !version.is_empty() && version.len() <= 64)
+            .map(str::to_owned);
         let window_physical =
             serde_json::from_value::<crate::platform::DesktopRect>(field("windowPhysical"))
                 .ok()
@@ -485,6 +494,7 @@ impl UiState {
             settings,
             palette_recent,
             trusted_plugins,
+            player_version,
         }
     }
 }

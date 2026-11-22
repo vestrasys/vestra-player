@@ -38,7 +38,7 @@ export const PAGE_ID = "window";
  * core undoes its effects on deactivation.
  */
 export default async function activate(plugin: Plugin) {
-  plugin.player.subscribe(); // was "events"
+  plugin.player.subscribe(); // B3: removed in SDK 1.11; migrate (events-and-triggers.md §7)
   await plugin.player.read(); // was "playback.read"
   const { player, window } = plugin;
   const { text } = plugin.i18n;
@@ -254,7 +254,7 @@ export default async function activate(plugin: Plugin) {
     video.observe(state);
   };
   follow(player.state);
-  player.onChange((state) => {
+  player.onChange((state) => { // B3: Player.onChange is removed in SDK 1.11
     follow(state);
     void onTop.apply();
   });

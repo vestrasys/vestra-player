@@ -24,6 +24,14 @@ const EVENTS: &[&str] = &[
     "source.opening",
     "source.ready",
     "source.ended",
+    "video.reconfigured",
+    "audio.reconfigured",
+    "audio.tracks.changed",
+    "subtitles.changed",
+    "window.changed",
+    "layout.changed",
+    "audio.devices.changed",
+    "app.started",
 ];
 /// Events a parked plugin is woken for (lazy activation §6.9): they follow
 /// a user's or a plugin's deliberate change (an install, a key edit, the
@@ -33,7 +41,8 @@ const EVENTS: &[&str] = &[
 /// (every resize step, menu and focus change), `playback.backend` (every
 /// mpv event) and `timeline.changed` (every source and mark) keep it.
 /// The discrete source events wake too (events-and-triggers.md §4.6): each
-/// is sent once per thing that happened to a source.
+/// is sent once per thing that happened to a source; and so do the facts
+/// of the second batch ([`FACT_EVENTS`]), each sent once per change.
 pub(crate) const WAKE_EVENTS: &[&str] = &[
     "packages.changed",
     "bindings.changed",
@@ -45,7 +54,35 @@ pub(crate) const WAKE_EVENTS: &[&str] = &[
     "source.opening",
     "source.ready",
     "source.ended",
+    "video.reconfigured",
+    "audio.reconfigured",
+    "audio.tracks.changed",
+    "subtitles.changed",
+    "window.changed",
+    "layout.changed",
+    "audio.devices.changed",
+    "app.started",
 ];
+/// The second batch of events (events-and-triggers.md §4.6, release B): a
+/// fact that changed, sent once per change (`crate::fact_events`). For the
+/// start-up mute they are states, compared as the other wake events are
+/// (`OnDemand::announced`).
+pub(crate) const FACT_EVENTS: &[&str] = &[
+    crate::fact_events::VIDEO_RECONFIGURED,
+    crate::fact_events::AUDIO_RECONFIGURED,
+    crate::fact_events::AUDIO_TRACKS_CHANGED,
+    crate::fact_events::SUBTITLES_CHANGED,
+    crate::fact_events::WINDOW_CHANGED,
+    crate::fact_events::LAYOUT_CHANGED,
+    crate::fact_events::AUDIO_DEVICES_CHANGED,
+    crate::fact_events::APP_STARTED,
+];
+/// A source event or a fact event to a running listener counts as use
+/// (design §4.9): a handler runs, so a standby on its way is cancelled
+/// rather than the process stopped under it.
+pub(crate) fn counts_as_use(event: &str) -> bool {
+    SOURCE_EVENTS.contains(&event) || FACT_EVENTS.contains(&event)
+}
 /// The wake events that report one change of one source
 /// (`crate::source_events`), not a state: the backlog merges them per
 /// source (`wake_trigger`), and the start-up mute holds them for its end
@@ -59,12 +96,16 @@ pub(crate) const SOURCE_EVENTS: &[&str] = &[
 /// The backlog trigger for wake event `event` with `data`: merged with a
 /// held one of the same key (newest wins). The key is the event's name;
 /// for a source event its name and source id, so two sources in a row
-/// keep one each (design §4.9).
+/// keep one each (design §4.9); so does a fact of one source
+/// (`fact_events::source_of`).
 pub(crate) fn wake_trigger(event: &str, data: &Value) -> crate::supervisor::Trigger<Value> {
     let message = json!({"event":event,"data":data});
     if SOURCE_EVENTS.contains(&event) {
         let key = format!("{event} {}", crate::source_events::source_id(data));
         return crate::supervisor::Trigger::event(key, message);
+    }
+    if let Some(source) = crate::fact_events::source_of(event, data) {
+        return crate::supervisor::Trigger::event(format!("{event} {source}"), message);
     }
     crate::supervisor::Trigger::event(event, message)
 }
@@ -227,5 +268,47 @@ mod tests {
                 "{event}"
             );
         }
+    }
+
+    /// Design §4.6, second batch: each fact event can be subscribed to and
+    /// is a wake event (a listener of one keeps nothing running); a fact of
+    /// one source merges per source in the backlog, the others by name;
+    /// a notification of one to a running listener counts as use.
+    #[test]
+    fn fact_events_wake_and_merge_per_source() {
+        let key = |trigger: &crate::supervisor::Trigger<Value>| match &trigger.kind {
+            TriggerKind::Event(key) => key.clone(),
+            other => panic!("{other:?}"),
+        };
+        assert_eq!(FACT_EVENTS.len(), 8);
+        for event in FACT_EVENTS {
+            assert!(
+                WAKE_EVENTS.contains(event) && EVENTS.contains(event),
+                "{event}"
+            );
+            assert!(counts_as_use(event), "{event}");
+        }
+        let video = json!({"sourceId":4,"width":1920,"height":1080});
+        assert_eq!(
+            key(&wake_trigger("video.reconfigured", &video)),
+            "video.reconfigured 4"
+        );
+        let subtitles = json!({"state":{"source":{"generation":5}}});
+        assert_eq!(
+            key(&wake_trigger("subtitles.changed", &subtitles)),
+            "subtitles.changed 5"
+        );
+        let window = json!({"fullscreen":true});
+        assert_eq!(
+            key(&wake_trigger("window.changed", &window)),
+            "window.changed"
+        );
+        assert_eq!(
+            key(&wake_trigger("app.started", &json!({"version":"1.0.0"}))),
+            "app.started"
+        );
+        assert!(counts_as_use("source.ready"));
+        assert!(!counts_as_use("source.state"));
+        assert!(!counts_as_use("packages.changed"));
     }
 }

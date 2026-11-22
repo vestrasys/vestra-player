@@ -165,7 +165,7 @@ const pause = (ms: number) => new Promise<void>((done) => void setTimeout(done, 
  * Picture… is in the menu.
  */
 export default async function activate(plugin: Plugin) {
-  plugin.player.subscribe(); // was "events"
+  plugin.player.subscribe(); // B3: removed in SDK 1.11; migrate (events-and-triggers.md §7)
   await plugin.player.read(); // was "playback.read"
   const { player } = plugin;
   const store = settingsStore(plugin);
@@ -872,7 +872,7 @@ export default async function activate(plugin: Plugin) {
 
   // A new source starts upright and unflipped, silently.
   let source = player.state.sourceId;
-  player.onChange((state) => {
+  player.onChange((state) => { // B3: Player.onChange is removed in SDK 1.11
     if (state.sourceId === source) return;
     source = state.sourceId;
     const g = look.geometry;
@@ -887,7 +887,7 @@ export default async function activate(plugin: Plugin) {
   });
   // A new source (or one becoming ready) needs its own rate before 倍帧 can add the node,
   // and its transfer for the HDR note.
-  player.onChange(() => {
+  player.onChange(() => { // B3: Player.onChange is removed in SDK 1.11
     if (blendRate() !== sentBlend) apply();
     if (wantsMeasure()) void measure();
     void readTransfer();
@@ -1852,7 +1852,7 @@ export default async function activate(plugin: Plugin) {
   panel.onChange(followPanel);
   followPanel(panel.state);
   let renderingSource = player.state.sourceId;
-  player.onChange((state) => {
+  player.onChange((state) => { // B3: Player.onChange is removed in SDK 1.11
     if (state.sourceId === renderingSource) return;
     renderingSource = state.sourceId;
     void refreshRendering();

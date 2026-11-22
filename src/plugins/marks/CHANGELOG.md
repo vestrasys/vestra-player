@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.11
+
+- The hidden element that measures the edit labels in the Marks window is placed (`x`, `y`), so its layout limits stay out of the window's. Nothing changes today; the same unplaced element made the Plugin Store's maximum height 0, so its size limits swapped (Store 0.3.3). Who must change: nobody.
+
 ## 0.1.10
 
 - The description's last line, starting with `→ `, says where to open the plugin; Store 0.3.1 shows it on the plugin's card, also before install. Description text and its translations only. Who must change: nobody.

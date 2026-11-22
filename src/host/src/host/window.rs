@@ -573,7 +573,10 @@ impl Core {
             // Plan step S2f(2): a video frame was shown (`power_tick`).
             UiReport::FrameShown(at) => self.last_frame = Some(at),
             // S3a(4) review F2: the interface's facts of its tick are in.
-            UiReport::FactsSettled => self.window_state_out(),
+            UiReport::FactsSettled => {
+                self.window_state_out();
+                self.facts_events();
+            }
             UiReport::WindowFacts(facts) => {
                 // A value older than the one applied is skipped (module
                 // `messages`: a coalesced snapshot can overtake a handoff).
@@ -1332,6 +1335,36 @@ impl Core {
             let facts = self.window_facts.clone();
             self.window_state_sent = facts.clone();
             self.broadcast("window.state", facts);
+        }
+    }
+    /// The second batch's facts of the interface (events-and-triggers.md
+    /// §4.6), at `UiReport::FactsSettled` only, after `window.state`: the
+    /// facts are then those of a whole interface tick, never an in-between
+    /// value (core-thread.md, S3a(4) review F2). `window.changed` at once
+    /// for a flip, after `fact_events::QUIET_MS` for a size change
+    /// (`window_change_tick`); `layout.changed` when the positions changed.
+    pub(crate) fn facts_events(&mut self) {
+        let now = self.now_ms();
+        let shape = crate::fact_events::window_shape(&self.window_facts);
+        if let Some(state) = self.window_change.facts(shape, now) {
+            self.broadcast(crate::fact_events::WINDOW_CHANGED, state);
+        }
+        // `pending` until the interface confirmed the shell's layout.
+        if let Ok(layout) = self.layout_state()
+            && let Some(layout) = self.layout_change.layout(layout)
+        {
+            self.broadcast(crate::fact_events::LAYOUT_CHANGED, layout);
+        }
+    }
+    /// The core's periodic step (`Core::STEPS`): a size change of the
+    /// window whose quiet period ended goes out as `window.changed`.
+    pub(crate) fn window_change_tick(&mut self) {
+        if !self.window_change.waiting() {
+            return;
+        }
+        let now = self.now_ms();
+        if let Some(state) = self.window_change.tick(now) {
+            self.broadcast(crate::fact_events::WINDOW_CHANGED, state);
         }
     }
 }

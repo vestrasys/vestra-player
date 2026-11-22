@@ -1740,11 +1740,30 @@ impl Core {
             if !self.supervisor.events_muted() {
                 self.on_demand.caught_up = true;
                 self.wake_missed();
+                self.app_started();
             }
         }
     }
 }
 impl Core {
+    /// `app.started` (events-and-triggers.md §4.6), once per run: after
+    /// start-up settled and its mute ended, behind what the mute held
+    /// (`wake_missed`), so it is the last of start-up's work. Its
+    /// `previous` is the version the state file names (the last run's);
+    /// this run's goes into the file, which the core's own debounced
+    /// write saves (no file I/O here).
+    fn app_started(&mut self) {
+        let version = crate::version::player();
+        let previous = self.ui_state.state.player_version.clone();
+        if previous.as_deref() != Some(version) {
+            self.ui_state.state.player_version = Some(version.to_owned());
+            let now = self.now_ms();
+            self.ui_state.touch(now);
+        }
+        diag!("app.started {version} (previous {previous:?})");
+        let data = crate::fact_events::app_started(version, previous.as_deref());
+        self.broadcast(crate::fact_events::APP_STARTED, data);
+    }
     /// Whether a development load would start past the wire's safe
     /// integers (the core allocates its pid with the `Spawn`).
     pub(crate) fn owners_exhausted(&self) -> bool {

@@ -1,6 +1,6 @@
 {
   "id": "vestra.playlist",
-  "version": "0.2.10",
+  "version": "0.2.11",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "name": "Playlist",

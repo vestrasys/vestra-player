@@ -62,7 +62,7 @@ function size(bytes: number) {
  * (README, known behaviour).
  */
 export default async function activate(plugin: Plugin) {
-  plugin.player.subscribe(); // was "events"
+  plugin.player.subscribe(); // B3: removed in SDK 1.11; migrate (events-and-triggers.md §7)
   await plugin.player.read(); // was "playback.read"
   const { player } = plugin;
   // Headless hosts refuse the display; that never fails the action itself.
@@ -318,6 +318,6 @@ export default async function activate(plugin: Plugin) {
     refreshUsage();
     osd("Cover cache cleared");
   });
-  player.onChange(observe);
+  player.onChange(observe); // B3: Player.onChange is removed in SDK 1.11
   observe(player.state);
 }

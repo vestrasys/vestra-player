@@ -10,7 +10,7 @@ import { Resume } from "./resume.ts";
  * positions.json), written after each change and on deactivation.
  */
 export default async function activate(plugin: Plugin) {
-  plugin.player.subscribe(); // was "events"
+  plugin.player.subscribe(); // B3: removed in SDK 1.11; migrate (events-and-triggers.md §7)
   await plugin.player.read(); // was "playback.read"
   const { player } = plugin;
   const recent = new Recent(plugin);
@@ -24,7 +24,7 @@ export default async function activate(plugin: Plugin) {
   recent.observe(player.state);
   resume.observe(player.state, true);
   void menu.build();
-  player.onChange((state) => {
+  player.onChange((state) => { // B3: Player.onChange is removed in SDK 1.11
     recent.observe(state);
     resume.observe(state);
   });

@@ -51,6 +51,8 @@ fn core(root: &Path) -> (Core, mpsc::Receiver<Event>, mpsc::Receiver<Command>) {
         window_facts: Value::Null,
         window_facts_seq: None,
         window_state_sent: Value::Null,
+        window_change: Default::default(),
+        layout_change: Default::default(),
         held_events: Default::default(),
         ui_facts: Default::default(),
         restarts: Default::default(),

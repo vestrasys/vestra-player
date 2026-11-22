@@ -111,6 +111,8 @@ export component MarksWindow inherits Window {
     private property <length> edit-column: max(28px, edit-measure.preferred-width);
     Rectangle {
         visible: false;
+        x: 0;
+        y: 0;
         width: 0;
         height: 0;
         edit-measure := VerticalLayout {

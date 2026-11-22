@@ -29,6 +29,8 @@ export component AddLink inherits Window {
     width: max(464px, max(heading.preferred-width, hint-measure.preferred-width) + 2 * Theme.dialog-padding);
     Rectangle {
         visible: false;
+        x: 0;
+        y: 0;
         width: 0;
         height: 0;
         hint-measure := Text { text: @tr("Enter HTTP(S) links; adding only selects, it does not play"); font-size: Theme.font-body; }

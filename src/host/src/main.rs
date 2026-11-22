@@ -14,6 +14,7 @@ mod command_renames;
 mod commands;
 mod conditions;
 mod core_actions;
+mod fact_events;
 pub mod font_asset;
 pub mod font_carrier;
 mod guest;
@@ -639,6 +640,8 @@ fn player() -> Result<()> {
         window_facts: Value::Null,
         window_facts_seq: None,
         window_state_sent: Value::Null,
+        window_change: Default::default(),
+        layout_change: Default::default(),
         held_events: Default::default(),
         ui_facts: Default::default(),
         restarts: Default::default(),

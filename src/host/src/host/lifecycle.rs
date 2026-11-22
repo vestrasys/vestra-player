@@ -366,10 +366,11 @@ impl Core {
                 self.supervisor.wake(Pid(*owner), &trigger);
                 continue;
             }
-            // A source event to a running listener is a wake trigger sent
-            // now: it counts as use and cancels a standby on its way, so
-            // the process is not stopped under its handler (§4.9).
-            if wake && capabilities::SOURCE_EVENTS.contains(&event) {
+            // A source event (or a fact event of the second batch) to a
+            // running listener is a wake trigger sent now: it counts as
+            // use and cancels a standby on its way, so the process is not
+            // stopped under its handler (§4.9).
+            if wake && capabilities::counts_as_use(event) {
                 self.supervisor.delivering(Pid(*owner));
             }
             if let Err(error) = plugin.send(json!({"event":event,"data":data})) {

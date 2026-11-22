@@ -177,6 +177,12 @@ pub struct Sources {
     audio_owner: Option<u64>,
     audio_active: Option<String>,
     audio_checked: Option<std::time::Instant>,
+    /// What `audio.devices.changed` last reported (the first check of the
+    /// run is the start, not a change).
+    devices_sent: Option<Value>,
+    /// Its data while the control worker has not taken it
+    /// (`take_devices_changed`).
+    devices_changed: Option<Value>,
     /// The `Control::Seek` mpv is still running (`SeekFlight`).
     seek_flight: SeekFlight,
     /// Repeats of a running seek not sent (tests read it).
@@ -607,7 +613,9 @@ impl Sources {
     }
     /// R-A3/R-H9: play on the requested device while it is present, else on
     /// the system default; checked every second. mpv and generated streams
-    /// follow the same choice.
+    /// follow the same choice. Notes `audio.devices.changed` when the
+    /// device list, the request or the device in use changed since the last
+    /// check that said so (second batch of events; `take_devices_changed`).
     pub fn follow_device(&mut self, mpv: &Mpv) {
         if self
             .audio_checked
@@ -616,10 +624,11 @@ impl Sources {
             return;
         }
         self.audio_checked = Some(std::time::Instant::now());
+        let devices = audio_devices(mpv);
         let target = self
             .audio_requested
             .clone()
-            .filter(|id| audio_devices(mpv).iter().any(|(present, _)| present == id));
+            .filter(|id| devices.iter().any(|(present, _)| present == id));
         let wanted = target.as_deref().unwrap_or("auto");
         if mpv.get_property::<String>("audio-device").ok().as_deref() != Some(wanted)
             && let Err(error) = mpv.set_property("audio-device", wanted)
@@ -629,6 +638,18 @@ impl Sources {
         #[cfg(feature = "producer-audio")]
         self.producers.follow_device(target.as_deref());
         self.audio_active = target;
+        if let Some(data) = devices_changed(
+            &mut self.devices_sent,
+            &devices,
+            self.audio_requested.as_deref(),
+            self.audio_active.as_deref(),
+        ) {
+            self.devices_changed = Some(data);
+        }
+    }
+    /// `audio.devices.changed`'s data noted since the last call (the newest).
+    pub fn take_devices_changed(&mut self) -> Option<Value> {
+        self.devices_changed.take()
     }
     fn audio_track(&mut self, mpv: &Mpv, method: &str, params: &Value) -> Result<Value, RpcError> {
         self.check_expected(params)?;
@@ -1919,6 +1940,30 @@ fn chapter_list(node: Node) -> Vec<Value> {
         })
         .collect()
 }
+/// `audio.devices.changed` (events-and-triggers.md §4.6): `{ devices,
+/// requested, active }` (`devices` as `player.audioDevices()` lists them,
+/// `requested` the device `player.setAudioDevice` asked for, `active` the
+/// one in use, `null` for the system default, as `PlayerState.audioOutput`)
+/// when it differs from `sent`. The first check of a run sets `sent` and
+/// reports nothing.
+fn devices_changed(
+    sent: &mut Option<Value>,
+    devices: &[(String, String)],
+    requested: Option<&str>,
+    active: Option<&str>,
+) -> Option<Value> {
+    let devices = devices
+        .iter()
+        .map(|(id, name)| json!({"id": id, "name": name}))
+        .collect::<Vec<_>>();
+    let now = json!({"devices": devices, "requested": requested, "active": active});
+    if sent.as_ref() == Some(&now) {
+        return None;
+    }
+    let first = sent.is_none();
+    *sent = Some(now.clone());
+    (!first).then_some(now)
+}
 /// mpv `audio-device-list` as `(id, name)`, without `auto` (the system
 /// default). Where CoreAudio devices are listed, only those: macOS lists the
 /// same device once more under `avfoundation/`.
@@ -2789,6 +2834,31 @@ mod audio_track_tests {
             title: None,
             language: None,
         }
+    }
+    #[test]
+    fn audio_devices_changed_reports_changes_after_the_first_check() {
+        let mut sent = None;
+        let one = vec![("wasapi/a".to_owned(), "Speakers".to_owned())];
+        assert!(devices_changed(&mut sent, &one, None, None).is_none());
+        assert!(devices_changed(&mut sent, &one, None, None).is_none());
+        let two = vec![
+            ("wasapi/a".to_owned(), "Speakers".to_owned()),
+            ("wasapi/b".to_owned(), "Headset".to_owned()),
+        ];
+        let plugged = devices_changed(&mut sent, &two, None, None).unwrap();
+        assert_eq!(
+            plugged["devices"][1],
+            json!({"id":"wasapi/b","name":"Headset"})
+        );
+        assert_eq!(plugged["active"], Value::Null);
+        // Chosen, then in use.
+        let chosen = devices_changed(&mut sent, &two, Some("wasapi/b"), Some("wasapi/b")).unwrap();
+        assert_eq!(chosen["requested"], "wasapi/b");
+        assert_eq!(chosen["active"], "wasapi/b");
+        // Unplugged: the list shrinks and the default plays.
+        let lost = devices_changed(&mut sent, &one, Some("wasapi/b"), None).unwrap();
+        assert_eq!(lost["active"], Value::Null);
+        assert_eq!(lost["requested"], "wasapi/b");
     }
     #[test]
     fn audio_devices_skip_auto_and_duplicate_backends() {
