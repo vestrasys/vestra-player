@@ -270,6 +270,27 @@ export class PlayerService {
      * `source.state` (`Connection.hold`). `always`: the state is read once
      * more when the subscription starts, also without `read()`.
      */
+    /**
+     * A fact event's fields of the state (1.11.0-rc.2): taken into the copy
+     * when `belongs` holds for it, as `accept` takes a state (a precise
+     * pass for the fields that changed); its event sequence is kept, so the
+     * next `source.state` is accepted as before.
+     */
+    patch(belongs, fields) {
+        if (!belongs(this.raw))
+            return;
+        const raw = { ...this.raw, ...fields };
+        if (JSON.stringify(raw) === JSON.stringify(this.raw))
+            return;
+        const last = this.state;
+        const lastRaw = this.raw;
+        this.raw = raw;
+        this.state = view(raw, this.runtime);
+        const changed = changes(last, lastRaw, this.state, raw);
+        for (const watcher of [...this.#watchers])
+            watcher(raw);
+        this.runtime.changed(PLAYER, changed);
+    }
     watch(watcher, always = false) {
         void this.start();
         this.#watchers.add(watcher);
@@ -597,10 +618,24 @@ function provideSequence(scope, provider) {
 /**
  * `audio.tracks.changed`'s data as the listener gets it (`ScopeImpl.fact`,
  * SDK 1.11.0): the tracks as {@link PlayerState.audioTracks} lists them.
+ * The copy takes them first (1.11.0-rc.2), when they are of its source.
  */
-export function audioTracksChanged(data) {
+export function audioTracksChanged(runtime, data) {
     const { sourceId, audioTracks } = data;
+    playerOf(runtime).patch((raw) => raw.stamp.generation === sourceId, {
+        audioTracks,
+    });
     return { sourceId, audioTracks: audioTracks.map(audioTrack) };
+}
+/**
+ * `audio.devices.changed`'s data as the listener gets it (1.11.0-rc.2):
+ * as the player sent it; the copy takes `requested` and `active` into
+ * {@link PlayerState.audioOutput} first.
+ */
+export function audioDevicesChanged(runtime, data) {
+    const { requested, active } = data;
+    playerOf(runtime).patch(() => true, { audioOutput: { requested, active } });
+    return data;
 }
 export const playerOf = (runtime) => runtime.service("player", () => new PlayerService(runtime));
 /**
