@@ -230,7 +230,6 @@ export const SYSTEM_DEFAULT = "System Default";
 export const NO_DEVICES = "No Output Devices";
 export const UNNAMED_DEVICE = "Unnamed device";
 export const SELECTED_DEVICE = "Selected device";
-export const DEVICE_POLL_MS = 5000;
 const utf8 = new TextEncoder();
 const bytes = (text: string) => utf8.encode(text).length;
 /** A saved id the player would accept: 1–512 UTF-8 bytes, no control characters (C0, DEL, C1), as the player checks it. */

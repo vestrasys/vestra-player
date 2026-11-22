@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.12
+
+- SDK 1.11 (events and triggers, Release B): `player.subscribe()` and `player.onChange()` are gone. The scene follows `source.opening`, `source.ready` and `source.ended` instead of diffing the state stream, a source that closes after it ended is told by a trigger on `when.open` (its `leave`), and the backdrop coming back is told by `layout.changed` instead of `panels.backdrop.onChange` (which held `window.state`). No stream: the backdrop shows nothing that follows the position. Behaviour is unchanged; the mounted backdrop panel still keeps the plugin running. Who must change: nobody.
+
 ## 0.1.11
 
 - The description's last line, starting with `→ `, says where to open the plugin; Store 0.3.1 shows it on the plugin's card, also before install. Description text and its translations only. Who must change: nobody.

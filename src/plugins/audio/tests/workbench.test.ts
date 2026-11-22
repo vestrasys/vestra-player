@@ -993,7 +993,7 @@ test("G16: the saved device is restored at start without an OSD, also while it i
   }
 });
 
-test("G16: a device plugged in later shows up within 5 s; without a list the palette has none and the drop-down says so", async () => {
+test("G16: a device plugged in later shows up when the player reports it; without a list the palette has none and the drop-down says so", async () => {
   const host = new TestHost();
   host.handle("player.audioDevices", () => {
     throw new HostError("unavailable", "no audio output");
@@ -1008,7 +1008,9 @@ test("G16: a device plugged in later shows up within 5 s; without a list the pal
   assert.equal(window.props["devices-available"], false);
   host.reset("player.audioDevices");
   host.audioDevices = [SPEAKERS, PHONES];
-  await host.settle(5200);
+  // The player checks the list once a second and reports a change (SDK 1.11; the plugin polled every 5 s before).
+  host.emit("audio.devices.changed", { devices: host.audioDevices, requested: null, active: null });
+  await host.settle();
   assert.deepEqual(deviceItems(host).map((item) => item[0]), ["System Default", "MacBook Air 扬声器", "USB 耳机"]);
   assert.deepEqual(listed(host, window.props["device-rows"]), ["System Default", device(SPEAKERS.name), device(PHONES.name)]);
   assert.deepEqual(host.osd, [], "a new device is not announced");
@@ -1343,6 +1345,51 @@ test("activated before a file is open, the panel follows the file opened later (
   host.setSource({ audioTracks: [track(1)] });
   await host.settle();
   assert.equal(panel.props["source-ready"], true);
+  await stop();
+});
+
+test("B3: the commands and the track menu follow the end, playing again after it, and closing, through events and conditions", async () => {
+  const { host, stop } = await open();
+  await host.settle();
+  assert.equal(host.triggers.length, 2, "when.ready and when.open");
+  assert.equal(host.command("audio.equalizer").state.enabled, true);
+  host.setSource({ phase: "ended", terminalReason: "natural" });
+  await host.settle();
+  assert.equal(host.command("audio.equalizer").state.enabled, false);
+  assert.equal(host.command("audio.load").state.reason, "No file is playing");
+  // A seek back from the end: the same source plays again in a new cycle, with no source event.
+  host.setSource({ phase: "ready", terminalReason: null, cycle: host.source.cycle + 1 });
+  await host.settle();
+  assert.equal(host.command("audio.equalizer").state.enabled, true);
+  host.setSource({ phase: "ended", terminalReason: "natural" });
+  await host.settle();
+  // Closed after its end: no source event, the condition when.open says so.
+  host.setSource({ phase: "empty", source: null, audioTracks: null });
+  await host.settle();
+  assert.equal(host.command("audio.track.none").state.enabled, false);
+  assert.equal(host.command("audio.track.cycle").state.reason, "No audio tracks");
+  await stop();
+});
+
+test("B3: the panel follows the player with a stream only while it is on screen", async () => {
+  const host = new TestHost();
+  const { stop } = await startPlugin(activate, { directory, host });
+  await host.settle();
+  // A stream reads the state once when it opens (`source.state`).
+  const reads = () => host.sent("source.state").length;
+  const before = reads();
+  await host.command("audio.workbench").run(); // shown
+  await host.settle();
+  assert.equal(reads(), before + 1, "opened");
+  await host.command("audio.workbench").run(); // hidden
+  await host.settle();
+  host.setSource({ output: { volume: 40, muted: false } });
+  await host.settle();
+  assert.equal(reads(), before + 1, "closed: nothing opened while hidden");
+  await host.command("audio.workbench").run(); // shown again
+  await host.settle();
+  assert.equal(reads(), before + 2, "opened again");
+  assert.equal(host.mounted().props.volume, 40);
   await stop();
 });
 

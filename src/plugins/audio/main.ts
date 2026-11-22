@@ -2,7 +2,6 @@ import { readdir } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join } from "node:path";
 import type { AudioDevice, AudioTrack, Panel, Plugin, PlayerState, PluginError, Scope } from "@vestra-player/sdk";
 import {
-  DEVICE_POLL_MS,
   SELECTED_DEVICE,
   SYNC_STEP_MS,
   channelModes,
@@ -44,7 +43,17 @@ const quiet = (shown: Promise<void>) => void shown.catch(() => undefined);
  * saved in `settings.json`; only the audio sync follows the source, as its keep mode says.
  */
 export default async function activate(plugin: Plugin) {
-  plugin.player.subscribe(); // B3: removed in SDK 1.11; migrate (events-and-triggers.md §7)
+  // `player.state` follows the player only at the discrete changes this plugin hears (SDK 1.11):
+  // the source events, the fact events and these two conditions, which the player evaluates. They
+  // tell the phase flips no source event reports: playing again after the end (`ready`), and a
+  // source closed after it ended (`open`). Declared before the first await (triggers are); the
+  // handler is set once everything exists, and a flip before that is caught up then.
+  // A notification's state is taken into `player.state` before its handler runs.
+  let flipped: (() => void) | null = null;
+  let missed = false;
+  const flip = () => (flipped ? flipped() : void (missed = true));
+  plugin.trigger().firesOn(plugin.when.ready).enter(flip).leave(flip);
+  plugin.trigger().firesOn(plugin.when.open).leave(flip);
   await plugin.player.read(); // was "playback.read"
   const { player } = plugin;
   const { text } = plugin.i18n;
@@ -148,8 +157,14 @@ export default async function activate(plugin: Plugin) {
     apply();
     plugin.update();
   };
-  let reread: ReturnType<typeof setTimeout> | undefined;
-  plugin.onDispose(() => clearTimeout(reread));
+  /** The count the player reports when the decoded audio changes (`audio.reconfigured`); a read on its way is dropped. */
+  const takeChannels = (count: number | null) => {
+    ++probe;
+    if (count === channelCount) return;
+    channelCount = count;
+    apply();
+    plugin.update();
+  };
 
   // A new source resets only the delay, and only under Don't Keep. A track switch keeps everything;
   // re-setting the same value also drops a failure the previous track left behind.
@@ -165,16 +180,16 @@ export default async function activate(plugin: Plugin) {
       apply(); // a never-applied neutral chain sends nothing
     }
     // Read the channel count once the track plays. The decoder may still report the
-    // previous track at first, so read again a second later.
+    // previous track at first: `audio.reconfigured` brings the new count once it changed
+    // (it replaces the second read a second later).
     const key = `${source}|${track}`;
     if (state.phase !== "ready" || probed === key) return;
     probed = key;
     void readChannels();
-    clearTimeout(reread);
-    reread = setTimeout(() => void readChannels(), 1000);
-    reread.unref?.();
   };
-  player.onChange(follow); // B3: Player.onChange is removed in SDK 1.11
+  player.on("audio.reconfigured", ({ sourceId, channels }) => {
+    if (sourceId === source) takeChannels(channels);
+  });
   follow(player.state);
 
   // ---------------------------------------------------------------- A11 external audio
@@ -239,7 +254,7 @@ export default async function activate(plugin: Plugin) {
       }
     }
   };
-  player.onChange((state) => void autoLoadFor(state)); // B3: Player.onChange is removed in SDK 1.11
+  // Scanned when a source is ready (`changed` below), and here for the one open at start.
   void autoLoadFor(player.state);
   const setAutoLoad = (on: boolean) => {
     autoLoad = on;
@@ -308,12 +323,12 @@ export default async function activate(plugin: Plugin) {
         }),
       );
     }));
-  player.onChange(() => void rebuildTracks()); // B3: Player.onChange is removed in SDK 1.11
   void rebuildTracks();
 
   // ---------------------------------------------------------------- G16 output device
-  // The device list is read at start and every 5 s (the player pushes no list changes);
-  // the choice is saved here and handed to the player at start (it keeps it for one run).
+  // The device list is read at start; the player tells a change of the list or of the device in
+  // use (`audio.devices.changed`, checked once a second). The choice is saved here and handed to the
+  // player at start (it keeps it for one run).
   let devices: AudioDevice[] | null = null; // null: the player lists none (headless, ao=null)
   /**
    * Why the player refused the last volume or mute change (it has no audio output), `null` while it
@@ -351,13 +366,8 @@ export default async function activate(plugin: Plugin) {
       ...(missing === null ? [] : [{ id: device, title: titles.at(-1)!, name: device === null ? null : nameOf(device), connected: false }]),
     ];
   };
-  const readDevices = async () => {
-    let list: AudioDevice[] | null;
-    try {
-      list = await player.audioDevices();
-    } catch {
-      list = null;
-    }
+  const readDevices = async () => takeDevices(await player.audioDevices().catch(() => null));
+  const takeDevices = (list: AudioDevice[] | null) => {
     devices = list && list.length > 0 ? list : null;
     if (devices) volumeWorks();
     // Keep the saved name current, so a disconnected device still shows what it is called.
@@ -388,7 +398,7 @@ export default async function activate(plugin: Plugin) {
       else quiet(plugin.osd.show("Cannot switch to {}: {}", [arg(name), message]));
     } finally {
       switching--;
-      output = player.state.audioOutput ?? output;
+      output = (await player.refresh().catch(() => player.state)).audioOutput ?? output;
       void rebuildDevices();
       plugin.update();
     }
@@ -401,8 +411,7 @@ export default async function activate(plugin: Plugin) {
     else quiet(plugin.osd.show("Audio output: {}", [arg(name)]));
   };
   /** Unplugged: the player falls back to the default; plugged back: it returns to the choice. */
-  const followOutput = (state: PlayerState) => {
-    const next = state.audioOutput ?? { requested: null, active: null };
+  const followOutput = (next: { requested: string | null; active: string | null }) => {
     const previous = output;
     output = next;
     if (switching || next.requested === null || next.requested !== previous.requested || next.active === previous.active) return;
@@ -416,7 +425,16 @@ export default async function activate(plugin: Plugin) {
       void readDevices().then(() => announce(requested));
     }
   };
-  player.onChange(followOutput); // B3: Player.onChange is removed in SDK 1.11
+  let outputActive = output.active;
+  player.on("audio.devices.changed", ({ devices: list, requested, active }) => {
+    // A change of the device in use may bring the output back (as a new source does).
+    if (active !== outputActive) {
+      outputActive = active;
+      volumeWorks();
+    }
+    takeDevices(list);
+    followOutput({ requested, active });
+  });
 
   let deviceScope: Scope = plugin.scope();
   let deviceKey: string | null = null;
@@ -454,13 +472,10 @@ export default async function activate(plugin: Plugin) {
       switching++;
       await player.setAudioDevice(device).catch(() => undefined);
       switching--;
-      output = player.state.audioOutput ?? output;
+      output = (await player.refresh().catch(() => player.state)).audioOutput ?? output;
     }
     await readDevices();
   })();
-  const devicePoll = setInterval(() => void readDevices(), DEVICE_POLL_MS);
-  devicePoll.unref?.();
-  plugin.onDispose(() => clearInterval(devicePoll));
 
   // ---------------------------------------------------------------- volume (the player's)
   // The panel's slider sets the player's volume like the bottom bar's (0–100; a louder volume set
@@ -489,21 +504,30 @@ export default async function activate(plugin: Plugin) {
     volumeRefused = clip(String((error as Error)?.message || "unavailable"), 120);
     plugin.update();
   }
-  // A new source or a change of the output may bring the output back.
-  let outputSource = player.state.sourceId;
-  let outputActive = player.state.audioOutput?.active ?? null;
-  player.onChange((state) => { // B3: Player.onChange is removed in SDK 1.11
-    const active = state.audioOutput?.active ?? null;
-    if (state.sourceId === outputSource && active === outputActive) return;
-    outputSource = state.sourceId;
-    outputActive = active;
-    volumeWorks();
-  });
+  // A new source (`source.opening`, in `changed` below) or a change of the device in use
+  // (`audio.devices.changed` above) may bring the output back.
 
   // ---------------------------------------------------------------- panel
   /** The first key of one of this plugin's commands or the player's (`host/…`, SDK 1.6.16), "" without one. */
   const keyOf = (id: string) => plugin.commands.keys(id)[0] ?? "";
+  // The panel shows the player's volume and mute, which have no event: it follows them with a
+  // stream while it is on screen (in fullscreen also while its column waits at the edge, which
+  // `layout.changed` leaves out), and with none while it is not. Looked at in each update pass:
+  // `layout.changed` (heard below, so the panel's state copy follows it) and the first read of the
+  // layout each run one.
+  let feed: { stop(): void } | null = null;
+  const followPanel = () => {
+    const state = panel.state;
+    const showing = !!state?.active && (state.effective || state.reason === "fullscreen" || state.reason === "idle");
+    if (showing) feed ??= player.stream(() => undefined);
+    else if (feed) {
+      feed.stop();
+      feed = null;
+    }
+  };
+  player.on("layout.changed", () => plugin.update());
   panel.bind(() => {
+    followPanel();
     const list = tracks();
     const state = player.state;
     return {
@@ -768,6 +792,31 @@ export default async function activate(plugin: Plugin) {
       if (edit(neutralProcessing(settings))) quiet(plugin.osd.show("Audio processing reset"));
     },
   });
+
+  // ---------------------------------------------------------------- following the player
+  // The discrete changes this plugin hears re-run what the state stream drove before SDK 1.11: the
+  // sync and channel follow, the track menu, auto-loading, and an update pass for the command
+  // states and the panel, which read `player.state` (the newest snapshot the plugin has). The
+  // events of a new or loaded source and the conditions' notifications bring the player's state;
+  // an ended source's state is no longer the player's, and a track change does not update the
+  // copy in SDK 1.11.0-rc.1, so those two read it once.
+  const changed = () => {
+    const state = player.state;
+    follow(state);
+    void rebuildTracks();
+    void autoLoadFor(state);
+    plugin.update();
+  };
+  const reread = () => void player.refresh().then(changed, () => undefined);
+  player.on("source.opening", () => {
+    volumeWorks(); // a new source may bring the output back
+    changed();
+  });
+  player.on("source.ready", changed);
+  player.on("source.ended", reread);
+  player.on("audio.tracks.changed", reread);
+  flipped = changed;
+  if (missed) changed();
 
   /** The panel's status line, as a state its Slint file puts into words. */
   function describe() {
