@@ -761,7 +761,12 @@ impl Core {
             let Some((_, state)) = current.remove(&(owner, event.clone())) else {
                 continue;
             };
-            let id = self.held_id(owner).unwrap_or_default().to_owned();
+            // An earlier missed event of the same plugin already woke it (its
+            // spawn let go of the held entry): it starts and reads the state, as
+            // every start does, and `wake_listener` would do nothing.
+            let Some(id) = self.held_id(owner).map(str::to_owned) else {
+                continue;
+            };
             diag!("lazy: {id} parked before {event} changed at start-up, waking it");
             let data = if event == KEYS_EVENT {
                 self.keys_woken(owner, state)

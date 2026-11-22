@@ -402,6 +402,11 @@ const SETS_AFTER_READY: &str = "vestra.fixture-sets-after-ready";
 #[test]
 #[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]
 fn a_first_run_that_takes_up_a_resource_while_its_class_is_asked_is_not_parked() {
+    // The display layer through the wire, not `plugin.video.view()`: since
+    // SDK 1.11 the view's handle follows the player (a `source.state` hold,
+    // which subscribes), and a subscription that reached the player before
+    // the ready's classification made the plugin resident as a listener at
+    // once, so the late classification this test is about was never asked.
     let root = root_with(|plugins| {
         vec![package(
             plugins,
@@ -411,7 +416,7 @@ fn a_first_run_that_takes_up_a_resource_while_its_class_is_asked_is_not_parked()
                 "export default async function activate(plugin) {{\n\
                  plugin.commands.add({{ id: \"noop\", path: [\"Tools\", \"Noop\"], run: () => {{}} }});\n\
                  setTimeout(() => {{\n\
-                 plugin.video.view().set({{ zoom: 1.5 }});\n\
+                 plugin.wire.request(\"video.view.set\", {{ values: {{ aspect: null, fit: \"keep\", zoom: 1.5, panX: 0, panY: 0 }} }});\n\
                  console.error(`{SETS_AFTER_READY} applied`);\n\
                  }}, 0);\n}}\n"
             ),
@@ -1105,6 +1110,71 @@ fn a_listener_parked_at_start_up_is_woken_once_for_a_muted_change() {
         );
     }
     assert!(!second.contains(&format!("] {BINDINGS} start")), "{second}");
+}
+
+const TWO: &str = "vestra.fixture-two-events";
+const LATE_TWO: &str = "vestra.fixture-late-two";
+
+/// A listener of two wake events, parked before both changed during
+/// start-up: the first missed event wakes it, and the log names it once.
+/// The second needs no wake of its own (the plugin starts and reads the
+/// state, as every start does), so no second line, and none without a name
+/// (the plugin was no longer in standby when the second was looked at).
+#[test]
+#[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]
+fn a_listener_that_missed_two_events_at_start_up_is_woken_once_and_named() {
+    let root = root_with(|plugins| {
+        vec![
+            package(
+                plugins,
+                TWO,
+                &[],
+                format!(
+                    "export default async function activate(plugin) {{\n\
+                     console.error(`{TWO} start`);\n\
+                     plugin.bindings.onChange(() => console.error(`{TWO} heard bindings`));\n\
+                     plugin.player.on(\"resolvers.fileTypes\", () => console.error(`{TWO} heard file types`));\n}}\n"
+                ),
+            ),
+            package(
+                plugins,
+                LATE_TWO,
+                &[],
+                format!(
+                    "export default async function activate(plugin) {{\n\
+                     await new Promise((done) => setTimeout(done, 4000));\n\
+                     plugin.commands.add({{ id: \"late\", path: [\"Tools\", \"Late\"], run: () => {{}} }});\n\
+                     await plugin.wire.request(\"sourceResolvers.register\", {{ id: \"late-files\", extensions: [\"latetwo\"] }});\n\
+                     console.error(`{LATE_TWO} added`);\n}}\n"
+                ),
+            ),
+        ]
+    });
+    let lazy = [("VESTRA_SHARED", "1"), ("VESTRA_IDLE_MS", "500")];
+    let log = run(root.path(), 10, &lazy);
+    let at = |text: &str| log.find(text).unwrap_or_else(|| panic!("{text}: {log}"));
+    // The set-up: parked before both changed, during start-up.
+    let parked = at(&format!("lazy: {TWO} parked"));
+    let added = at(&format!("{LATE_TWO} added"));
+    let settled = at("lazy: start-up settled");
+    assert!(parked < added && added < settled, "{log}");
+    // Woken once, named, by the first of the two (in name order).
+    assert_eq!(count(&log, &format!("lazy: {TWO} woken by")), 1, "{log}");
+    assert_eq!(
+        count(&log, &format!("lazy: {TWO} parked before ")),
+        1,
+        "{log}"
+    );
+    assert!(
+        log.contains(&format!(
+            "lazy: {TWO} parked before bindings.changed changed at start-up, waking it"
+        )),
+        "{log}"
+    );
+    assert!(!log.contains("lazy:  parked before"), "{log}");
+    // Its woken run started after the mute ended.
+    let woken_start = log.rfind(&format!("{TWO} start")).unwrap();
+    assert!(settled < woken_start, "{log}");
 }
 
 /// A test parks and wakes every built-in and diffs the registries: for
