@@ -2235,3 +2235,38 @@ test("motion smoothing's run-long reasons and engines agree (playback/motion.rs 
   // player has no reserved engine's text for the SDK's TestHost to repeat;
   // the TestHost models the engine in the SDK's T8 change.
 });
+
+test("other-engine agrees: TestHost's message and where it comes in the order of reasons (playback/motion.rs Reason::message and check; SDK TestHost; T8)", () => {
+  const motion = host("src/playback/motion.rs");
+  const testHost = sdkFile("plugin/testing/processing.js");
+  // The message, with the engine's vendor in place of the format argument.
+  const own =
+    /Self::OtherEngine\(engine\) => format!\(\s*"([^"]+)",\s*engine\.vendor\(\)/.exec(
+      motion,
+    )?.[1];
+  assert.ok(own, "Reason::OtherEngine's message in motion.rs");
+  const sdk = /code: "other-engine",\s*message: `([^`]+)`/.exec(testHost)?.[1];
+  assert.ok(sdk, "otherEngine's message in the SDK's TestHost");
+  assert.equal(sdk, own.replace("{}", "${vendor}"));
+  // The reasons the player checks after it, in `check`.
+  const check = /pub fn check\([\s\S]*?\n\}/.exec(motion)?.[0];
+  assert.ok(check, "check in motion.rs");
+  const after = check.split("Reason::OtherEngine(other)")[1];
+  assert.ok(after, "other-engine in check");
+  const names: Record<string, string> = {
+    "Reason::Failed": "failed",
+    "Reason::Overload": "overload",
+    "rate(facts": "rate",
+    "Reason::Format": "format",
+    "size(facts": "size",
+  };
+  const order = [
+    ...after.matchAll(/Reason::[A-Z][a-z]+|rate\(facts|size\(facts/g),
+  ].map((m) => names[m[0]] ?? m[0]);
+  const later = /const AFTER_OTHER_ENGINE = \[([^\]]+)\]/.exec(testHost)?.[1];
+  assert.ok(later, "AFTER_OTHER_ENGINE in the SDK's TestHost");
+  assert.deepEqual(
+    [...later.matchAll(/"([^"]+)"/g)].map((m) => m[1]!).sort(),
+    [...new Set(order)].sort(),
+  );
+});

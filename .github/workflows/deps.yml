@@ -108,6 +108,10 @@ jobs:
         with:
           node-version: "26"
       - name: Collect
+        # The libmpv pin is a release asset of this (private) repository:
+        # collect-windows-deps.mjs fetches it with gh.
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: node src/packaging/collect-windows-deps.mjs --out "$env:RUNNER_TEMP\deps"
       # MSVC import library from the DLL's export table (rsmpv-sys links mpv.lib).
       - name: mpv.lib

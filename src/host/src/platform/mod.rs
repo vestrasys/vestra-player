@@ -321,10 +321,12 @@ pub fn current_install_layout() -> Option<InstallLayout> {
 }
 
 /// A command for a console tool the host runs itself (FFmpeg, ffprobe),
-/// without a console window (`hide_console`).
+/// without a console window (`hide_console`) and without motion
+/// smoothing's Vulkan scope (`unscoped_child_env`).
 pub fn tool_command(program: impl AsRef<std::ffi::OsStr>) -> std::process::Command {
     let mut command = std::process::Command::new(program);
     hide_console(&mut command);
+    unscoped_child_env(&mut command);
     command
 }
 
@@ -633,6 +635,8 @@ mod no_motion {
     }
     /// Nothing to prepare.
     pub fn prepare_motion(_engine: crate::playback::motion::Engine) {}
+    /// Nothing scoped (`prepare_motion`).
+    pub fn unscoped_child_env(_command: &mut std::process::Command) {}
     /// No motion smoothing filter.
     pub fn motion_filter(
         _engine: crate::playback::motion::Engine,

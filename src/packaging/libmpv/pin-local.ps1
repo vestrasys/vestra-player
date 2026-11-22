@@ -3,11 +3,11 @@
 # libmpv-2.dll, its MSVC import library mpv.lib (as deps.yml makes it) and
 # a note in components.json. Point env.ps1's MPV_LIBRARY_DIR and
 # VESTRA_DEPS_DIR at -Out to build and stage the host with it.
-#   pin-local.ps1 -Dll <work>\out\libmpv-2.dll [-From C:\vestra\deps] [-Out C:\vestra\deps-t8]
+#   pin-local.ps1 -Dll <work>\out\libmpv-2.dll -From <current deps dir> -Out <new deps dir>
 param(
   [Parameter(Mandatory)] [string]$Dll,
-  [string]$From = 'C:\vestra\deps',
-  [string]$Out = 'C:\vestra\deps-t8'
+  [Parameter(Mandatory)] [string]$From,
+  [Parameter(Mandatory)] [string]$Out
 )
 $ErrorActionPreference = 'Stop'
 New-Item -ItemType Directory -Force $Out | Out-Null

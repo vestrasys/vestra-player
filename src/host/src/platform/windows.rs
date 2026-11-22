@@ -2144,10 +2144,16 @@ fn nvidia_motion_probe() -> super::MotionProbe {
             ),
         });
     }
+    *NVIDIA_ADAPTER.lock().unwrap_or_else(|e| e.into_inner()) = Some(rtx.name.clone());
     Ok(super::MotionGpu {
         name: rtx.name.clone(),
     })
 }
+
+/// The adapter [`nvidia_motion_probe`] chose, by its name: the converter's
+/// Vulkan device is created on the device of that name
+/// ([`fruc_vulkan_filter`]).
+static NVIDIA_ADAPTER: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
 
 /// Where AMD's motion smoothing works: an AMD adapter
 /// (vendor `0x1002`, not software) and AMD's AMF runtime (`amfrt64.dll` in
@@ -2226,10 +2232,14 @@ pub fn motion_filter(
 /// inside the player, which only the converter uses Vulkan for. Measured
 /// 2026-11-22: with it, those DLLs are no longer loaded and the converter
 /// runs as before (doc/architecture/README.md §4.4a). Always, and never
-/// widened (user ruling, T8): a value already in the environment is
-/// replaced, and there is no switch to turn it off. The variables stay set
-/// for the process and its later children (Node, FFmpeg), none of which uses
-/// Vulkan.
+/// widened (user ruling, T8): there is no switch to turn it off, and a value
+/// already in the environment is only narrowed ([`scoped_value`]).
+///
+/// The variables have to be in the process environment when the loader
+/// reads them, inside mpv, whenever the filter is created (a `vf add`, and
+/// again when mpv builds a new filter chain for the next file), so they stay
+/// set; the programs the player starts get the values from before
+/// ([`unscoped_child_env`]).
 pub fn prepare_motion(engine: crate::playback::motion::Engine) {
     static ONCE: std::sync::Once = std::sync::Once::new();
     if engine != crate::playback::motion::Engine::Nvidia {
@@ -2238,18 +2248,73 @@ pub fn prepare_motion(engine: crate::playback::motion::Engine) {
     ONCE.call_once(scope_vulkan);
 }
 
-/// Set [`VULKAN_SCOPE`] for this process, over any value already there.
+/// Narrow this process's Vulkan loader to [`VULKAN_SCOPE`], keeping what
+/// the environment had before for the programs the player starts.
 fn scope_vulkan() {
+    let mut before = VULKAN_BEFORE.lock().unwrap_or_else(|e| e.into_inner());
     for (name, value) in VULKAN_SCOPE {
-        if let Some(before) = std::env::var_os(name)
-            && before != *value
-        {
-            diag!("motion: {name} was {}; replaced", before.to_string_lossy());
+        let old = std::env::var_os(name);
+        let new = scoped_value(name, value, old.as_deref());
+        before.push((name, old.clone()));
+        if old.as_deref() == Some(std::ffi::OsStr::new(&new)) {
+            diag!("motion: {name}={new} (already set; kept)");
+            continue;
         }
-        match vestra_win32::set_process_env(name, value) {
-            Ok(()) => diag!("motion: {name}={value} for the converter's Vulkan device"),
+        match vestra_win32::set_process_env(name, &new) {
+            Ok(()) => diag!("motion: {name}={new} for the converter's Vulkan device"),
             Err(error) => diag!("motion: {error}"),
         }
+    }
+}
+
+/// The value of one scoping variable over what the environment has
+/// (`old`): only ever narrower.
+///
+/// - `VK_LOADER_DRIVERS_SELECT`: a selection already there is kept (it is
+///   at least as narrow as the user meant it); if it leaves NVIDIA's driver
+///   out, the converter's device cannot be created and the engine reports
+///   `runtime` (`motion::device_failure`).
+/// - `VK_LOADER_LAYERS_DISABLE`: `~implicit~` is added to the list, so what
+///   it already disables (`~all~`, named layers) stays disabled.
+fn scoped_value(name: &str, value: &str, old: Option<&std::ffi::OsStr>) -> String {
+    let old = old
+        .map(|old| old.to_string_lossy().trim().to_owned())
+        .filter(|old| !old.is_empty());
+    match (name, old) {
+        (_, None) => value.to_owned(),
+        ("VK_LOADER_DRIVERS_SELECT", Some(old)) => old,
+        (_, Some(old)) => {
+            let has = |item: &str| old.split(',').any(|o| o.trim().eq_ignore_ascii_case(item));
+            if has(value) || has("~all~") {
+                old
+            } else {
+                format!("{old},{value}")
+            }
+        }
+    }
+}
+
+/// The scoping variables as they were before [`scope_vulkan`] (empty until
+/// it ran).
+static VULKAN_BEFORE: std::sync::Mutex<Vec<(&str, Option<std::ffi::OsString>)>> =
+    std::sync::Mutex::new(Vec::new());
+
+/// A program the player starts (FFmpeg, Node, a guest or restarted player)
+/// gets the scoping variables as the player's environment had them before
+/// [`scope_vulkan`], so the scope stays inside this process. (What Windows
+/// opens through the shell, `open_path` / `open_url`, is started by
+/// `ShellExecuteW` with this process's environment; see
+/// `doc/architecture/README.md` §4.4a.)
+pub fn unscoped_child_env(command: &mut std::process::Command) {
+    for (name, old) in VULKAN_BEFORE
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .iter()
+    {
+        match old {
+            Some(old) => command.env(name, old),
+            None => command.env_remove(name),
+        };
     }
 }
 
@@ -2270,10 +2335,14 @@ const VULKAN_SCOPE: [(&str, &str); 2] = [
 /// uploaded to a Vulkan device (`hwupload`) and copied back
 /// (`hwdownload`) for either renderer, as AMD's.
 ///
-/// `hwdevice=vulkan:hwdevice_name=NVIDIA`: the device is the filter's own
-/// (libmpv's lavfi patch, src/packaging/libmpv), created on the first
-/// Vulkan device whose name has "NVIDIA" when the filter goes into the chain and freed
-/// with the filter. mpv's renderer and its Direct3D 11 device are not
+/// `hwdevice=vulkan:hwdevice_name=<adapter>`: the device is the filter's
+/// own (libmpv's lavfi patch, src/packaging/libmpv), created when the filter
+/// goes into the chain and freed with the filter, on the Vulkan device whose
+/// name has the name of the adapter `nvidia_motion_probe` chose (FFmpeg's
+/// device string: a name is matched as a substring of `deviceName`, which
+/// for NVIDIA's driver is the adapter's DXGI description). Two adapters of
+/// the same model get the first. mpv's `%n%` quoting keeps the name's
+/// spaces and any comma or colon out of the option syntax. mpv's renderer and its Direct3D 11 device are not
 /// involved; without the option the graph would get no Vulkan device from
 /// Vestra's renderers.
 ///
@@ -2286,12 +2355,24 @@ const VULKAN_SCOPE: [(&str, &str); 2] = [
 /// grids 1, 2 and 4; measured 2026-11-22), so the fallback goes on to
 /// `overload`.
 fn fruc_vulkan_filter(large: bool, performance: bool) -> String {
+    // The filter is only added after the probe chose an adapter (the
+    // engine is `no-gpu` otherwise); "NVIDIA" is never used in practice.
+    let adapter = NVIDIA_ADAPTER
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone()
+        .unwrap_or_else(|| "NVIDIA".to_owned());
+    fruc_vulkan_filter_on(&adapter, large, performance)
+}
+
+fn fruc_vulkan_filter_on(adapter: &str, large: bool, performance: bool) -> String {
     let (perf, grid) = match (large, performance) {
         (false, false) => ("slow", 4),
         (false, true) | (true, _) => ("fast", 4),
     };
     format!(
-        "lavfi=graph=[format=nv12,hwupload,fruc_vulkan=fps=source_fps*2:perf={perf}:grid={grid},hwdownload,format=nv12]:hwdevice=vulkan:hwdevice_name=NVIDIA"
+        "lavfi=graph=[format=nv12,hwupload,fruc_vulkan=fps=source_fps*2:perf={perf}:grid={grid},hwdownload,format=nv12]:hwdevice=vulkan:hwdevice_name=%{}%{adapter}",
+        adapter.len()
     )
 }
 
@@ -2381,6 +2462,7 @@ pub fn background_tool_command(program: impl AsRef<std::ffi::OsStr>) -> std::pro
         CREATE_NO_WINDOW
     };
     command.creation_flags(console | BELOW_NORMAL_PRIORITY_CLASS);
+    unscoped_child_env(&mut command);
     command
 }
 
@@ -2489,29 +2571,63 @@ mod tests {
                 ("VK_LOADER_LAYERS_DISABLE", "~implicit~")
             ]
         );
-        // Over a value already there (the variables only scope Vulkan,
-        // which no other test in this process uses).
-        vestra_win32::set_process_env("VK_LOADER_DRIVERS_SELECT", "*everything*").unwrap();
+        let scoped = |name, old: Option<&str>| {
+            let value = VULKAN_SCOPE.iter().find(|(n, _)| *n == name).unwrap().1;
+            scoped_value(name, value, old.map(std::ffi::OsStr::new))
+        };
+        let (drivers, layers) = ("VK_LOADER_DRIVERS_SELECT", "VK_LOADER_LAYERS_DISABLE");
+        // Nothing set: the scope.
+        assert_eq!(scoped(drivers, None), "*nv-vk64*");
+        assert_eq!(scoped(layers, None), "~implicit~");
+        assert_eq!(scoped(layers, Some("  ")), "~implicit~");
+        // Only ever narrower: a driver selection already there is kept (a
+        // converter it leaves without NVIDIA's driver reports `runtime`).
+        assert_eq!(scoped(drivers, Some("*amdvlk*")), "*amdvlk*");
+        assert_eq!(scoped(drivers, Some("*nv-vk64*")), "*nv-vk64*");
+        // Layers: added to the list; `~all~` and `~implicit~` already cover it.
+        assert_eq!(scoped(layers, Some("~all~")), "~all~");
+        assert_eq!(scoped(layers, Some("~implicit~")), "~implicit~");
+        assert_eq!(
+            scoped(layers, Some("VK_LAYER_foo")),
+            "VK_LAYER_foo,~implicit~"
+        );
+        assert_eq!(
+            scoped(layers, Some("VK_LAYER_foo, ~ALL~")),
+            "VK_LAYER_foo, ~ALL~"
+        );
+
+        // The process: narrowed; the programs it starts get the values from
+        // before (the variables only scope Vulkan, which no other test in
+        // this process uses).
+        vestra_win32::set_process_env(drivers, "*everything*").unwrap();
+        vestra_win32::set_process_env(layers, "VK_LAYER_foo").unwrap();
         scope_vulkan();
-        assert_eq!(
-            std::env::var("VK_LOADER_DRIVERS_SELECT").unwrap(),
-            "*nv-vk64*"
-        );
-        assert_eq!(
-            std::env::var("VK_LOADER_LAYERS_DISABLE").unwrap(),
-            "~implicit~"
-        );
+        assert_eq!(std::env::var(drivers).unwrap(), "*everything*");
+        assert_eq!(std::env::var(layers).unwrap(), "VK_LAYER_foo,~implicit~");
+        let mut child = std::process::Command::new("cmd");
+        unscoped_child_env(&mut child);
+        let envs: Vec<_> = child.get_envs().collect();
+        assert!(envs.contains(&(
+            std::ffi::OsStr::new(drivers),
+            Some(std::ffi::OsStr::new("*everything*"))
+        )));
+        assert!(envs.contains(&(
+            std::ffi::OsStr::new(layers),
+            Some(std::ffi::OsStr::new("VK_LAYER_foo"))
+        )));
     }
 
     #[test]
-    fn nvidias_motion_filter_brings_its_own_vulkan_device() {
+    fn nvidias_motion_filter_brings_its_own_vulkan_device_on_the_chosen_adapter() {
         assert_eq!(
-            fruc_vulkan_filter(false, false),
-            "lavfi=graph=[format=nv12,hwupload,fruc_vulkan=fps=source_fps*2:perf=slow:grid=4,hwdownload,format=nv12]:hwdevice=vulkan:hwdevice_name=NVIDIA"
+            fruc_vulkan_filter_on("NVIDIA GeForce RTX 4070 Laptop GPU", false, false),
+            "lavfi=graph=[format=nv12,hwupload,fruc_vulkan=fps=source_fps*2:perf=slow:grid=4,hwdownload,format=nv12]:hwdevice=vulkan:hwdevice_name=%34%NVIDIA GeForce RTX 4070 Laptop GPU"
         );
-        assert!(fruc_vulkan_filter(false, true).contains("perf=fast:grid=4"));
-        assert!(fruc_vulkan_filter(true, false).contains("perf=fast:grid=4"));
-        assert!(fruc_vulkan_filter(true, true).contains("perf=fast:grid=4"));
+        // mpv's %n% counts bytes.
+        assert!(fruc_vulkan_filter_on("Ä, b:c", false, false).ends_with("hwdevice_name=%7%Ä, b:c"));
+        assert!(fruc_vulkan_filter_on("x", false, true).contains("perf=fast:grid=4"));
+        assert!(fruc_vulkan_filter_on("x", true, false).contains("perf=fast:grid=4"));
+        assert!(fruc_vulkan_filter_on("x", true, true).contains("perf=fast:grid=4"));
     }
 
     #[test]

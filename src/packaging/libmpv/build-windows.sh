@@ -146,8 +146,10 @@ build_ffmpeg() {
     --disable-vdpau --disable-videotoolbox --disable-decoder=libaom_av1 \
     --extra-cflags="-Wno-error=int-conversion $SECTIONS" \
     --extra-libs='-lstdc++'
-  # The acceptance check: the converter is in.
+  # The acceptance check: both motion smoothing converters are in (NVIDIA's
+  # fruc_vulkan, AMD's frc_amf).
   grep -q '^CONFIG_FRUC_VULKAN_FILTER=yes' ffbuild/config.mak || { echo "fruc_vulkan was not enabled"; exit 1; }
+  grep -q '^CONFIG_FRC_AMF_FILTER=yes' ffbuild/config.mak || { echo "frc_amf was not enabled"; exit 1; }
   make -j"$JOBS"
   make install
 }

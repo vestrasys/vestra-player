@@ -399,6 +399,7 @@ pub(crate) fn relaunch_command(
     source: &Value,
 ) -> std::process::Command {
     let mut command = std::process::Command::new(exe);
+    crate::platform::unscoped_child_env(&mut command);
     command.args([
         "--vestra-restart".to_string(),
         std::process::id().to_string(),

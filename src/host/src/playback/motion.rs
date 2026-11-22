@@ -1566,6 +1566,15 @@ pub fn bit_depth(format: &str) -> u32 {
 /// Vulkan device (no Vulkan driver, lavfi's `could not create hwdevice`) or
 /// without the optical flow it needs (`fruc_vulkan`'s device checks), the
 /// first time: neither depends on the video.
+///
+/// Why one failure is enough for NVIDIA: the device is created by FFmpeg's
+/// `av_hwdevice_ctx_create` from the Vulkan loader, with the loader scoped
+/// to NVIDIA's driver (`platform::prepare_motion`) and on the adapter the
+/// system check chose. Nothing about the video goes into it, so a second try
+/// on the next video meets the same driver, loader and adapter, and fails
+/// the same way (a missing or broken Vulkan driver, a driver selection that
+/// leaves NVIDIA's out, a GPU without optical flow). After a driver is
+/// installed or updated, a restart of the player tries again.
 pub fn device_failure(engine: Engine, error: &str, count: u32) -> bool {
     match engine {
         Engine::Amd => count >= 2 && error.contains("AMFFRC->Init() failed"),

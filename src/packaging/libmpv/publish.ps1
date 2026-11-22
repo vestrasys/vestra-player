@@ -6,8 +6,9 @@
 #        (url, sha256, msys2_packages, msys2_packages_sha256).
 #   2. publish.ps1 -Step deps
 #        The Windows half of deps.yml on this machine: collect-windows-deps.mjs (it fetches
-#        the pinned libmpv asset and BtbN FFmpeg and checks them), mpv.lib from the DLL's
-#        exports, vestra-deps-windows-x64.zip; the macOS assets copied unchanged from the
+#        the pinned libmpv asset and the FFmpeg tools of the pinned deps release, and checks
+#        them), mpv.lib from the DLL's exports, vestra-deps-windows-x64.zip; the macOS
+#        assets copied unchanged from the
 #        release deps.json names (as deps.yml does for a system it does not rebuild); then a
 #        pre-release deps-<date>.N with SHA256SUMS, and deps.json's release/assets rewritten.
 #        With remote CI, `gh workflow run deps.yml -f platforms=windows` does the same.
@@ -71,9 +72,11 @@ try { gh release download $pins.release --repo $repo --pattern 'components-macos
 if (-not $Tag) { $Tag = "deps-$(Get-Date -Format yyyyMMdd).1" }
 $sums = Get-ChildItem $out -File | ForEach-Object { "$(Sha $_.FullName)  $($_.Name)" }
 Set-Content -Path "$out\SHA256SUMS" -Value $sums
-$assets = [ordered]@{
+# PSCustomObjects, not hashtables: Windows PowerShell 5.1's ConvertTo-Json writes a hashtable
+# assigned to an object's property as its type name.
+$assets = [pscustomobject][ordered]@{
   'macos-arm64' = $pins.assets.'macos-arm64'
-  'windows-x64' = [ordered]@{ file = 'vestra-deps-windows-x64.zip'; sha256 = (Sha "$out\vestra-deps-windows-x64.zip") }
+  'windows-x64' = [pscustomobject][ordered]@{ file = 'vestra-deps-windows-x64.zip'; sha256 = (Sha "$out\vestra-deps-windows-x64.zip") }
   'macos-arm64-sources' = $pins.assets.'macos-arm64-sources'
 }
 $newPins = Get-Content (Join-Path $packaging 'deps.json') -Raw | ConvertFrom-Json
@@ -82,7 +85,10 @@ $newPins.assets = $assets
 "new deps.json (written to $out\deps.json):"
 $json = $newPins | ConvertTo-Json -Depth 8
 [IO.File]::WriteAllText("$out\deps.json", $json + "`n", (New-Object Text.UTF8Encoding $false))
-$json
+# The repository's JSON style (two spaces, as Prettier checks it), and a check that it parsed.
+node -e "const f=process.argv[1],fs=require('fs');const p=JSON.parse(fs.readFileSync(f,'utf8'));if(typeof p.assets!=='object')throw new Error('assets');fs.writeFileSync(f,JSON.stringify(p,null,2)+String.fromCharCode(10))" "$out\deps.json"
+if ($LASTEXITCODE -ne 0) { throw 'deps.json is not valid' }
+Get-Content "$out\deps.json" -Raw
 Run gh (@('release', 'create', $Tag, '--repo', $repo, '--prerelease', '--title', "Native dependencies $Tag",
   '--notes', "Native dependencies for Vestra Player packages, made on a local machine by src/packaging/libmpv/publish.ps1 (the Windows half of deps.yml; libmpv from $($mpv.url)); macOS assets unchanged from $($pins.release).") + (Get-ChildItem $out -File | Where-Object Name -ne 'deps.json' | ForEach-Object FullName))
 if ($Publish) { Copy-Item "$out\deps.json" (Join-Path $packaging 'deps.json'); "deps.json updated: release $Tag" }
