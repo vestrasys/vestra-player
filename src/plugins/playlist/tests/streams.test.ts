@@ -34,6 +34,12 @@ async function start() {
     locale: "zh-Hans",
   });
   const panel = host.mounted();
+  // `PLAYLIST_TEST_HIDDEN=1`: the list is closed after the start, so the plugin hears the
+  // source events instead of a stream (features.test.ts runs its own cases both ways).
+  if (process.env.PLAYLIST_TEST_HIDDEN) {
+    await host.command("playlist.close").run();
+    await host.settle();
+  }
 
   const book = new Map<number, Json>();
   let resolving: number | null = null;

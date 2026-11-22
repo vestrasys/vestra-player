@@ -363,6 +363,9 @@ test("lazy activation: the check marks are player conditions that follow a switc
   host.setLanguage("ja");
   await host.settle();
   assert.deepEqual(marked(), ["theme.vestra-light", "language.ja"]);
+  // The pages follow the switch made elsewhere too (`appearance.changed`, a wake event).
+  assert.equal(page(host).props.theme, "vestra-light");
+  assert.equal(languagePage(host).props.language, "ja");
   host.setLanguage("system");
   await host.settle();
   assert.deepEqual(marked(), ["theme.vestra-light", "language.system"]);
