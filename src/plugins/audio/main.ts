@@ -797,9 +797,9 @@ export default async function activate(plugin: Plugin) {
   // The discrete changes this plugin hears re-run what the state stream drove before SDK 1.11: the
   // sync and channel follow, the track menu, auto-loading, and an update pass for the command
   // states and the panel, which read `player.state` (the newest snapshot the plugin has). The
-  // events of a new or loaded source and the conditions' notifications bring the player's state;
-  // an ended source's state is no longer the player's, and a track change does not update the
-  // copy in SDK 1.11.0-rc.1, so those two read it once.
+  // events of a new or loaded source, `audio.tracks.changed` and the conditions' notifications
+  // bring the player's state into it; an ended source's state is no longer the player's, so that
+  // one reads it once.
   const changed = () => {
     const state = player.state;
     follow(state);
@@ -814,7 +814,7 @@ export default async function activate(plugin: Plugin) {
   });
   player.on("source.ready", changed);
   player.on("source.ended", reread);
-  player.on("audio.tracks.changed", reread);
+  player.on("audio.tracks.changed", changed);
   flipped = changed;
   if (missed) changed();
 
