@@ -228,6 +228,16 @@ The user handed the remaining technical follow-ups to an unattended loop ([agent
 
 #### Loop log (newest first)
 
+- 11-22: **Player 0.10.3 tagged (#432, 5d49551b)**; assets are being built locally. The real-GPU 4K60 tests failed while the user's game was in the foreground and passed with it minimized (60.1/s). **Release B starts now (user).** It ships as SDK 1.11.0 plus the next player version, and follows events-and-triggers-plan.md §5, with these overrides:
+  - B2: the removed API is treated as never existed, with no "use player.stream(fn)" message (11-21 ruling).
+  - Only the player repo runs the local ci:local; the SDK, plugins and page repos rely on remote CI (11-21 ruling).
+
+  Lanes:
+  - **L1 API maintainer:** B1 second batch of events plus B2 removal, in host and SDK. Also the SDK refuses a plugin's writes after `runtime.stop`; that is the dropped store `settings.set` from 11-21.
+  - **L2 capability removal (11-16 ruling, checklist in #416):** the SDK scanner and capability-scan.json, the store and install-dialog permission lists, the plugins CI scan, Workshop's vendored scanner and the docs; a manifest `capabilities` field becomes an ordinary unknown-field error (option A). Renaming the internal `capabilities/` module still waits for the user's word.
+  - **Later:** B3 migration, at most 4 migrators, once the L1 SDK pre-release exists; then B4 docs, B5 reviews and checks, B6 release.
+
+  Segment Heap waits for an idle machine. The user is gaming: gaming.flag rules apply.
 - 11-21: **User ruling: T8 starts with a comparison.** Before any T8 code, an agent compares two candidate `video.motion` engines:
   - the NVIDIA-specific engine (the original plan; it needs libmpv on a newer FFmpeg);
   - a vendor-neutral RIFE engine (rife-ncnn-vulkan, MIT), run by the host the same way as the AMD engine. RIFE can't be a plugin, because Node can't run GPU inference.
