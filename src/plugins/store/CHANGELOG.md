@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.3
+
+(Release B's branch also uses 0.3.3; the two entries are combined when both are merged.)
+
+- The window resizes as a window should (reported: it could not be made taller than about half the screen but could be squeezed to nothing, and the cards jumped while it was resized). The hidden element that measures translated labels was an unplaced child of the window, so Slint added its layout limits to the window's: the maximum height came out 0, under the minimum of 480, and Slint swapped the two, giving the system a maximum height of 480 and no minimum. The window also opened 480 high instead of 640. Now it is at least 600 × 480 (wider when the tabs need it in the interface language), has no maximum but the screen, and opens at 920 × 640.
+- Resizing keeps the cards in view: when the number of columns changes, the card at the top left stays in the top row, which starts at the top of the grid (the scroll position used to stay in pixels, so other cards slid into view). A narrower window drops a column as soon as a card would be under 264 pixels wide; a wider one adds a column only 24 pixels past that point, so a width that trembles during a drag does not flip the grid back and forth.
+- Who must change: nobody. Plugin authors: a hidden measuring element directly in a `Window` needs `x` and `y` (any value), or its limits become the window's.
+
 ## 0.3.2
 
 - The "how to open" convention puts the sidebar first (owner request 2026-11-21): a plugin with a sidebar tab writes `Sidebar: <tab> tab` (with its key when it has one), and adds its next way in after `; ` only while the line stays within 48 characters, for example `Sidebar: VestraTube tab; Menu: Open ▸ VestraTube`. README and `open-line.ts` say so; the fallback for a plugin without the line still reads menus and palette rows only, since the command table has no tabs. A test checks that every built-in plugin that mounts a sidebar tab (today the Playlist) names the sidebar first. Nothing the store shows changes.

@@ -3051,6 +3051,238 @@ export component W inherits Window {
         assert!(failures.is_empty(), "{}", failures.join("\n"));
     }
 
+    /// The size limits the winit backend hands the system for a window
+    /// (`WindowProperties::layout_constraints`: the root's layout info, min
+    /// and max each taken as `min_max_size_for_layout_constraints` does, so
+    /// a maximum under the minimum swaps them) and its preferred size, in
+    /// logical pixels: `((min w, min h), (max w, max h), (preferred w, h))`.
+    /// Slint has no public interface for it; recheck on upgrades.
+    #[allow(clippy::type_complexity)]
+    fn window_limits(instance: &ComponentInstance) -> ((f32, f32), (f32, f32), (f32, f32)) {
+        use slint::private_unstable_api::re_exports::{ItemTreeRc, Orientation, WindowInner};
+        settle_layout(instance.window());
+        let component = WindowInner::from_pub(instance.window()).component();
+        let component = ItemTreeRc::borrow_pin(&component);
+        let h = component.as_ref().layout_info(Orientation::Horizontal);
+        let v = component.as_ref().layout_info(Orientation::Vertical);
+        (
+            (h.min.min(h.max), v.min.min(v.max)),
+            (h.max.max(h.min), v.max.max(v.min)),
+            (h.preferred_bounded(), v.preferred_bounded()),
+        )
+    }
+
+    /// Every built-in plugin's tool window (the files its `windows.create`
+    /// names) as the player compiles it, shown in this thread's headless
+    /// window at its preferred size, one after the other.
+    fn each_plugin_window(mut check: impl FnMut(&str, &ComponentInstance)) {
+        headless();
+        let plugins = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../plugins");
+        for (plugin, file) in [
+            ("history", "ui/resume.slint"),
+            ("info", "ui/about.slint"),
+            ("info", "ui/properties.slint"),
+            ("marks", "ui/marks.slint"),
+            ("playback", "ui/open-url.slint"),
+            ("playlist", "ui/link.slint"),
+            ("store", "ui/store.slint"),
+            ("subtitle-online", "ui/download.slint"),
+            ("subtitle-online", "ui/settings.slint"),
+            ("subtitle-online", "ui/service.slint"),
+            ("subtitle-online", "ui/choose.slint"),
+            ("subtitles", "ui/settings.slint"),
+            ("video", "ui/aspect.slint"),
+            ("video", "ui/shaders.slint"),
+            ("workshop", "ai.slint"),
+        ] {
+            let path = plugins.join(plugin).join(file);
+            let instance = compile(&path).unwrap_or_else(|e| panic!("{}: {e:#}", path.display()));
+            instance.show().unwrap();
+            let (_, _, (width, height)) = window_limits(&instance);
+            instance
+                .window()
+                .set_size(slint::LogicalSize::new(width, height));
+            check(&format!("{plugin}/{file}"), &instance);
+            instance.hide().unwrap();
+        }
+    }
+
+    /// The size limits of the root's layout as Slint computes them, before
+    /// [`window_limits`] orders them: `(min w, max w, min h, max h)`.
+    fn raw_limits(instance: &ComponentInstance) -> (f32, f32, f32, f32) {
+        use slint::private_unstable_api::re_exports::{ItemTreeRc, Orientation, WindowInner};
+        settle_layout(instance.window());
+        let component = WindowInner::from_pub(instance.window()).component();
+        let component = ItemTreeRc::borrow_pin(&component);
+        let h = component.as_ref().layout_info(Orientation::Horizontal);
+        let v = component.as_ref().layout_info(Orientation::Vertical);
+        (h.min, h.max, v.min, v.max)
+    }
+
+    /// Store 0.3.3 (reported: the Plugin Store could not be made taller
+    /// than about half the screen, but could be squeezed to nothing): a
+    /// window's layout maximum under its minimum makes Slint swap the two,
+    /// so the system got the minimum as the maximum and no minimum at all
+    /// (the store's: maximum height 0 from its hidden measuring rectangle,
+    /// minimum 480, so 0..480 and a first height of 480 instead of 640).
+    /// No built-in plugin window may have that; each opens at a size inside
+    /// its limits and keeps a usable minimum.
+    #[test]
+    fn plugin_window_limits_never_swap() {
+        let mut wrong = Vec::new();
+        each_plugin_window(|name, instance| {
+            let (min_w, max_w, min_h, max_h) = raw_limits(instance);
+            let ((lo_w, lo_h), (hi_w, hi_h), (pref_w, pref_h)) = window_limits(instance);
+            if max_w < min_w || max_h < min_h {
+                wrong.push(format!(
+                    "{name}: maximum under minimum: width {min_w}..{max_w}, height {min_h}..{max_h}"
+                ));
+            }
+            if lo_w < 100. || lo_h < 60. {
+                wrong.push(format!("{name}: minimum {lo_w}x{lo_h}"));
+            }
+            if !(lo_w..=hi_w).contains(&pref_w) || !(lo_h..=hi_h).contains(&pref_h) {
+                wrong.push(format!(
+                    "{name}: preferred {pref_w}x{pref_h} outside {lo_w}x{lo_h}..{hi_w}x{hi_h}"
+                ));
+            }
+        });
+        assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+    }
+
+    /// The Plugin Store window with `count` cards, at 920 x 640 (its
+    /// preferred size), and three probes the test adds to its source:
+    /// the grid's columns, its scroll position (settable) and its visible
+    /// height.
+    fn store_window(count: usize) -> ComponentInstance {
+        headless();
+        let path =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../plugins/store/ui/store.slint");
+        let source = std::fs::read_to_string(&path).unwrap();
+        let head = "export component StoreWindow inherits Window {";
+        assert!(source.contains(head));
+        let source = source.replacen(
+            head,
+            &format!(
+                "{head}\n    out property <int> probe-columns: root.columns;\n    \
+                 in-out property <length> probe-scroll <=> grid.viewport-y;\n    \
+                 out property <length> probe-visible: grid.visible-height;"
+            ),
+            1,
+        );
+        let instance = compile_source(source, &path).unwrap();
+        let cards: Vec<serde_json::Value> = (0..count)
+            .map(|n| serde_json::json!({"key": format!("p{n}"), "name": format!("Plugin {n}")}))
+            .collect();
+        crate::ui::ui_values::set(
+            &instance,
+            None,
+            "cards",
+            crate::ui::ui_values::from_json(&serde_json::Value::Array(cards)).unwrap(),
+        )
+        .unwrap();
+        instance.show().unwrap();
+        store_resize(&instance, 920.);
+        instance
+    }
+
+    fn store_resize(instance: &ComponentInstance, width: f32) {
+        instance
+            .window()
+            .set_size(slint::LogicalSize::new(width, 640.));
+        settle_layout(instance.window());
+        slint::platform::update_timers_and_animations();
+        settle_layout(instance.window());
+    }
+
+    fn store_number(instance: &ComponentInstance, name: &str) -> f64 {
+        match instance.get_property(name).unwrap() {
+            Value::Number(n) => n,
+            other => panic!("{name}: {other:?}"),
+        }
+    }
+
+    /// (columns, index of the card at the top-left, offset into its row).
+    fn store_top(instance: &ComponentInstance) -> (usize, usize, f64) {
+        let columns = store_number(instance, "probe-columns") as usize;
+        let scrolled = -store_number(instance, "probe-scroll");
+        let row = (scrolled / 148.).floor();
+        (columns, row as usize * columns, scrolled - row * 148.)
+    }
+
+    /// Store 0.3.3 (reported: the cards jumped while the window was
+    /// resized): a step in the column count keeps the card at the top-left
+    /// in the top row, from its top (it used to keep the scroll pixels, so
+    /// other cards came into view), and a width trembling just past a step
+    /// does not flip the columns back and forth. Between steps the view
+    /// does not move.
+    #[test]
+    fn store_columns_step_without_losing_the_cards_in_view() {
+        let store = store_window(40);
+        assert_eq!(store_top(&store), (3, 0, 0.));
+        // Scrolled to the 6th row (cards 15–17), 30px into it: there first (the
+        // ListView builds the rows from that row's top), then the 30px.
+        store
+            .set_property("probe-scroll", Value::Number(-(5. * 148.)))
+            .unwrap();
+        store_resize(&store, 920.);
+        store
+            .set_property("probe-scroll", Value::Number(-(5. * 148. + 30.)))
+            .unwrap();
+        store_resize(&store, 920.);
+        assert_eq!(store_top(&store), (3, 15, 30.));
+        // Narrower, still three cards of 264 or more: nothing moves.
+        store_resize(&store, 850.);
+        assert_eq!(store_top(&store), (3, 15, 30.));
+        // Narrower than three cards of 264: two columns, card 15 still in the top row.
+        store_resize(&store, 846.);
+        let (columns, top, offset) = store_top(&store);
+        assert_eq!(columns, 2);
+        assert!(
+            (top..top + 2).contains(&15),
+            "top-left card {top}, wanted the row of card 15"
+        );
+        assert_eq!(offset, 0.);
+        // Back and forth across the step (848 fits three): still two.
+        for width in [848., 852., 847., 860., 849., 866.] {
+            store_resize(&store, width);
+            assert_eq!(store_top(&store).0, 2, "at {width}");
+        }
+        // Clearly wider: three again, card 14 (the top-left) still in the top row.
+        store_resize(&store, 880.);
+        let (columns, top, offset) = store_top(&store);
+        assert_eq!(columns, 3);
+        assert!(
+            (top..top + 3).contains(&14),
+            "top-left card {top}, wanted the row of card 14"
+        );
+        assert_eq!(offset, 0.);
+        // Near the end, a step never scrolls past the last row.
+        let rows = |columns: f64| (40. / columns).ceil() * 148.;
+        let visible = store_number(&store, "probe-visible");
+        store
+            .set_property("probe-scroll", Value::Number(-(rows(3.) - visible)))
+            .unwrap();
+        store_resize(&store, 1200.);
+        assert_eq!(store_top(&store).0, 4);
+        let scrolled = -store_number(&store, "probe-scroll");
+        assert!(
+            scrolled <= rows(4.) - visible + 0.5,
+            "{scrolled} past the end"
+        );
+    }
+
+    /// The store's limits as the system gets them: at least 600 x 480 (in
+    /// English), no maximum, 920 x 640 at first.
+    #[test]
+    fn store_window_limits() {
+        let store = store_window(10);
+        let ((lo_w, lo_h), (hi_w, hi_h), preferred) = window_limits(&store);
+        assert_eq!((lo_w, lo_h), (600., 480.));
+        assert!(hi_w > 1e6 && hi_h > 1e6, "maximum {hi_w}x{hi_h}");
+        assert_eq!(preferred, (920., 640.));
+    }
+
     /// Player 0.5.10: a bottom bar placing `BarButtons` draws from its own
     /// `BarButtonsHost` (compiled on its own, `ui/panels.rs`), which the
     /// host fills as the shell's; the shell's strip learns it is placed, and

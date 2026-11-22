@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.47
+
+- The Vestra Player AI window can be made wider than 720 again and no narrower than 720. The hidden row that measures the result card's buttons in the interface language was an unplaced child of the window, so Slint added its limits to the window's: the maximum width came out 334, under the minimum of 720, and Slint swapped the two (at most 720 wide, down to 334, and it opened 720 wide instead of 900). Found by the player's new check of every built-in plugin window's size limits (Store 0.3.3). Who must change: nobody.
+
 ## 2.2.46
 
 - The vendored SDK is 1.10.1 as published on npm (`npm run vendor:sdk`), the version the player now uses. 1.10.1 adds `AppInfo.temporary`, `App.openWindow` (built-in plugins only) and `TestHost.openedWindows`, documents `unavailable` in a temporary window, and adds the playlist's Play in New Window to `BUILTIN_COMMANDS`; the documentation tree and `capability-scan.json` follow. The Workshop uses none of them. Who must change: nobody.
