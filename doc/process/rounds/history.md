@@ -228,6 +228,20 @@ The user handed the remaining technical follow-ups to an unattended loop ([agent
 
 #### Loop log (newest first)
 
+- 11-22: **0.10.3 published** (GitHub release, six assets, latest). The README has the new banner (variant B4), new screenshots, captions without how-to text, and the current slogan "Next-generation media player. Built to extend, enhanced by AI." (page v2).
+  - **User rulings:**
+    - `src/host/src/capabilities/` is renamed to `api/` (`uncapable.rs` → `open.rs`). This is a names-only refactor with a differential check, done after the L1 and L2 merges and alongside B3.
+    - The workflow file's four capability passages were changed with the user's approval (#436).
+  - **Coordinator decisions on Release B:**
+    - The error code `capability` becomes `builtin-only` in 1.11, with no alias.
+    - The mpv clipboard refusal now reads "has its own API".
+    - The store's late `settings.set` is fixed in the store during B3. There is no new host duty; the SDK refuses requests locally after `runtime.stop`.
+    - The player stays on SDK 1.10.1 until B3 switches the built-ins.
+    - Merge order: L2's SDK PR #129 first, then L1 merges main into relb-1.11, then the rc.
+    - Later, as its own tooling change: verify-gates gate (d), which is dead.
+  - **Status:**
+    - L2 PRs are under static review: player #435, SDK #129, plugins #74.
+    - L1 is done (B1: the eight events and their shapes in design §4.6; B2: the removal; the SDK refuses after stop) and is being committed into PRs.
 - 11-22: **Player 0.10.3 tagged (#432, 5d49551b)**; assets are being built locally. The real-GPU 4K60 tests failed while the user's game was in the foreground and passed with it minimized (60.1/s). **Release B starts now (user).** It ships as SDK 1.11.0 plus the next player version, and follows events-and-triggers-plan.md §5, with these overrides:
   - B2: the removed API is treated as never existed, with no "use player.stream(fn)" message (11-21 ruling).
   - Only the player repo runs the local ci:local; the SDK, plugins and page repos rely on remote CI (11-21 ruling).
