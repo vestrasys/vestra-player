@@ -70,15 +70,11 @@ flowchart LR
 **Threads.** Whatever can wait has its own thread, so no wait holds unrelated work:
 
 - **UI thread.** Slint's event loop: windows, input, drawing, compiling plugins' Slint files.
-- **`vestra-core`.** A single-threaded state machine that takes no locks and never waits: it routes plugin requests, runs the supervisor, evaluates triggers and directs playback, asleep on its event queue between events.
+- **`vestra-core`.** A single-threaded state machine that takes no locks and never waits: it routes plugin requests, runs the supervisor, evaluates triggers and directs playback.
 - **Playback.** One worker sends every mpv command; a render thread hands the interface only the newest frame, so a slow interface skips frames.
 - **Plugin I/O and helpers.** A reader and writer per plugin process; helpers for blocking calls (process creation, files, clipboard).
 
-**The interface is the core's client.** The two exchange only messages, so a stalled UI thread (a window compiling or dragged, a GPU wait) freezes only the window: plugins, triggers and playback control carry on. Only requests that need an interface result (opening a window, mounting a panel) wait for it; the rest never queue behind.
-
-**The core loop.** Everything reaches the core as an event on one queue: plugin lines from the reader threads, playback worker results and state, interface reports. The core sleeps on that queue and wakes for the first event, or at a 16 ms deadline for its periodic steps. A turn handles the interface's reports first, then the other events in order: at least 128, then as many as fit in 4 ms. The rest wait for the next turn, so a cheap burst drains fast and the periodic steps keep their deadline. A flood is refused before it reaches the queue: once a plugin has 320 requests or 4 MiB unanswered, its reader thread answers `limit` itself. A plugin that leaves 1024 messages unread is stopped.
-
-**Changing the interface.** The core never touches a window. It pushes numbered commands into one queue for the UI thread; a last-value-wins snapshot replaces a waiting one of its kind in place, so repeated state cannot pile up. It then wakes Slint's event loop with `invoke_from_event_loop`, behind a flag that keeps at most one wake pending. Each wake applies everything waiting, in order, and reports `Applied(n)`, which releases the answers that waited on the interface. The interface's own 16 ms tick ends with `FactsSettled` when window facts changed, and the core broadcasts one `window.state`.
+**The interface is the core's client.** The two exchange only messages, so a stalled UI thread (a window compiling or dragged, a GPU wait) freezes only the window: plugins, triggers and playback control carry on.
 
 **Plugin supervisor.** Part of the core decides when each process exists: pure logic, tested by deterministic simulation.
 
@@ -90,7 +86,7 @@ flowchart LR
 - **Faults.** A crash stops only that plugin, which restarts after a doubling pause; five crashes in ten minutes turn it off, saying why.
 - **Watchdogs.** Five missed heartbeats restart the shared runner. On Windows a stalled GPU renderer restarts the player where it was.
 
-**From a plugin to the core.** The [SDK](https://vestrasys.github.io/vestra-player-sdk/) turns each call into `vestra/1` lines on the plugin's pipes: requests, answers and events. In the blocks below, as in the diagram (plugins on the right, the core on the left), `←` is a line the plugin sends to the core and `→` one the core sends back. A plugin learns the player's state by a single read, a discrete event (`source.ready`), a trigger or a stream.
+**From a plugin to the core.** The [SDK](https://vestrasys.github.io/vestra-player-sdk/) turns each call into `vestra/1` lines on the plugin's pipes: requests, answers and events. In the blocks below, as in the diagram (plugins on the right, the core on the left), `←` is a line the plugin sends to the core and `→` one the core sends back. A plugin learns the player's state by a single read, a discrete event (`source.ready`), a trigger or a stream. Following the lines of two examples shows how the core works.
 
 A trigger hands the core a condition as data:
 
@@ -117,7 +113,9 @@ export default function activate(plugin: Plugin) {
 → {"id":6,"result":null}
 ```
 
-The core stores the condition and re-evaluates it when a fact it reads changes, even without the plugin's process. On a flip the supervisor starts a parked plugin, `triggers.fired` waits until it is ready, and the SDK calls `enter` or `leave`.
+- **`← triggers.set`.** The plugin's reader thread parses the line and puts it on the core's one event queue, beside the playback worker's reports and the interface's. The core sleeps on that queue until an event arrives or its periodic steps are due (every 16 ms). A turn handles interface reports first, then the other events in order: at least 128, then as many as fit in 4 ms. The rest wait a turn, which keeps the periodic steps on time. The core stores the condition and answers through the plugin's writer thread.
+- **`→ triggers.fired`.** The playback worker reports "playing"; the interface reports "fullscreen" and ends its 16 ms tick with `FactsSettled`, on which the core broadcasts `window.state`. In that turn the core re-evaluates the stored condition. On the flip the supervisor starts a parked plugin, the event waits until it is ready, and the SDK calls `enter`.
+- **`← window.setAlwaysOnTop`.** The core never touches a window. It records the setting, answers at once and pushes a numbered command onto one queue for the UI thread; a last-value-wins snapshot replaces a waiting one of its kind. It wakes Slint's event loop with `invoke_from_event_loop`, at most one wake pending; the wake applies everything waiting, in order, and reports `Applied(n)`.
 
 A stream follows every state change while a window shows it:
 
@@ -150,7 +148,9 @@ plugin.commands.add({
 ← {"id":43,"method":"events.unsubscribe","params":{"event":"source.state"}}
 ```
 
-The core forwards each playback-worker state report to the subscriber; the supervisor never parks a plugin with an open stream.
+- **`← events.subscribe`, `← source.state`.** The core records the subscription and passes the read to the playback worker, whose result returns on the same queue. An open stream keeps the supervisor from parking the plugin.
+- **`→ source.state`.** The core forwards each playback-worker report in the turn it arrives. Another plugin's flood cannot slow this: besides the turn budget, a reader thread answers `limit` itself once its plugin has 320 requests or 4 MiB unanswered, and a plugin that leaves 1024 messages unread is stopped.
+- **`← ui.set`.** Unlike `setAlwaysOnTop`, the answer depends on the interface: the command takes the same queue and wake, the UI thread writes the property and reports the result, and only then does the core answer. A stalled interface delays just these answers; the stream keeps flowing.
 
 ## License
 
