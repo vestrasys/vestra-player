@@ -18,7 +18,7 @@
 //! | `audio.devices.changed` | the playback thread (`SourceBackend::follow_device`) | the device list, checked every second |
 //! | `audio.tracks.changed` | the core ([`audio_tracks_changed`]) | two consecutive `source.state` broadcasts |
 //! | `window.changed` | the core ([`WindowChange`]) | the window facts at `FactsSettled`; a resize waits for [`QUIET_MS`] without a size change |
-//! | `layout.changed` | the core ([`LayoutChange`]) | `layout.state` at `FactsSettled` |
+//! | `layout.changed` | the core ([`LayoutChange`]) | `layout.state` at `FactsSettled`, an overlay's pop-out left out |
 //! | `app.started` | the core ([`app_started`]) | the end of the start-up mute |
 #![forbid(unsafe_code)]
 
@@ -162,22 +162,45 @@ impl WindowChange {
 /// `layout.state` reports them, at `FactsSettled`, when they differ from
 /// the last ones sent (a slot shown or hidden, docked or detached, another
 /// tab active, a panel added or removed). The first of the run is the
-/// start, not a change. Data: `layout.state`'s reply (the SDK hands the
-/// listener `{ slots }`).
+/// start, not a change. An overlay's pop-out is not a change
+/// ([`overlay_settled`]): a fullscreen column revealed by the pointer at
+/// the edge and hidden again, the fullscreen bottom bar shown and hidden
+/// by the pointer. Data: `layout.state`'s reply as it is (the SDK hands
+/// the listener `{ slots }`).
 #[derive(Debug, Default)]
 pub(crate) struct LayoutChange {
+    /// What the last event's layout compares as (`overlay_settled`).
     sent: Option<Value>,
 }
 
 impl LayoutChange {
     pub(crate) fn layout(&mut self, layout: Value) -> Option<Value> {
         let first = self.sent.is_none();
-        if self.sent.as_ref() == Some(&layout) {
+        let settled = overlay_settled(&layout);
+        if self.sent.as_ref() == Some(&settled) {
             return None;
         }
-        self.sent = Some(layout.clone());
+        self.sent = Some(settled);
         (!first).then_some(layout)
     }
+}
+
+/// `layout` as `layout.changed` compares it: a position hidden only as an
+/// overlay (`reason` `fullscreen`: a column collapsed at the edge in
+/// fullscreen; `idle`: the fullscreen bottom bar away from the pointer)
+/// reads as shown, the state the pointer pops it out to. A pop-out and its
+/// hiding are transient, like the steps of a resize for `window.changed`,
+/// and as a wake event each would start the parked listeners.
+pub(crate) fn overlay_settled(layout: &Value) -> Value {
+    let mut settled = layout.clone();
+    for name in ["bottom", "sidebar", "adjust"] {
+        let slot = &mut settled[name];
+        if matches!(slot["reason"].as_str(), Some("fullscreen" | "idle")) {
+            slot["effective"] = json!(true);
+            slot["reason"] = Value::Null;
+        }
+    }
+    settled
 }
 
 /// `app.started`'s data: this run's player version and the last run's
@@ -314,6 +337,43 @@ mod tests {
         assert!(change.layout(shown.clone()).is_none());
         assert_eq!(change.layout(hidden.clone()), Some(hidden));
         assert_eq!(change.layout(shown.clone()), Some(shown));
+    }
+
+    /// Review of L1: a fullscreen column revealed by the pointer and hidden
+    /// again, and the fullscreen bottom bar shown and hidden by the
+    /// pointer, send nothing; turning a column off, or a panel coming,
+    /// does.
+    #[test]
+    fn an_overlay_pop_out_is_not_a_layout_change() {
+        let slot = |effective: bool, reason: Value| {
+            json!({"owner": 3, "preferred": true, "effective": effective,
+                "reason": reason, "detached": false, "panels": []})
+        };
+        let layout = |sidebar: Value, bottom: Value| json!({"sidebar": sidebar, "bottom": bottom, "adjust": null, "backdrop": null});
+        let mut change = LayoutChange::default();
+        // Windowed, both shown: the start.
+        assert!(
+            change
+                .layout(layout(slot(true, Value::Null), slot(true, Value::Null)))
+                .is_none()
+        );
+        // Fullscreen: the column collapsed at the edge, the bar idle.
+        let collapsed = layout(slot(false, json!("fullscreen")), slot(false, json!("idle")));
+        assert!(change.layout(collapsed.clone()).is_none());
+        // Pointer at the edge: popped out; and in again. Pointer at the
+        // bottom: the bar; and away.
+        let popped = layout(slot(true, Value::Null), slot(false, json!("idle")));
+        assert!(change.layout(popped).is_none());
+        assert!(change.layout(collapsed.clone()).is_none());
+        let bar = layout(slot(false, json!("fullscreen")), slot(true, Value::Null));
+        assert!(change.layout(bar).is_none());
+        assert!(change.layout(collapsed).is_none());
+        // The user turns the column off: a change, sent as it is.
+        let off = layout(slot(false, json!("userHidden")), slot(false, json!("idle")));
+        assert_eq!(change.layout(off.clone()), Some(off));
+        // A window too narrow for the column: a change.
+        let narrow = layout(slot(false, json!("space")), slot(true, Value::Null));
+        assert!(change.layout(narrow).is_some());
     }
 
     #[test]

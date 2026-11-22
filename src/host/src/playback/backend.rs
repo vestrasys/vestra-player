@@ -1340,8 +1340,14 @@ impl Backend {
                     }
                     // A reconfiguration (second batch of events): read once
                     // the source it belongs to was pushed, so its
-                    // `source.opening` goes first (`media_facts.rs`).
-                    if media_facts.due() && pushed_generation == Some(sources.generation()) {
+                    // `source.opening` goes first, and once mpv loaded it,
+                    // so the parameters are its own (`media_facts.rs`).
+                    let loaded = matches!(
+                        sources.phase(),
+                        crate::playback::session::Phase::Ready
+                            | crate::playback::session::Phase::Ended
+                    );
+                    if media_facts.readable(pushed_generation, sources.generation(), loaded) {
                         for (name, data) in media_facts.reconfigured(&mpv, sources.generation()) {
                             let _ = events.send(Event::Broadcast(name.into(), data));
                         }

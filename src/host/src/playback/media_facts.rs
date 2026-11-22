@@ -43,6 +43,16 @@ impl MediaFacts {
     pub(crate) fn due(&self) -> bool {
         self.video_due || self.audio_due
     }
+    /// Whether a waiting reconfiguration may be read now for source
+    /// `generation`: its `source.state` went out (`pushed`), and mpv has
+    /// loaded it (`loaded`: the phase is `ready` or `ended`). While the
+    /// source still loads, mpv's parameters may not be its own yet (the
+    /// last file's chain, or none), so a reconfiguration seen then, also a
+    /// late one of the last file, waits for the load and is read from the
+    /// new file's parameters, under its id.
+    pub(crate) fn readable(&self, pushed: Option<u64>, generation: u64, loaded: bool) -> bool {
+        self.due() && pushed == Some(generation) && loaded
+    }
     /// The reconfiguration events of source `generation` due now, read
     /// from mpv, as (event name, data).
     pub(crate) fn reconfigured(
@@ -221,6 +231,26 @@ mod tests {
         assert_eq!(facts["rotation"], 0);
         // No video: nothing.
         assert!(read_video(1, &props(&[("container-fps", "25")])).is_none());
+    }
+
+    /// Review of L1: a reconfiguration (a late one of the last file
+    /// included) is not read while the new source loads; it waits for the
+    /// load and its push.
+    #[test]
+    fn a_reconfiguration_waits_for_its_source_to_load() {
+        let mut facts = MediaFacts::default();
+        assert!(!facts.readable(Some(2), 2, true), "nothing due");
+        facts.event(&rsmpv::Event::VideoReconfig);
+        assert!(
+            !facts.readable(Some(1), 2, true),
+            "the new source not pushed yet"
+        );
+        assert!(
+            !facts.readable(Some(2), 2, false),
+            "the new source still loads"
+        );
+        assert!(facts.due(), "kept for later");
+        assert!(facts.readable(Some(2), 2, true));
     }
 
     #[test]
