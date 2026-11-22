@@ -1856,6 +1856,26 @@ pub fn pin_module(name: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Set an environment variable of this process (`SetEnvironmentVariableW`,
+/// which the Windows API keeps consistent across threads; Rust's
+/// `std::env::set_var` needs `unsafe` for the C runtime's copy, which the
+/// Vulkan loader does not read: it reads the process block through
+/// `GetEnvironmentVariable`). Child processes started later inherit it.
+/// `Err` with the system's error.
+pub fn set_process_env(name: &str, value: &str) -> Result<(), String> {
+    use windows_sys::Win32::Foundation::GetLastError;
+    use windows_sys::Win32::System::Environment::SetEnvironmentVariableW;
+    let wide = |s: &str| -> Vec<u16> { s.encode_utf16().chain(std::iter::once(0)).collect() };
+    let (name_w, value_w) = (wide(name), wide(value));
+    // SAFETY: two NUL-terminated wide strings alive for the call.
+    if unsafe { SetEnvironmentVariableW(name_w.as_ptr(), value_w.as_ptr()) } == 0 {
+        // SAFETY: no arguments; reads this thread's last error.
+        let error = unsafe { GetLastError() };
+        return Err(format!("SetEnvironmentVariableW({name}) failed: {error}"));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::{

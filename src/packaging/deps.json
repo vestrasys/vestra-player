@@ -33,6 +33,17 @@
       "sha256": "065076fe13d39ab97eea4740596426d5ae741b5044e48e1c9495d04835c92dbe",
       "version": "1.4.363.0",
       "build": "https://packages.msys2.org/base/mingw-w64-vulkan-loader"
+    },
+    "windows-mpv-t8": {
+      "note": "T8 branch only: libmpv-2.dll built locally by src/packaging/libmpv/build-windows.sh (FFmpeg 9.1 with fruc_vulkan, mpv at mpv_commit with mpv-lavfi-hwdevice.patch) and pinned with libmpv/pin-local.ps1 into a local deps directory. No deps-* release carries it yet: deps.yml still takes windows-mpv (shinchiro) and needs a build job for this before a release can ship the NVIDIA engine.",
+      "ffmpeg": "https://ffmpeg.org/releases/ffmpeg-9.1.tar.xz",
+      "ffmpeg_sha256": "1a4d394ae63d190a526cd052eb4415c156b5c5e2df37efab41a7de0b8fde2433",
+      "mpv_commit": "e471496c56f0f49c133bd88b50aed62b845f1909",
+      "mpv_sha256": "562674ce7a0f6ac0681291037abc4c8595e0d1202d86d27eb341113eb7d984ba",
+      "build": "src/packaging/libmpv/build-windows.sh",
+      "libmpv_sha256": "055771cc53d785f2466e44dff81779cffcd97384a86960cea78b0021adf187ce",
+      "aribcaption": "https://github.com/xqq/libaribcaption/archive/refs/tags/v1.1.2.tar.gz",
+      "aribcaption_sha256": "649b50bde99272b97c66af2a8400163e2f84eae072d252daa26baaaf0866a1c2"
     }
   }
 }

@@ -1,0 +1,7 @@
+# Symbols whose import pointer (__imp_<symbol>) build-windows.sh defines for
+# static linking: MSYS2 static libraries compiled against the DLL builds of
+# their dependencies call through __imp_<symbol>: libjxl (highway) and
+# libsixel (curl).
+_ZN3hwy15GetChosenTargetEv
+_ZN3hwy16SupportedTargetsEv
+curl_easy_strerror

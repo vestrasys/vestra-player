@@ -2076,13 +2076,86 @@ pub const UPSCALER_HWDEC: &str = "d3d11va";
 /// AMD's PCI vendor id.
 const AMD: u32 = 0x1002;
 
-/// Where motion smoothing works (`playback/motion.rs`): an AMD adapter
+/// Where motion smoothing's engine works (`playback/motion.rs`): AMD's
+/// ([`amd_motion_probe`]) or NVIDIA's ([`nvidia_motion_probe`]). DXGI
+/// only: no device, no Vulkan.
+pub fn motion_probe(engine: crate::playback::motion::Engine) -> super::MotionProbe {
+    match engine {
+        crate::playback::motion::Engine::Amd => amd_motion_probe(),
+        crate::playback::motion::Engine::Nvidia => nvidia_motion_probe(),
+    }
+}
+
+/// The first PCI device id of NVIDIA's Ampere GPUs (GA102, `0x2200`); RTX
+/// 30, 40 and 50 are at or above it, Turing (RTX 20, GTX 16) below.
+/// FFmpeg's `fruc_vulkan` needs Ampere's optical flow (`VK_NV_optical_flow`
+/// with the features it asks for).
+const NVIDIA_AMPERE: u32 = 0x2200;
+
+/// The NVIDIA driver `fruc_vulkan` needs: `VK_KHR_maintenance9`, from
+/// 573.38 on Windows (`nvidia_driver_name` numbering).
+const NVIDIA_FRUC_DRIVER: u32 = 57338;
+
+/// An NVIDIA driver version as a number: `32.0.15.7338` → `57338` (573.38).
+fn nvidia_driver_release(version: [u16; 4]) -> u32 {
+    u32::from(version[2] % 10) * 10000 + u32::from(version[3])
+}
+
+/// Where NVIDIA's motion smoothing works: an NVIDIA adapter (vendor
+/// `0x10DE`, not software) of the RTX 30 series or newer
+/// ([`NVIDIA_AMPERE`]) with a driver of 573.38 or newer. Whether its Vulkan
+/// driver starts the converter shows when the filter starts: the filter
+/// creates its Vulkan device then, and a device that cannot be created or
+/// lacks optical flow makes the engine `runtime` for the run
+/// (`motion::device_failure`).
+fn nvidia_motion_probe() -> super::MotionProbe {
+    let adapters = vestra_win32::dxgi_adapters().map_err(|error| super::MotionRefusal {
+        code: "no-gpu",
+        message: format!("the graphics adapters cannot be listed ({error})"),
+    })?;
+    let nvidia: Vec<_> = adapters
+        .iter()
+        .filter(|adapter| adapter.vendor_id == NVIDIA && !adapter.software)
+        .collect();
+    let Some(rtx) = nvidia
+        .iter()
+        .find(|adapter| adapter.device_id >= NVIDIA_AMPERE)
+    else {
+        return Err(super::MotionRefusal {
+            code: "no-gpu",
+            message: match nvidia.first() {
+                Some(older) => format!(
+                    "{} is older than the RTX 30 series: NVIDIA motion smoothing uses the optical flow of RTX 30 and newer GPUs",
+                    older.name
+                ),
+                None => "no NVIDIA GPU: NVIDIA motion smoothing needs an NVIDIA GeForce RTX 30 series or newer GPU".into(),
+            },
+        });
+    };
+    if let Some(version) = rtx.driver_version
+        && nvidia_driver_release(version) < NVIDIA_FRUC_DRIVER
+    {
+        return Err(super::MotionRefusal {
+            code: "runtime",
+            message: format!(
+                "the NVIDIA driver {} on {} is too old for NVIDIA motion smoothing, which needs 573.38 or newer; update the driver",
+                nvidia_driver_name(version),
+                rtx.name
+            ),
+        });
+    }
+    Ok(super::MotionGpu {
+        name: rtx.name.clone(),
+    })
+}
+
+/// Where AMD's motion smoothing works: an AMD adapter
 /// (vendor `0x1002`, not software) and AMD's AMF runtime (`amfrt64.dll` in
 /// System32, installed with the AMD driver), which FFmpeg's `frc_amf` loads.
 /// No device is created, so no GPU is woken; whether the runtime starts on
 /// this GPU shows when the filter starts (`playback/motion.rs` follows mpv's
 /// log).
-pub fn motion_probe() -> super::MotionProbe {
+fn amd_motion_probe() -> super::MotionProbe {
     let adapters = vestra_win32::dxgi_adapters().map_err(|error| super::MotionRefusal {
         code: "no-gpu",
         message: format!("the graphics adapters cannot be listed ({error})"),
@@ -2132,8 +2205,87 @@ pub fn motion_probe() -> super::MotionProbe {
 /// hybrid laptop), and `frc_amf` then accepts only Direct3D 11 input and
 /// the graph fails to configure ("dst: d3d11"; measured 2026-11-12). With
 /// no device it takes frames in memory and opens AMF on the AMD GPU itself.
-pub fn motion_filter(large: bool, performance: bool) -> Option<String> {
-    Some(frc_amf_filter(large, performance))
+pub fn motion_filter(
+    engine: crate::playback::motion::Engine,
+    large: bool,
+    performance: bool,
+) -> Option<String> {
+    Some(match engine {
+        crate::playback::motion::Engine::Amd => frc_amf_filter(large, performance),
+        crate::playback::motion::Engine::Nvidia => fruc_vulkan_filter(large, performance),
+    })
+}
+
+/// Before NVIDIA's converter first creates its Vulkan device: the Vulkan
+/// loader of this process sees only NVIDIA's driver and no implicit layer
+/// (`VK_LOADER_DRIVERS_SELECT`, `VK_LOADER_LAYERS_DISABLE=~implicit~`;
+/// loader 1.3.234 / 1.3.262 and later, the one shipped with the player is
+/// 1.4.363, the driver's 1.4.357). Without it the loader opens every
+/// installed driver (AMD's amdvlk64 on a hybrid laptop) and every implicit
+/// layer other software registered (OBS's capture hook, Steam's overlay)
+/// inside the player, which only the converter uses Vulkan for. Measured
+/// 2026-11-22: with it, those DLLs are no longer loaded and the converter
+/// runs as before (doc/architecture/README.md §4.4a). The variables stay set
+/// for the process and its later children (Node, FFmpeg), none of which uses
+/// Vulkan; a value the user set is kept. `VESTRA_VULKAN_SCOPE=0` turns it
+/// off (a design choice for review, T8).
+pub fn prepare_motion(engine: crate::playback::motion::Engine) {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    if engine != crate::playback::motion::Engine::Nvidia
+        || std::env::var("VESTRA_VULKAN_SCOPE").is_ok_and(|v| v.trim() == "0")
+    {
+        return;
+    }
+    ONCE.call_once(|| {
+        for (name, value) in [
+            ("VK_LOADER_DRIVERS_SELECT", NVIDIA_VULKAN_DRIVER),
+            ("VK_LOADER_LAYERS_DISABLE", "~implicit~"),
+        ] {
+            if std::env::var_os(name).is_some() {
+                diag!("motion: {name} is set already; kept");
+                continue;
+            }
+            match vestra_win32::set_process_env(name, value) {
+                Ok(()) => diag!("motion: {name}={value} for the converter's Vulkan device"),
+                Err(error) => diag!("motion: {error}"),
+            }
+        }
+    });
+}
+
+/// NVIDIA's Vulkan driver manifest (`nv-vk64.json` in the driver store,
+/// the adapter's `VulkanDriverName`), as a loader filter.
+const NVIDIA_VULKAN_DRIVER: &str = "*nv-vk64*";
+
+/// NVIDIA's converter: FFmpeg's `fruc_vulkan` (NVIDIA's optical flow
+/// hardware through `VK_NV_optical_flow`, then FFmpeg's compute shaders)
+/// doubles the frame rate (`fps=source_fps*2`) from frames in memory
+/// uploaded to a Vulkan device (`hwupload`) and copied back
+/// (`hwdownload`) for either renderer, as AMD's.
+///
+/// `hwdevice=vulkan:hwdevice_name=NVIDIA`: the device is the filter's own
+/// (libmpv's lavfi patch, src/packaging/libmpv), created on the first
+/// Vulkan device whose name has "NVIDIA" when the filter goes into the chain and freed
+/// with the filter. mpv's renderer and its Direct3D 11 device are not
+/// involved; without the option the graph would get no Vulkan device from
+/// Vestra's renderers.
+///
+/// Settings (T8 measurements, RTX 4070 Laptop, doc/architecture/README.md
+/// §4.4a): `perf=slow:grid=4` by default (the quality of grid 1 within
+/// 0.1 dB, 2.5–3.5× faster); above 1440p `perf=fast:grid=4` (slow grid 4
+/// leaves 1.21× headroom at 4K30 → 60). The fallback step (`performance`):
+/// `perf=fast`; above 1440p it is already the fastest setting the device
+/// offers (grid 8 is refused on the RTX 4070 Laptop, "supported mask 0x7":
+/// grids 1, 2 and 4; measured 2026-11-22), so the fallback goes on to
+/// `overload`.
+fn fruc_vulkan_filter(large: bool, performance: bool) -> String {
+    let (perf, grid) = match (large, performance) {
+        (false, false) => ("slow", 4),
+        (false, true) | (true, _) => ("fast", 4),
+    };
+    format!(
+        "lavfi=graph=[format=nv12,hwupload,fruc_vulkan=fps=source_fps*2:perf={perf}:grid={grid},hwdownload,format=nv12]:hwdevice=vulkan:hwdevice_name=NVIDIA"
+    )
 }
 
 fn frc_amf_filter(large: bool, performance: bool) -> String {
@@ -2318,6 +2470,27 @@ mod tests {
         assert_eq!(
             d3d11vpp_filter(2., true),
             "d3d11vpp=scale=2.00:scaling-mode=standard"
+        );
+    }
+
+    #[test]
+    fn nvidias_motion_filter_brings_its_own_vulkan_device() {
+        assert_eq!(
+            fruc_vulkan_filter(false, false),
+            "lavfi=graph=[format=nv12,hwupload,fruc_vulkan=fps=source_fps*2:perf=slow:grid=4,hwdownload,format=nv12]:hwdevice=vulkan:hwdevice_name=NVIDIA"
+        );
+        assert!(fruc_vulkan_filter(false, true).contains("perf=fast:grid=4"));
+        assert!(fruc_vulkan_filter(true, false).contains("perf=fast:grid=4"));
+        assert!(fruc_vulkan_filter(true, true).contains("perf=fast:grid=4"));
+    }
+
+    #[test]
+    fn nvidia_motion_smoothing_needs_driver_573_38() {
+        assert_eq!(nvidia_driver_release([32, 0, 15, 7338]), 57338);
+        assert!(nvidia_driver_release([32, 0, 15, 7337]) < NVIDIA_FRUC_DRIVER);
+        assert!(
+            nvidia_driver_release([32, 0, 16, 1062]) >= NVIDIA_FRUC_DRIVER,
+            "610.62"
         );
     }
 

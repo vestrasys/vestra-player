@@ -1140,9 +1140,10 @@ test("WireMotionState has the fields video.motion answers with (playback/motion.
     ...new Set([...wire.matchAll(/(\w+)\??:/g)].map((m) => m[1]!)),
   ].sort();
   const motion = host("src/playback/motion.rs");
-  const state = /fn state\(&mut self[\s\S]*?\n {4}\}/.exec(motion)?.[0];
+  // `\s*`: the signatures wrap since they take the engine (T8).
+  const state = /fn state\(\s*&mut self[\s\S]*?\n {4}\}/.exec(motion)?.[0];
   assert.ok(state, "Motion::state in motion.rs");
-  const shared = /fn shared_state\(&self[\s\S]*?\n {4}\}/.exec(motion)?.[0];
+  const shared = /fn shared_state\(\s*&self[\s\S]*?\n {4}\}/.exec(motion)?.[0];
   assert.ok(shared, "Motion::shared_state in motion.rs");
   const player = [
     ...new Set([
@@ -2182,7 +2183,7 @@ test("TestHost asks for a commands.run plan as the player does (commands_run.rs 
   await stop();
 });
 
-test("motion smoothing's run-long reasons, engines and the reserved engine's text agree (playback/motion.rs FIXED_CODES, AMD, NVIDIA, NO_NVIDIA; SDK TestHost and docs)", () => {
+test("motion smoothing's run-long reasons and engines agree (playback/motion.rs FIXED_CODES, AMD, NVIDIA; SDK TestHost and docs)", () => {
   const motion = host("src/playback/motion.rs");
   const values = (text: string) =>
     [...text.matchAll(/"([^"]+)"/g)].map((m) => m[1]!);
@@ -2213,11 +2214,7 @@ test("motion smoothing's run-long reasons, engines and the reserved engine's tex
   const sdk = /export type MotionEngine = ([^;]+);/.exec(sdkTypes())?.[1];
   assert.ok(sdk, "MotionEngine in the SDK's plugin types");
   assert.deepEqual(values(sdk).sort(), [...engines].sort());
-  // The reserved engine's message.
-  const own = /const NO_NVIDIA: &str =\s*"([^"]+)";/.exec(motion)?.[1];
-  assert.ok(own, "NO_NVIDIA in motion.rs");
-  assert.ok(
-    sdkFile("plugin/testing/processing.js").includes(own),
-    "TestHost's NO_NVIDIA is the player's",
-  );
+  // `nvidia` is no longer reserved (T8: NVIDIA's fruc_vulkan), so the
+  // player has no reserved engine's text for the SDK's TestHost to repeat;
+  // the TestHost models the engine in the SDK's T8 change.
 });
