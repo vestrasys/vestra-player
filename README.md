@@ -46,24 +46,22 @@ Vestra Player is an open-source video player for macOS and Windows. It aims for 
 ## Architecture
 
 ```mermaid
-flowchart TB
+flowchart LR
     subgraph HOST["Player: vestra-host (one Rust process)"]
-        UI["UI thread<br/>input, Slint layout and drawing,<br/>compiling plugin interfaces"]
-        CORE["vestra-core thread<br/>request routing, registries,<br/>plugin supervisor, triggers"]
-        PB["Playback worker<br/>the only caller of mpv control"]
+        direction LR
         RT["Render thread<br/>newest frame only"]
-        IO["Reader and writer threads<br/>per plugin process"]
+        UI["UI thread<br/>input, Slint, plugin UIs"]
+        CORE["vestra-core thread<br/>routing, supervisor, triggers"]
+        PB["Playback worker<br/>all mpv control"]
+        IO["Plugin I/O threads<br/>reader + writer per process"]
     end
-    SR["Node process: shared runner<br/>all built-in plugins"]
-    TP["Node process<br/>one per third-party plugin"]
-    CORE -- "numbered commands, table copies" --> UI
-    UI -- "reports: results, input, window facts" --> CORE
-    CORE -- "playback commands" --> PB
-    PB -- "results, playback state" --> CORE
+    SR["Node: shared runner<br/>all built-in plugins"]
+    TP["Node: one process per<br/>third-party plugin"]
     RT -- "frames" --> UI
-    IO -- "requests" --> CORE
-    CORE -- "answers, events" --> IO
-    IO <-->|"vestra/1: one JSON message per line"| SR
+    UI <-->|"commands / reports"| CORE
+    CORE <-->|"commands / state"| PB
+    CORE <-->|"answers, events / requests"| IO
+    IO <-->|"vestra/1: JSON lines"| SR
     IO <-->|"vestra/1"| TP
 ```
 
