@@ -593,6 +593,30 @@ impl Subtitles {
             }
         }
     }
+    /// A cheap key of what `subtitles.changed` reports (`media_facts`):
+    /// the source and its phase, the selection's stamp and targets, the
+    /// resources, and mpv's track count. Read at every `source.state`
+    /// push; the whole state (`state`, which lists mpv's tracks) only when
+    /// it moved.
+    pub fn change_key(&self, mpv: &Mpv) -> Value {
+        let snapshot = self.registry.state();
+        let resources = snapshot
+            .resources
+            .iter()
+            .map(|r| json!([r.owner, r.resource_id, r.revision]))
+            .collect::<Vec<_>>();
+        json!([
+            self.generation,
+            format!("{:?}", self.phase),
+            snapshot.stamp.generation,
+            snapshot.stamp.revision,
+            snapshot.selected.as_ref().map(target),
+            snapshot.secondary.as_ref().map(target),
+            resources,
+            mpv.get_property::<i64>("track-list/count").unwrap_or(-1),
+            self.active_load.is_some(),
+        ])
+    }
     /// The primary track's id in the SDK's form (`SubtitleTrack.id`:
     /// `embedded:<id>`, `external:<owner>:<resource>:<revision>`): the
     /// `subtitleTrack` condition's fact.

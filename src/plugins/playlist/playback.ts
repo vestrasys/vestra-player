@@ -76,7 +76,7 @@ export function playback(scope: Scope, queue: Queue, settled: () => void = () =>
       } else if (!ended) adoptedEnded = false;
     }
   };
-  player.onChange(observe);
+  player.onChange(observe); // B3: Player.onChange is removed in SDK 1.11
 
   // Only when nobody changed the source after it ended: otherwise "stale".
   const advance = (binding: Binding, ended: PlayerState): Promise<void> | undefined => {

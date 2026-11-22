@@ -183,7 +183,7 @@ const BRIEF_MS = 3000;
  * automatic check (Options ▸ General ▸ Updates) runs at most once a day.
  */
 export default async function activate(plugin: Plugin) {
-  plugin.player.subscribe(); // was "events"
+  plugin.player.subscribe(); // B3: removed in SDK 1.11; migrate (events-and-triggers.md §7)
   await plugin.player.read(); // was "playback.read"
   const panel = plugin.osd.panel();
   let shown = false;

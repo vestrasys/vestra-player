@@ -390,6 +390,8 @@ impl Core {
         // second after its last change.
         let now = self.now_ms();
         self.ui_state.save_if_due(now);
+        // A window resize whose quiet period ended (`window.changed`).
+        self.window_change_tick();
     }
 }
 #[cfg(test)]

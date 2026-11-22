@@ -444,6 +444,10 @@ pub(crate) struct Core {
     pub(crate) held_events: std::collections::VecDeque<Event>,
     /// The facts `window.state` last broadcast (`Core::window_state_out`).
     pub(crate) window_state_sent: Value,
+    /// When `window.changed` and `layout.changed` go out (second batch of
+    /// events; `Core::facts_events`).
+    pub(crate) window_change: crate::fact_events::WindowChange,
+    pub(crate) layout_change: crate::fact_events::LayoutChange,
     /// The interface's facts as last reported (`UiReport::UiFacts`; design
     /// §5.3 group A, plan step S2f(1)).
     pub(crate) ui_facts: messages::UiFacts,

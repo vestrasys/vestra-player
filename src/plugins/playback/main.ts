@@ -26,7 +26,7 @@ import type { Osd } from "./texts.ts";
  * (B23, moved from the marks plugin: the `ab.*` commands and the panel's A-B Loop section).
  */
 export default async function activate(plugin: Plugin) {
-  plugin.player.subscribe(); // was "events"
+  plugin.player.subscribe(); // B3: removed in SDK 1.11; migrate (events-and-triggers.md §7)
   await plugin.player.read(); // was "playback.read"
   const { player } = plugin;
   const bar = plugin.panels.mount("bottom", "ui/bar.slint");
@@ -105,7 +105,7 @@ export default async function activate(plugin: Plugin) {
   // Another source, or anyone else's change during a drag, ends the gesture;
   // further pointer moves wait for the next press. A failed load is announced once.
   let { sourceId, phase } = player.state;
-  player.onChange(async (state) => {
+  player.onChange(async (state) => { // B3: Player.onChange is removed in SDK 1.11
     const replaced = state.sourceId !== sourceId;
     if (state.phase === "error" && (replaced || phase !== "error"))
       if (state.error) osd("Open failed: {}", [state.error]);

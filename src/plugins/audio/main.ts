@@ -44,7 +44,7 @@ const quiet = (shown: Promise<void>) => void shown.catch(() => undefined);
  * saved in `settings.json`; only the audio sync follows the source, as its keep mode says.
  */
 export default async function activate(plugin: Plugin) {
-  plugin.player.subscribe(); // was "events"
+  plugin.player.subscribe(); // B3: removed in SDK 1.11; migrate (events-and-triggers.md §7)
   await plugin.player.read(); // was "playback.read"
   const { player } = plugin;
   const { text } = plugin.i18n;
@@ -174,7 +174,7 @@ export default async function activate(plugin: Plugin) {
     reread = setTimeout(() => void readChannels(), 1000);
     reread.unref?.();
   };
-  player.onChange(follow);
+  player.onChange(follow); // B3: Player.onChange is removed in SDK 1.11
   follow(player.state);
 
   // ---------------------------------------------------------------- A11 external audio
@@ -239,7 +239,7 @@ export default async function activate(plugin: Plugin) {
       }
     }
   };
-  player.onChange((state) => void autoLoadFor(state));
+  player.onChange((state) => void autoLoadFor(state)); // B3: Player.onChange is removed in SDK 1.11
   void autoLoadFor(player.state);
   const setAutoLoad = (on: boolean) => {
     autoLoad = on;
@@ -308,7 +308,7 @@ export default async function activate(plugin: Plugin) {
         }),
       );
     }));
-  player.onChange(() => void rebuildTracks());
+  player.onChange(() => void rebuildTracks()); // B3: Player.onChange is removed in SDK 1.11
   void rebuildTracks();
 
   // ---------------------------------------------------------------- G16 output device
@@ -416,7 +416,7 @@ export default async function activate(plugin: Plugin) {
       void readDevices().then(() => announce(requested));
     }
   };
-  player.onChange(followOutput);
+  player.onChange(followOutput); // B3: Player.onChange is removed in SDK 1.11
 
   let deviceScope: Scope = plugin.scope();
   let deviceKey: string | null = null;
@@ -492,7 +492,7 @@ export default async function activate(plugin: Plugin) {
   // A new source or a change of the output may bring the output back.
   let outputSource = player.state.sourceId;
   let outputActive = player.state.audioOutput?.active ?? null;
-  player.onChange((state) => {
+  player.onChange((state) => { // B3: Player.onChange is removed in SDK 1.11
     const active = state.audioOutput?.active ?? null;
     if (state.sourceId === outputSource && active === outputActive) return;
     outputSource = state.sourceId;

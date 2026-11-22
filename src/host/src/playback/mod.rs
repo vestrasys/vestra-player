@@ -8,6 +8,7 @@ pub(crate) mod cover_listing;
 pub(crate) mod effects;
 pub(crate) mod gpu_warm;
 pub(crate) mod media_copy;
+pub(crate) mod media_facts;
 pub(crate) mod media_jobs;
 pub(crate) mod media_join;
 pub(crate) mod media_sources;
