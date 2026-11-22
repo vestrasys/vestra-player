@@ -38,10 +38,14 @@ export class Chapters {
     return this.#list;
   }
 
-  /** Follow the player: forget on a new source, read once it is ready. */
+  /**
+   * Follow the player: forget on a new source and on a close (which keeps the source id, with no
+   * source open), read once it is ready.
+   */
   observe(state: PlayerState) {
-    if (state.sourceId !== this.#sourceId) {
-      this.#sourceId = state.sourceId;
+    const open = state.source === null ? null : state.sourceId;
+    if (open !== this.#sourceId) {
+      this.#sourceId = open;
       this.#loaded = null;
       if (this.#list.length) this.#set([]);
     }

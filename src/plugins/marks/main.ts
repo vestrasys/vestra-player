@@ -18,7 +18,7 @@ import { Settings } from "./store.ts";
  *
  * It follows the source, whoever opened it, through the source events
  * (`source.opening`, `source.ready`; at `source.ended` the state is read again,
- * so a close is seen), and holds no stream unless the window shows: the
+ * and a close after the end is the `when.open` trigger's leave), and holds no stream unless the window shows: the
  * commands' state is `plugin.when` conditions, the reason follows the "media"
  * trigger, and the current chapter (the radio check) the "chapter" trigger's
  * range list. With nothing shown the plugin may be stopped while idle; its
@@ -39,6 +39,16 @@ export default async function activate(plugin: Plugin) {
     .trigger("chapter")
     .enter(({ range }) => void (facts.chapter = range ? (rangeChapters[range.index] ?? -1) : -1))
     .leave(() => void (facts.chapter = -1));
+  // A source closed after it ended (its `source.ended` came at the end) sends no further source
+  // event: the player's `when.open` condition says it. Declared before the first await (triggers
+  // are); the handler is set once everything exists, and a close before that is caught up then.
+  // The notification's state is in `player.state` before the handler runs.
+  let closed: (() => void) | null = null;
+  let closedEarly = false;
+  plugin
+    .trigger()
+    .firesOn(when.open)
+    .leave(() => (closed ? closed() : void (closedEarly = true)));
 
   await player.read();
   facts.media = hasMedia(player.state);
@@ -84,6 +94,8 @@ export default async function activate(plugin: Plugin) {
       // Stopping (the player quits): nothing to follow.
     }),
   );
+  closed = () => observe(player.state);
   observe(player.state);
+  if (closedEarly) closed();
   void menu.build();
 }

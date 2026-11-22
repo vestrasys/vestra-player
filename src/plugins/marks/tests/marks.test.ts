@@ -648,6 +648,26 @@ test("idle: in standby the menu state, the current chapter and a close still rea
   assert.deepEqual(menuLines(host, "marks-bookmarks"), []);
 });
 
+test("window: a file closed after it played to its end leaves the list empty", async () => {
+  const host = new TestHost();
+  host.chapters = [{ title: "Opening", start: 0 }];
+  await start(host);
+  await play(host, file(), 600, 20);
+  await press(host, "P");
+  await press(host, "H");
+  const window = host.window("marks");
+  assert.equal((window.props.rows as WindowRow[]).length, 2);
+  // The end: `source.ended` comes now; the close afterwards sends no further source event.
+  host.setSource({ phase: "ended", terminalReason: "natural", position: 600 });
+  await host.settle(WAIT);
+  assert.equal(window.props.media, true, "an ended file is still open");
+  await host.request("source.submit", { operationId: 990002, intent: { kind: "close" } });
+  await host.settle(WAIT);
+  assert.equal(window.props.media, false);
+  assert.deepEqual(window.props.rows, [], "the closed file's bookmarks are gone from the window");
+  assert.equal(host.command("marks.add").state.reason, "No media open");
+});
+
 // ------------------------------------------------------------------ menus
 
 /** The fixed commands by order: title (as declared or as shown), order, group, keys. */

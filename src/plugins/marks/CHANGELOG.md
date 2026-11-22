@@ -3,6 +3,7 @@
 ## 0.1.12
 
 - Events and triggers instead of `subscribe()` and `player.onChange` (removed in SDK 1.11.0): the source is followed through `source.opening`, `source.ready` and `source.ended` (after which the state is read again, so a close is seen). The commands' `enabled` are `plugin.when` conditions (jumps: a seekable media source, ready or ended; Add Bookmark: ready and seekable), their reasons follow a "media" trigger, and the current chapter's radio check follows a "chapter" trigger on the listed chapters as a position range list. A command reads the state when it runs (`player.refresh()`); the Chapters and Bookmarks window streams the state only while it is open. With the window closed the plugin holds nothing and may be stopped while idle; its seek-bar layer stays with the player. Menus, keys, texts, the window and the seek-bar marks are unchanged. Who must change: nobody.
+- A file closed after it played to its end no longer leaves its marks in an open Chapter and Bookmark List: that close sends no further source event, so a `when.open` trigger (its `leave`) reports it, as in the audio and visualizer plugins. The chapters are also forgotten at a close, which keeps the source id (a close during playback left them listed too). Test: the window is empty after such a close.
 
 ## 0.1.11
 
