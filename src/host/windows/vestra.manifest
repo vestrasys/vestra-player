@@ -6,7 +6,7 @@
      it) makes the process heap and every HeapCreate heap a segment heap:
      Rust's System allocator, the UCRT's malloc (libmpv, FFmpeg) and the
      system DLLs all allocate there. It keeps less freed memory committed
-     than the NT heap (0.9.0, offscreen: 20-30 MB less private memory). -->
+     than the NT heap (0.10.3, CPU rendering: 19-44 MB less private memory). -->
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
   <dependency>
     <dependentAssembly>
