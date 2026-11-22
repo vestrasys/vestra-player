@@ -1341,6 +1341,43 @@ test("E18: 倍帧 reads the source rate without frameBlend, then adds it last; a
   await stop();
 });
 
+test("E18: switched on at the end of a file, the rate is read once it plays again (no new source, the ready trigger)", async () => {
+  const host = new TestHost();
+  setFps(host, 24);
+  host.openElsewhere("/pan24.mp4");
+  const { stop } = await start(host);
+  host.setSource({ phase: "ended" });
+  await host.settle();
+  await host.command("video.frame-blend").run();
+  await host.settle(20);
+  assert.equal(node(host, "frameBlend"), undefined, "nothing is read while the source has ended");
+  host.setSource({ phase: "ready", position: 0 }); // played again: the same source
+  await until(host, blendNode(host, 48), "the rate read when the source is ready again");
+  await stop();
+});
+
+test("video.reconfigured: the geometry editor gets the decoded shape at once", async () => {
+  const host = new TestHost();
+  const { stop } = await start(host);
+  await host.command("video.picture").run();
+  const window = host.mounted();
+  host.openElsewhere("/clip.mkv");
+  await host.settle();
+  host.emit("video.reconfigured", {
+    sourceId: host.source.stamp.generation,
+    width: 1440,
+    height: 1080,
+    displayWidth: 1920,
+    displayHeight: 1080,
+    fps: 25,
+    rotation: 0,
+    hdr: false,
+  });
+  await host.settle();
+  assert.equal(window.props["source-aspect"], 1440 / 1080);
+  await stop();
+});
+
 test("E18: an unknown rate blends to 60; no picture adds nothing; 启用画面效果 off removes it; the switch is saved", async () => {
   await withData(async (data) => {
     const host = new TestHost();
