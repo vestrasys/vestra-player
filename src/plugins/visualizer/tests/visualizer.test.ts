@@ -371,8 +371,10 @@ test("G-16b: loading shows the loading screen with the source name; ready judges
   host.setSource({ phase: "ready" });
   await settle(host);
   assert.equal(props(host).mode, "none");
-  // The same source loads again (reload): judged again once ready.
-  host.setSource({ phase: "loading" });
+  // The same source loads again (reload): judged again once ready. Like the
+  // player, a load begins a new cycle (playback/session.rs `begin_cycle`), so
+  // the player sends `source.opening` for it.
+  host.setSource({ phase: "loading", cycle: host.source.cycle + 1 });
   await settle(host);
   assert.equal(props(host).mode, "loading");
   host.setSource({ phase: "ready" });
@@ -389,6 +391,33 @@ test("G-16b: loading shows the loading screen with the source name; ready judges
   host.openElsewhere(join(folder({ "c.mp3": "x" }), "c.mp3"), "loading");
   await settle(host);
   assert.equal(props(host).mode, "loading");
+});
+
+test("B3: the scene follows the source events and layout.changed; only the backdrop keeps it running", async () => {
+  const host = new TestHost();
+  host.tools.handle("ffprobe", () => ({ stdout: PROBE_PLAIN }));
+  await start(host);
+  // No player event that the player does not wake it for: the backdrop panel is the reason.
+  assert.deepEqual(host.keepsRunning, ["a mounted panel"]);
+  // Judged video (the video track was known), then the backdrop hides.
+  host.stats = { ...host.stats, video: VIDEO_STATS };
+  host.openElsewhere(join(folder({ "v.mka": "x" }), "v.mka"));
+  await settle(host);
+  assert.equal(props(host).mode, "none");
+  host.setBackdropEffective(false);
+  await settle(host);
+  // The backdrop comes back (`layout.changed`): judged again, audio only now.
+  host.stats = { ...host.stats, video: null };
+  host.setBackdropEffective(true);
+  await settle(host);
+  assert.deepEqual([props(host).mode, props(host).title], ["audio", "v.mka"]);
+  // Played to its end: the card stays. Closed: idle.
+  host.setSource({ phase: "ended", terminalReason: "natural" });
+  await settle(host);
+  assert.equal(props(host).mode, "audio");
+  host.setSource({ phase: "empty", source: null });
+  await settle(host);
+  assert.equal(props(host).mode, "idle");
 });
 
 test("G-16b: an error is the idle screen, never the card of the source before", async () => {
