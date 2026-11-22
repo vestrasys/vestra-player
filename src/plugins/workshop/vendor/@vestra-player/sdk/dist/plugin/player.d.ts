@@ -71,6 +71,13 @@ export declare class PlayerService implements StreamSource {
      * `source.state` (`Connection.hold`). `always`: the state is read once
      * more when the subscription starts, also without `read()`.
      */
+    /**
+     * A fact event's fields of the state (1.11.0-rc.2): taken into the copy
+     * when `belongs` holds for it, as `accept` takes a state (a precise
+     * pass for the fields that changed); its event sequence is kept, so the
+     * next `source.state` is accepted as before.
+     */
+    patch(belongs: (raw: SourceState) => boolean, fields: Partial<SourceState>): void;
     watch(watcher: (raw: SourceState) => void, always?: boolean): Disposable;
     /**
      * `watch`, for `plugin.player.stream`: the copy hears `source.state` while
@@ -105,11 +112,18 @@ export declare class PlayerService implements StreamSource {
 /**
  * `audio.tracks.changed`'s data as the listener gets it (`ScopeImpl.fact`,
  * SDK 1.11.0): the tracks as {@link PlayerState.audioTracks} lists them.
+ * The copy takes them first (1.11.0-rc.2), when they are of its source.
  */
-export declare function audioTracksChanged(data: unknown): {
+export declare function audioTracksChanged(runtime: Runtime, data: unknown): {
     sourceId: number;
     audioTracks: AudioTrack[];
 };
+/**
+ * `audio.devices.changed`'s data as the listener gets it (1.11.0-rc.2):
+ * as the player sent it; the copy takes `requested` and `active` into
+ * {@link PlayerState.audioOutput} first.
+ */
+export declare function audioDevicesChanged(runtime: Runtime, data: unknown): unknown;
 export declare const playerOf: (runtime: Runtime) => PlayerService;
 /**
  * The player's source as a stream needs it (`stream.ts`, L1): a stream

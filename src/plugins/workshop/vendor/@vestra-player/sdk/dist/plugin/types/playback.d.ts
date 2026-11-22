@@ -1138,9 +1138,10 @@ export interface Player {
      * not keep the plugin running: the player starts a plugin in standby to
      * deliver them, and an event that arrives while the plugin starts waits
      * for its activation. Where the data carries a state the SDK keeps
-     * (`subtitles.changed`, `window.changed`), the SDK takes it first, so
-     * `plugin.subtitles.state` and `plugin.window.state` hold it when the
-     * listener runs. As for every {@link Player.on} listener, no full update
+     * (`subtitles.changed`, `window.changed`, `layout.changed`, and
+     * `audio.tracks.changed` and `audio.devices.changed` for
+     * `plugin.player.state`), the SDK takes it first, so the copy holds it
+     * when the listener runs. As for every {@link Player.on} listener, no full update
      * pass follows it.
      *
      * @param event - The event's name.
@@ -2081,7 +2082,11 @@ export interface FactEventPayloads {
      * loads; `source.ended` and `source.opening` say so).
      */
     "audio.tracks.changed": {
-        /** The source it belongs to ({@link PlayerState.sourceId}). */
+        /**
+         * The source it belongs to ({@link PlayerState.sourceId}). When it is
+         * the source of `plugin.player.state`, the SDK takes the tracks into
+         * {@link PlayerState.audioTracks} first.
+         */
         sourceId: number;
         /** Its audio tracks, as {@link PlayerState.audioTracks} lists them. */
         audioTracks: AudioTrack[];
@@ -2129,7 +2134,9 @@ export interface FactEventPayloads {
     /**
      * The audio output devices changed: one was plugged in or removed, or
      * the device in use changed (`setAudioDevice`, or the chosen one went
-     * away and the system default plays). Checked once a second.
+     * away and the system default plays). Checked once a second. The SDK
+     * takes `requested` and `active` into {@link PlayerState.audioOutput}
+     * first.
      */
     "audio.devices.changed": {
         /** The devices, as {@link Player.audioDevices} lists them. */
