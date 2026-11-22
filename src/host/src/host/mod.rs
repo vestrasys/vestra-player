@@ -1,6 +1,6 @@
 //! The `Host` and its `Core`. The core ([`Core`], behind `Host::link`) is the
 //! state and the code that never touch the interface: the lifecycle of
-//! plugins, the dispatch of their requests (`crate::capabilities`), the
+//! plugins, the dispatch of their requests (`crate::api`), the
 //! supervisor, triggers, packages; its turn takes the core alone (plan step
 //! S2f(3): `Core::handle`, `Core::report`, `Core::STEPS`), and what it
 //! asks of the interface waits in its outbox (`outbox.rs`). The `Host` is

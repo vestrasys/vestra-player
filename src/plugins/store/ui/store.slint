@@ -365,9 +365,39 @@ export component StoreWindow inherits Window {
     }
 
     // The only layout arithmetic (design store-v3 §3.2): how many cards of at
-    // least 264px fit with 16px sides and 12px gaps.
-    private property <int> columns: clamp(floor((grid.width - 20px) / 276px), 2, 5);
+    // least 264px fit with 16px sides and 12px gaps. Set by `fit-columns` as
+    // the grid's width changes (store 0.3.3), not bound, so a step can keep
+    // the scroll position on the same cards.
+    private property <int> columns: 2;
     private property <int> row-count: ceil(root.cards.length / root.columns);
+    // A card row's height (the row's 148 = 136 card + 12 gap).
+    private property <length> row-height: 148px;
+
+    // The columns for the grid's width. Narrower drops a column at once (a
+    // card is never under 264); wider adds one only 24px past its step, so
+    // a width that trembles at a step during a drag does not flip the grid
+    // back and forth. On a change the card at the top-left stays in the top
+    // row: the cards flow round it instead of the view landing on other
+    // cards.
+    function fit-columns() {
+        if grid.width <= 0 {
+            return;
+        }
+        let room = grid.width - 20px;
+        let fit = clamp(floor(room / 276px), 2, 5);
+        let wider = clamp(floor((room - 24px) / 276px), 2, 5);
+        let next = fit < root.columns ? fit : max(root.columns, wider);
+        if next == root.columns {
+            return;
+        }
+        // The first card of the top row, which a step puts at the top of its new row. Not at the same
+        // offset into it: the rows are a new model then, and the ListView lays out from a row's top
+        // whenever the view moves past the rows it had built.
+        let top-card = floor(max(0px, -grid.viewport-y) / root.row-height) * root.columns;
+        root.columns = next;
+        let bottom = max(0px, ceil(root.cards.length / next) * root.row-height - grid.visible-height);
+        grid.viewport-y = -min(bottom, floor(top-card / next) * root.row-height);
+    }
 
     // Widths that follow the interface language, never under the original ones.
     // A drop-down: its widest label + 21px (6 + 5 padding, 2 gap, 8 caret).
@@ -377,8 +407,14 @@ export component StoreWindow inherits Window {
     private property <length> published-width: max(76px, published-measure.preferred-width);
     private property <length> install-width: max(48px, install-measure.preferred-width + 2 * Theme.button-padding);
     private property <length> fact-width: max(44px, fact-measure.preferred-width);
+    // Placed (x, y): an unplaced child of the window adds its layout limits to
+    // the window's, and this one's (the measured texts) made the window's
+    // maximum height 0, under its minimum, so the two swapped: at most 480
+    // high and down to nothing (store 0.3.3).
     Rectangle {
         visible: false;
+        x: 0;
+        y: 0;
         width: 0;
         height: 0;
         goal-measure := Cell { text: root.goal-model.length > 0 ? root.goal-model[0] : ""; }
@@ -548,8 +584,10 @@ export component StoreWindow inherits Window {
                         x: (parent.width - self.width) / 2;
                         width: min(parent.width, 1800px);
                         height: parent.height;
+                        init => { root.fit-columns(); }
+                        changed width => { root.fit-columns(); }
                         for r in root.row-count: HorizontalLayout {
-                            height: 148px;
+                            height: root.row-height;
                             padding-left: 16px;
                             padding-right: 16px;
                             padding-bottom: 12px;

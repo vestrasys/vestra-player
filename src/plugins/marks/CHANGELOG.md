@@ -4,6 +4,10 @@
 
 - Events and triggers instead of `subscribe()` and `player.onChange` (removed in SDK 1.11.0): the source is followed through `source.opening`, `source.ready` and `source.ended` (after which the state is read again, so a close is seen). The commands' `enabled` are `plugin.when` conditions (jumps: a seekable media source, ready or ended; Add Bookmark: ready and seekable), their reasons follow a "media" trigger, and the current chapter's radio check follows a "chapter" trigger on the listed chapters as a position range list. A command reads the state when it runs (`player.refresh()`); the Chapters and Bookmarks window streams the state only while it is open. With the window closed the plugin holds nothing and may be stopped while idle; its seek-bar layer stays with the player. Menus, keys, texts, the window and the seek-bar marks are unchanged. Who must change: nobody.
 
+## 0.1.11
+
+- The hidden element that measures the edit labels in the Marks window is placed (`x`, `y`), so its layout limits stay out of the window's. Nothing changes today; the same unplaced element made the Plugin Store's maximum height 0, so its size limits swapped (Store 0.3.3). Who must change: nobody.
+
 ## 0.1.10
 
 - The description's last line, starting with `→ `, says where to open the plugin; Store 0.3.1 shows it on the plugin's card, also before install. Description text and its translations only. Who must change: nobody.
