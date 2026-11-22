@@ -767,7 +767,7 @@ pub fn open(
     Ok(View { instance })
 }
 
-/// For window tests in other modules (`capabilities::ui_window`).
+/// For window tests in other modules (`api::ui_window`).
 #[cfg(test)]
 pub(crate) use tests::recording_platform;
 

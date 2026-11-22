@@ -38,7 +38,7 @@ fn ask(
     method: &str,
     mut params: Value,
 ) -> (Result<Value, RpcError>, Option<Value>) {
-    if let Err(error) = crate::capabilities::mpv_check(method, &params) {
+    if let Err(error) = crate::api::mpv_check(method, &params) {
         return (Err(error), None);
     }
     params["plugin"] = if owner == 1 { "aa.first" } else { "bb.second" }.into();

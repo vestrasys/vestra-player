@@ -419,7 +419,7 @@ pub(crate) enum FullscreenChange {
 pub(crate) enum DialogPurpose {
     /// `dialogs.open`: its parameters as the core checked them, the title
     /// and file name in the plugin's language (`{ kind, title, fileName }`;
-    /// capabilities/ui_dialog.rs).
+    /// api/ui_dialog.rs).
     Open(Value),
     /// `media.sources.locate`: `{ store, token, name }` of the reference.
     Locate(Value),
@@ -554,7 +554,7 @@ pub(crate) enum LeadOp {
     Set {
         owner: u64,
         appeared: bool,
-        ended: Option<crate::capabilities::LeadStatus>,
+        ended: Option<crate::api::LeadStatus>,
     },
     /// `palette.lead.clear`, or its holder gone.
     Clear { owner: u64 },

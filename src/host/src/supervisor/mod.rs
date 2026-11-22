@@ -107,7 +107,7 @@ pub enum Action<P> {
         unit: UnitId,
         holder: Pid,
     },
-    /// Move registrations `from` → `to` (`capabilities::rekey`).
+    /// Move registrations `from` → `to` (`api::rekey`).
     Rekey {
         unit: UnitId,
         from: Pid,
@@ -162,7 +162,7 @@ pub enum Action<P> {
     KillRunner {
         runner: RunnerId,
     },
-    /// `capabilities::revoke` of the registrations under `pid`.
+    /// `api::revoke` of the registrations under `pid`.
     Revoke {
         unit: UnitId,
         pid: Pid,

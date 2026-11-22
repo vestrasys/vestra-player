@@ -52,7 +52,7 @@ use std::time::{Duration, Instant};
 /// The filter's label in mpv's chain.
 pub const LABEL: &str = "vestra-upscale";
 /// The event with the shared state (`UpscalingState` without `enabled`),
-/// player 0.5.25; it needs `video.upscaling` (capabilities/events.rs).
+/// player 0.5.25; it needs `video.upscaling` (api/events.rs).
 pub const CHANGED: &str = "video.upscaling.changed";
 /// How often the worker looks at the size and the decoding while upscaling
 /// is asked for.

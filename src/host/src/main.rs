@@ -6,9 +6,9 @@
 // `diag!`, used everywhere below (declared first for its textual scope).
 #[macro_use]
 mod diag;
+mod api;
 mod binding_manager;
 mod bindings;
-mod capabilities;
 mod clipboard;
 mod command_renames;
 mod commands;

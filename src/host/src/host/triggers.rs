@@ -33,7 +33,7 @@ pub(crate) struct TriggerState {
 
 impl Core {
     /// The facts conditions read, now: a trigger's and a command's state
-    /// (`capabilities::refresh_conditions`) read the same.
+    /// (`api::refresh_conditions`) read the same.
     pub(crate) fn condition_facts(&self) -> Facts {
         let language = self.language_preference();
         let mut facts = Facts::new(
@@ -70,7 +70,7 @@ impl Core {
     /// state reads it (`when.subtitleTrack`) follow it, as do triggers.
     pub(crate) fn triggers_subtitle(&mut self, track: Option<String>) {
         self.trigger_state.subtitle = track;
-        capabilities::refresh_conditions(self);
+        api::refresh_conditions(self);
         self.triggers_facts();
     }
     /// The position model reported (`Event::Position`).

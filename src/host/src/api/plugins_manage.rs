@@ -1,6 +1,6 @@
 //! `plugins.manage`: installing, enabling, reloading and uninstalling other
 //! plugins; the RPC face of package_manager.rs, which refuses the methods it
-//! does not know. `packages.list` needs no capability (uncapable.rs).
+//! does not know. `packages.list` needs no capability (open.rs).
 use super::{Capability, Handled, Info, Recorded};
 use crate::host::{Core, Reply};
 use serde_json::Value;

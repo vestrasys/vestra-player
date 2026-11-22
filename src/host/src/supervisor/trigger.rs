@@ -19,7 +19,7 @@ pub enum TriggerKind {
     /// A wake-event broadcast, by its merge key: merged with a held one of
     /// the same key (newest wins), dropped silently. The key is the event
     /// name, or for a per-source event its name and source id
-    /// (`capabilities::wake_trigger`).
+    /// (`api::wake_trigger`).
     Event(String),
     /// A message that follows a held trigger (`source.resolveCancel`): held
     /// only behind one, never starts anything.

@@ -8,7 +8,7 @@ Ask Vestra, so a calculator, a library search or a jump-to-time row can use them
 
 ## 1. Built-in-only requests
 
-`Info::builtin_only` (`capabilities/mod.rs`) marks an area of the API (`commands_run.rs`:
+`Info::builtin_only` (`api/mod.rs`) marks an area of the API (`commands_run.rs`:
 `commands.list`, `commands.run`; `palette_lead.rs`: `palette.lead.*`) that only built-in
 plugins may use. Since player 0.9.0 (SDK 1.9.0) manifests declare nothing, so this is the only
 refusal by who is asking; until then they were two built-in-only manifest declarations. Built-in means **by provenance**: `Host::is_builtin` (listed in `builtin.json`,
@@ -36,7 +36,7 @@ requests themselves are refused as above. TestHost refuses them the same way (`T
 
 ## 2. `commands.run` (built-in only)
 
-`capabilities/commands_run.rs`. Holds nothing for standby.
+`api/commands_run.rs`. Holds nothing for standby.
 
 | Method | Params | Result | Errors |
 | --- | --- | --- | --- |
@@ -119,7 +119,7 @@ before running such a command later.
 
 Design: `C:\vestra\design\ask-vestra-ux\PROPOSAL.md` §4.3, §4.6, §4.7 (user rulings of
 2026-11-12; step 3: H3, H7). `host/review_sheet.rs`, `ui/review-sheet.slint`, `ui/host.slint`,
-`capabilities/commands_run.rs` (`ask`, `reason`).
+`api/commands_run.rs` (`ask`, `reason`).
 
 A menu-layer mode beside the palette (`MenuMode::Review`) in the main window, drawn by the host from
 its own data: where the palette and the status strip are (centred, y 16, below the fullscreen
@@ -166,7 +166,7 @@ plugins to remember (`r04-remember-two`), Close, eight steps; both palettes, 2×
 
 Design: PROPOSAL §3.2 B3, §4.3, §4.5, §4.6, §4.7, §5.1 H4 (step 4; user rulings of 2026-11-12: per
 plugin, kept until reset by a palette command; never offered with a destructive step).
-`capabilities/commands_run.rs` (`Judged`, `trust_offer`, `trust_plugins`, `ask_again`,
+`api/commands_run.rs` (`Judged`, `trust_offer`, `trust_plugins`, `ask_again`,
 `forget_trust`), `ui/ui_state.rs` (`trustedPlugins`), `host/review_sheet.rs`
 (`remember_text`, `decide`), `host/actions.rs` (`ASK_AGAIN`), `packages/package_manager.rs`
 (`uninstall`, `source_changes`, `trustable_plugin`).
@@ -209,7 +209,7 @@ rulings of 2026-11-03/04): the store review and uninstall remain the gate.
 
 Design: PROPOSAL §4.4, §5.1 H5, §5.4 step 5, §7 Q5/Q6 (user rulings of 2026-11-12: Ask Vestra's
 first-use consent in the player; every other main-window confirmation too, as a separate step).
-`capabilities/ui_dialog.rs` (`ask`), `host/review_sheet.rs` (`Asks::Confirm`, `confirm_sheet`,
+`api/ui_dialog.rs` (`ask`), `host/review_sheet.rs` (`Asks::Confirm`, `confirm_sheet`,
 `open_confirm`), `host/origins.rs`, `platform::tool_window_focused`. No API change:
 `dialogs.confirm` keeps its parameters and its answer `{ confirmed, checked }`.
 
@@ -289,7 +289,7 @@ in a 640×360 window (`h5-long-detail-small`).
 
 ## 3. `palette.lead` (built-in only, residency recordable)
 
-`capabilities/palette_lead.rs`, `host/palette.rs`, `ui/command_palette.rs`,
+`api/palette_lead.rs`, `host/palette.rs`, `ui/command_palette.rs`,
 `ui/command-palette.slint`. Store label "Add the first row of the command palette".
 
 | Method / event | Params | Notes |
@@ -331,7 +331,7 @@ The palette with a lead (nothing changes without one):
 ### 3.1 `status.state` and the status strip
 
 Design: `C:\vestra\design\ask-vestra-ux\PROPOSAL.md` §4.2 (user rulings of 2026-11-12, step 2:
-H1, H2, H6; SDK 1.7.15 `PaletteLeadStatus.state`). `capabilities/palette_lead.rs` (`LeadStatus`,
+H1, H2, H6; SDK 1.7.15 `PaletteLeadStatus.state`). `api/palette_lead.rs` (`LeadStatus`,
 `StatusState`), `host/lead_strip.rs`, `ui/lead-strip.slint`, `ui/host.slint`.
 
 `status.state` is `"working"` (absent or null: the default), `"done"`, `"failed"`, `"note"` or
@@ -347,7 +347,7 @@ again, and the row goes back to its usual form at once. The same end status sent
 twice. The holder needs no timer and may call `palette.lead.done` right away.
 
 **The texts' lengths and the strip's own text (SDK 1.8.0).** `TITLE_CHARS` … `STATUS_STRIP_CHARS`
-in `capabilities/palette_lead.rs` are the SDK's `PALETTE_LEAD_LIMITS`
+in `api/palette_lead.rs` are the SDK's `PALETTE_LEAD_LIMITS`
 (`tests/sdk/lead-status-agreement.test.ts`); each text is counted as shown and is one line as
 sent.
 
@@ -415,13 +415,13 @@ player's (tickets, rates, confirmation, the line naming each run). Opening eithe
 
 ## 4. Tests
 
-- Unit: `capabilities/commands_run.rs` (tickets, idle end, rates, revoke and rekey, which commands
+- Unit: `api/commands_run.rs` (tickets, idle end, rates, revoke and rekey, which commands
   ask first, trusted plugins, what "Don't ask again" offers, `step`/`of`, `then`, plan approvals,
   the sheet's reasons), `host/review_sheet.rs` (the guard, the question, the sheet's value, the
   checkbox's text; a confirmation's value and its checkbox answered with either button), `ui/ui_state.rs` (`trustedPlugins`: per caller, bounded, uninstall, reset, lenient
-  reading, round trip), `capabilities/palette_lead.rs` (parameters, built-in only),
-  `capabilities/mod.rs` (built-in-only refusal for live requests and replays),
-  `capabilities/palette_lead.rs` (`status.state`), `host/lead_strip.rs` (what the strip shows, end
+  reading, round trip), `api/palette_lead.rs` (parameters, built-in only),
+  `api/mod.rs` (built-in-only refusal for live requests and replays),
+  `api/palette_lead.rs` (`status.state`), `host/lead_strip.rs` (what the strip shows, end
   states' times, the shell value), `ui/command_palette.rs` (`names`, `aim`, `lead_shows_status`, no
   change without a lead), `ui/widgets_tests.rs` (the strip's sizes, presses, fade and animation; the sheet's size, keys,
   repeats and buttons; the checkbox: click, Run, Enter, Ctrl+Enter, Space, a wrapping text; a

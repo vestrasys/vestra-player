@@ -40,7 +40,7 @@ pub(crate) enum Origin {
     /// The main window's palette first row: a request typed there for the
     /// lead's holder, or its Stop in the status strip. Routed as [`Self::Main`];
     /// the holder's confirmation then shows that request in its request box
-    /// (`capabilities/ui_dialog.rs`), which an action in its panel since
+    /// (`api/ui_dialog.rs`), which an action in its panel since
     /// then (plain `Main`) does not.
     Lead,
     /// The floating sidebar's window (its panels, menus and keys).
@@ -546,7 +546,7 @@ mod tests {
     /// holder elsewhere in the main window (its docked panel, while the
     /// palette's ticket is still live), its confirmation still goes to the
     /// sheet but is no longer that request's: no request box, and the old
-    /// ticket's end does not cancel it (`capabilities/ui_dialog.rs`).
+    /// ticket's end does not cancel it (`api/ui_dialog.rs`).
     #[test]
     fn only_a_request_in_the_first_row_makes_a_confirmation_that_requests() {
         let mut origins = Origins::default();
@@ -561,12 +561,8 @@ mod tests {
         assert_eq!(route(origins.get(ASK), false, &[], |_| false), Route::Focus);
         // Wiring: the request box asks for this origin.
         assert!(
-            after(
-                include_str!("../capabilities/ui_dialog.rs"),
-                "let request = core",
-                8
-            )
-            .contains("== Some(&Origin::Lead)")
+            after(include_str!("../api/ui_dialog.rs"), "let request = core", 8)
+                .contains("== Some(&Origin::Lead)")
         );
     }
 
@@ -595,13 +591,10 @@ mod tests {
             ("host/mounts.rs", include_str!("mounts.rs")),
             ("ui/bar_buttons.rs", include_str!("../ui/bar_buttons.rs")),
             (
-                "capabilities/commands_run.rs",
-                include_str!("../capabilities/commands_run.rs"),
+                "api/commands_run.rs",
+                include_str!("../api/commands_run.rs"),
             ),
-            (
-                "capabilities/ui_window.rs",
-                include_str!("../capabilities/ui_window.rs"),
-            ),
+            ("api/ui_window.rs", include_str!("../api/ui_window.rs")),
             ("host/supervisor/mod.rs", include_str!("supervisor/mod.rs")),
             (
                 "host/supervisor/probe.rs",
@@ -646,7 +639,7 @@ mod tests {
             after(include_str!("palette.rs"), "fn lead_event", 12)
                 .contains("self.act(owner, origins::Origin::Lead)")
         );
-        let window = include_str!("../capabilities/ui_window.rs");
+        let window = include_str!("../api/ui_window.rs");
         assert!(
             after(window, "fn open(", 60)
                 .contains("host.act(reply.owner, crate::host::origins::Origin::View(")

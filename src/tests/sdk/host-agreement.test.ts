@@ -337,10 +337,10 @@ test("a former manifest field is an ordinary unknown field on both sides (option
   assert.doesNotMatch(sdkFile("manifest.js"), /"capabilities"/);
 });
 
-test("the built-in-only requests are TestHost's (capabilities/commands_run.rs, palette_lead.rs: code builtin-only; SDK 1.11.0)", async (t) => {
+test("the built-in-only requests are TestHost's (api/commands_run.rs, palette_lead.rs: code builtin-only; SDK 1.11.0)", async (t) => {
   // The player: the areas marked builtin_only, and their methods.
   const only = (file: string) => {
-    const rust = host(`src/capabilities/${file}`);
+    const rust = host(`src/api/${file}`);
     assert.match(rust, /builtin_only: true/, file);
     const methods = /static METHODS: &\[&str\] = &\[([^\]]*)\]/.exec(rust)?.[1];
     assert.ok(methods, `METHODS in ${file}`);
@@ -363,7 +363,7 @@ test("the built-in-only requests are TestHost's (capabilities/commands_run.rs, p
       "app.openWindow",
     ],
   );
-  const root = new URL("../../host/src/capabilities/", import.meta.url);
+  const root = new URL("../../host/src/api/", import.meta.url);
   const marked = readdirSync(root)
     .filter((name) => name.endsWith(".rs"))
     .filter((name) =>
@@ -376,7 +376,7 @@ test("the built-in-only requests are TestHost's (capabilities/commands_run.rs, p
     "palette_lead.rs",
   ]);
   assert.match(
-    host("src/capabilities/mod.rs"),
+    host("src/api/mod.rs"),
     /"builtin-only",\s*"this is for built-in plugins only"/,
   );
   if (sdkBefore(1, 11, 0))
@@ -726,11 +726,11 @@ test("step seek parameters are the player's: setStepSeek keyframes, host.run sec
   assert.match(wire, /"host\.run",\s*seconds === undefined/);
   // The player reads them under the same names.
   assert.match(
-    host("src/capabilities/playback_control.rs"),
+    host("src/api/playback_control.rs"),
     /params\["keyframes"\]/,
   );
   assert.match(
-    host("src/capabilities/commands.rs"),
+    host("src/api/commands.rs"),
     /run_step\(action, &params\["seconds"\]\)/,
   );
   assert.match(
@@ -932,7 +932,7 @@ function matching(text: string, open: number): number {
   throw new Error("unbalanced brackets");
 }
 
-test("OSD_LIMITS, SECRET_LIMITS, TIMELINE_LIMITS and MESSAGE_LIMIT are the player's (capabilities/ui_osd.rs, system.rs, secret_index.rs, timeline.rs, process/mod.rs)", () => {
+test("OSD_LIMITS, SECRET_LIMITS, TIMELINE_LIMITS and MESSAGE_LIMIT are the player's (api/ui_osd.rs, system.rs, secret_index.rs, timeline.rs, process/mod.rs)", () => {
   const constant = (file: string, name: string) => {
     const value = new RegExp(`const ${name}: \\w+ = ([^;]+);`).exec(
       host(file),
@@ -945,13 +945,13 @@ test("OSD_LIMITS, SECRET_LIMITS, TIMELINE_LIMITS and MESSAGE_LIMIT are the playe
   };
   assert.deepEqual(
     {
-      messageChars: constant("src/capabilities/ui_osd.rs", "OSD_MESSAGE_CHARS"),
-      panelLines: constant("src/capabilities/ui_osd.rs", "OSD_PANEL_LINES"),
-      panelBytes: constant("src/capabilities/ui_osd.rs", "OSD_PANEL_BYTES"),
-      minColumns: constant("src/capabilities/ui_osd.rs", "OSD_MIN_COLUMNS"),
-      maxColumns: constant("src/capabilities/ui_osd.rs", "OSD_MAX_COLUMNS"),
-      actions: constant("src/capabilities/ui_osd.rs", "OSD_ACTIONS"),
-      actionChars: constant("src/capabilities/ui_osd.rs", "OSD_ACTION_CHARS"),
+      messageChars: constant("src/api/ui_osd.rs", "OSD_MESSAGE_CHARS"),
+      panelLines: constant("src/api/ui_osd.rs", "OSD_PANEL_LINES"),
+      panelBytes: constant("src/api/ui_osd.rs", "OSD_PANEL_BYTES"),
+      minColumns: constant("src/api/ui_osd.rs", "OSD_MIN_COLUMNS"),
+      maxColumns: constant("src/api/ui_osd.rs", "OSD_MAX_COLUMNS"),
+      actions: constant("src/api/ui_osd.rs", "OSD_ACTIONS"),
+      actionChars: constant("src/api/ui_osd.rs", "OSD_ACTION_CHARS"),
     },
     { ...OSD_LIMITS },
     "OSD_LIMITS differ from the player's OSD_* constants",
@@ -1338,7 +1338,7 @@ test("VIDEO_PROCESSING_LIMITS are the player's (playback/effects.rs, plugin_file
   );
 });
 
-test("MEDIA_SOURCE_LIMITS are the player's (playback/media_sources.rs, capabilities/media_sources.rs; SDK 1.7.8)", () => {
+test("MEDIA_SOURCE_LIMITS are the player's (playback/media_sources.rs, api/media_sources.rs; SDK 1.7.8)", () => {
   // `[pub ]const NAME: <type> = …;` (the request share and the Locate
   // interval are private), products of numbers; `86400.` reads as 86400.
   const constant = (file: string, name: string) => {
@@ -1354,7 +1354,7 @@ test("MEDIA_SOURCE_LIMITS are the player's (playback/media_sources.rs, capabilit
       .reduce((a, b) => a * b, 1);
   };
   const store = "src/playback/media_sources.rs";
-  const capability = "src/capabilities/media_sources.rs";
+  const capability = "src/api/media_sources.rs";
   assert.deepEqual(
     {
       references: constant(store, "MAX_PER_PLUGIN"),
@@ -1908,13 +1908,13 @@ test("SESSION_STORAGE_LIMITS are the player's (session_storage.rs; SDK 1.5.25, p
   );
 });
 
-test("the SDK's wake events are the player's (capabilities/events.rs WAKE_EVENTS; commands.keys from SDK 1.6.7)", async () => {
-  const rust = host("src/capabilities/events.rs");
+test("the SDK's wake events are the player's (api/events.rs WAKE_EVENTS; commands.keys from SDK 1.6.7)", async () => {
+  const rust = host("src/api/events.rs");
   const block =
     /pub\(crate\) const WAKE_EVENTS: &\[&str\] = &\[([\s\S]*?)\];/.exec(
       rust,
     )?.[1];
-  assert.ok(block, "WAKE_EVENTS in capabilities/events.rs");
+  assert.ok(block, "WAKE_EVENTS in api/events.rs");
   const player = [...block.matchAll(/"([^"]+)"/g)].map((m) => m[1]);
   // Internal to the SDK: TestHost and `vestra-plugin test` use it to say
   // what keeps a plugin running while idle.
@@ -1956,10 +1956,10 @@ test("the SDK's wake events are the player's (capabilities/events.rs WAKE_EVENTS
 });
 
 test("palette.lead's status states are the player's (palette_lead.rs StatusState::NAMES; SDK 1.7.15)", async (t) => {
-  const rust = host("src/capabilities/palette_lead.rs");
+  const rust = host("src/api/palette_lead.rs");
   const block = found(
     /pub const NAMES: \[&'static str; \d+\] = \[([^\]]*)\];/.exec(rust)?.[1],
-    "StatusState::NAMES in capabilities/palette_lead.rs",
+    "StatusState::NAMES in api/palette_lead.rs",
   );
   const player = [...block.matchAll(/"([^"]+)"/g)].map((m) => m[1]!);
   const version = JSON.parse(
@@ -2020,12 +2020,12 @@ test("COMMAND_RUN_LIMITS are the player's (commands_run.rs; SDK 1.7.16)", async 
   };
   if (!runtime.COMMAND_RUN_LIMITS)
     return t.skip("the installed SDK is older than 1.7.16");
-  const rust = host("src/capabilities/commands_run.rs");
+  const rust = host("src/api/commands_run.rs");
   const constant = (name: string) =>
     Number(
       found(
         new RegExp(`pub const ${name}: \\w+ = ([\\d_]+);`).exec(rust)?.[1],
-        `${name} in capabilities/commands_run.rs`,
+        `${name} in api/commands_run.rs`,
       ).replaceAll("_", ""),
     );
   assert.deepEqual(
@@ -2055,7 +2055,7 @@ test("TestHost asks for a commands.run plan as the player does (commands_run.rs 
     t.skip(`the installed SDK ${version} predates commands.run then (1.7.16)`);
     return;
   }
-  const rust = host("src/capabilities/commands_run.rs");
+  const rust = host("src/api/commands_run.rs");
   const fake = new TestHost();
   fake.setSource({ phase: "ready", duration: 60, position: 0 });
   const ran: string[] = [];

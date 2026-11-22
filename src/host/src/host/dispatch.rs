@@ -94,7 +94,7 @@ impl Core {
             self.ui_finished(reply.owner);
         }
     }
-    /// One request of a plugin's: its route (`capabilities::lookup`), the
+    /// One request of a plugin's: its route (`api::lookup`), the
     /// built-in-only check, text resolution, then the area's `handle`.
     pub(crate) fn dispatch(
         &mut self,
@@ -106,8 +106,8 @@ impl Core {
             .plugins
             .get(&reply.owner)
             .ok_or_else(|| RpcError::new("disabled", "plugin no longer running"))?;
-        let route = capabilities::lookup(method)
-            .ok_or_else(|| RpcError::new("unsupported", "unknown method"))?;
+        let route =
+            api::lookup(method).ok_or_else(|| RpcError::new("unsupported", "unknown method"))?;
         // Built-in-only areas (`commands.run`, `palette.lead`): by
         // provenance. Every other request is open to every plugin (a
         // manifest declares nothing since player 0.9.0).

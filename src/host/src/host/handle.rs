@@ -235,7 +235,7 @@ impl Core {
                 self.respond(reply, Ok(json!({"confirmed":confirmed,"checked":checked})));
             }
             Event::SourceLocate(reply, fields) => {
-                if let Err(error) = crate::capabilities::locate_dialog(self, &reply, fields) {
+                if let Err(error) = crate::api::locate_dialog(self, &reply, fields) {
                     self.respond(reply, Err(error));
                 }
             }
@@ -654,7 +654,7 @@ impl Core {
                 self.send(owner, json!({"event":"ui.callback","data":callback}))
             }
             Event::CommandRunAnswered(reply, yes, remember) => {
-                crate::capabilities::command_run_answered(self, reply, yes, remember);
+                crate::api::command_run_answered(self, reply, yes, remember);
             }
             other => unreachable!("{:?} has no core part", other.label()),
         }

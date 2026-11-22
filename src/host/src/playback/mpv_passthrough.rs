@@ -1,6 +1,6 @@
 //! The mpv pass-through on the control worker (`mpv.command`, `mpv.get`,
 //! `mpv.set`, `mpv.observe`, `mpv.unobserve`; capability `mpv`, SDK 1.8.0;
-//! doc/architecture/README.md §4.9). The capability (capabilities/mpv.rs)
+//! doc/architecture/README.md §4.9). The capability (api/mpv.rs)
 //! checked each request's shape and the closed refusal rules
 //! (`mpv_rules.rs`) and added the caller's manifest id (`plugin`); here is
 //! what needs mpv and the other plugins:

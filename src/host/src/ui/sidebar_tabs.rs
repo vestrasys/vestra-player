@@ -4,7 +4,7 @@
 //! plugin running: the same rules, per column (each panel compiles on its
 //! own when first shown, `ui/panels.rs`). Pure
 //! decisions; the host applies them (`host/mounts.rs`, `host/window.rs`,
-//! `capabilities/ui_mount.rs`).
+//! `api/ui_mount.rs`).
 #![forbid(unsafe_code)]
 
 use serde_json::{Value, json};

@@ -236,9 +236,9 @@ pub(crate) struct CoreFacts {
     /// A native dialog is open (`Core::dialog_busy`).
     pub(crate) dialog_busy: bool,
     /// The palette's lead (`Core::lead`).
-    pub(crate) lead: Option<crate::capabilities::Lead>,
+    pub(crate) lead: Option<crate::api::Lead>,
     /// The `commands.run` tickets and the runs waiting for the sheet.
-    pub(crate) runs: crate::capabilities::RunsView,
+    pub(crate) runs: crate::api::RunsView,
     /// Where the user last acted for each plugin (`Core::origins`).
     pub(crate) origins: origins::Origins,
 }

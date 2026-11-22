@@ -149,7 +149,7 @@ Release build, headless, median of 7 runs, Ryzen 9 7940HS. The shell has the rea
 | `src/ui/sidebar_tabs.rs` (new) | tab order, front and compiled sets, `live`, `shown_tab`, `need`, `blamed`, `next_active`, the recorded call; tests (20 tabs → 4 compiled, no sidebar tab live, order persistence, wake vs compile, a broken panel left out, a placeholder neighbour passed over) |
 | `src/host/mounts.rs` | `apply_mounts` / `compile_shell`: compile only when the compiled set changes; `shell_refresh`; per-property value failures; a broken added panel left out; batch owners' values rewritten; the next current tab decided first |
 | `src/host/window.rs` | `tab_order` via `sidebar_tabs`, `tab_demand` (wake or compile the current tab), `sidebar-shown`, floating window with the compiled set, `sidebar-overflow` |
-| `src/capabilities/ui_mount.rs` | no cap; `record`, `rekey`, `revoke`, `prune`, `replay`; take-over of a placeholder; `setMount` on an uncompiled tab stores only |
+| `src/api/ui_mount.rs` | no cap; `record`, `rekey`, `revoke`, `prune`, `replay`; take-over of a placeholder; `setMount` on an uncompiled tab stores only |
 | `src/host/lifecycle.rs`, `src/host/rpc.rs`, `src/ui/slot_claims.rs` | parked tabs kept; `sidebar_full` and `MAX_SIDEBAR_TABS` removed |
 | `src/host/supervisor/mod.rs` | `panel_shown` |
 | `src/host/menus.rs`, `src/host/handle.rs`, `src/host/events.rs`, `src/ui/menu.rs` | the `»` menu (`MenuMode::Tabs`, `Token::Tab`, `SidebarOverflow`) |

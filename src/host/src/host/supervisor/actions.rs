@@ -61,7 +61,7 @@ impl Core {
                 } => self.held_unanswered(unit, reason, &payload),
                 // A woken run's ready runs these itself, in today's order
                 // (`unit_ready`).
-                Action::Prune { pid, .. } => capabilities::prune(self, pid.0),
+                Action::Prune { pid, .. } => api::prune(self, pid.0),
                 Action::Deliver { pid, payload, .. } => self.send(pid.0, payload),
                 Action::Notify { unit: None, notice } => self.runner_notice(notice),
                 // The reaper kills at each stop's grace by itself; a kill
@@ -360,7 +360,7 @@ impl Core {
                 "lazy: {id} woken by {} (owner {from} → {to})",
                 first.unwrap_or("its settings page")
             );
-            capabilities::rekey(self, from, to);
+            api::rekey(self, from, to);
         } else {
             // A restart after a crash: the panels kept meanwhile are its
             // (`panel_restart.rs`), before its first `ui.mount` comes.
@@ -422,7 +422,7 @@ impl Core {
             );
         if kept && let Some(from) = from {
             self.on_demand.unrekeyed.remove(&to);
-            capabilities::rekey(self, from, to);
+            api::rekey(self, from, to);
             if let Some(held) = held {
                 self.hold(to, held.reheld());
             }
@@ -451,7 +451,7 @@ impl Core {
         let held = spawning.held.take();
         match from {
             Some(from) if keep => {
-                capabilities::rekey(self, from, owner);
+                api::rekey(self, from, owner);
                 if let Some(held) = held {
                     self.hold(owner, held.reheld());
                 }

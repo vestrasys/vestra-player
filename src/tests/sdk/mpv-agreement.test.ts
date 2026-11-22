@@ -102,10 +102,10 @@ test("MPV_RULES are the player's (host/mpv-rules.json)", (t) => {
     );
 });
 
-test("the mpv group serves the pass-through's five methods, open to every plugin (capabilities/mpv.rs)", () => {
-  const rust = host("src/capabilities/mpv.rs");
+test("the mpv group serves the pass-through's five methods, open to every plugin (api/mpv.rs)", () => {
+  const rust = host("src/api/mpv.rs");
   const methods = /static METHODS: &\[&str\] = &\[([^\]]*)\]/.exec(rust)?.[1];
-  assert.ok(methods, "METHODS in capabilities/mpv.rs");
+  assert.ok(methods, "METHODS in api/mpv.rs");
   assert.deepEqual(
     [...methods.matchAll(/"([^"]+)"/g)].map((m) => m[1]),
     ["command", "get", "set", "observe", "unobserve"].map(
@@ -114,7 +114,7 @@ test("the mpv group serves the pass-through's five methods, open to every plugin
   );
   assert.match(rust, /name: "mpv",\s*builtin_only: false,/);
   // No other area lists an mpv.* method.
-  const root = new URL("../../host/src/capabilities/", import.meta.url);
+  const root = new URL("../../host/src/api/", import.meta.url);
   for (const file of readdirSync(root).filter((name) => name.endsWith(".rs"))) {
     if (file === "mpv.rs") continue;
     const list = /static METHODS: &\[&str\] = &\[([^\]]*)\]/.exec(
