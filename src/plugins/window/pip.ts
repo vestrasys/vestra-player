@@ -22,7 +22,7 @@ export class PictureInPicture {
     this.#plugin = plugin;
     this.#video = video;
     this.#active = plugin.window.state.pictureInPicture.active;
-    plugin.window.onChange((state) => {
+    plugin.player.on("window.changed", (state) => {
       const active = state.pictureInPicture.active;
       if (this.switching || active === this.#active) return;
       this.#active = active;
@@ -63,8 +63,7 @@ export class PictureInPicture {
 
   /** Closed from the small window or by the core (no video, source closed). */
   async #closed() {
-    const { phase } = this.#plugin.player.state;
-    const video = phase === "ready" || phase === "ended" ? await this.#video.refresh().catch(() => null) : null;
+    const video = this.#video.showing ? await this.#video.refresh().catch(() => null) : null;
     quiet(this.#plugin.osd.show(video ? "Picture-in-picture: Off" : "Picture-in-picture: Off (no video)"));
   }
 }

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.16
+
+- Events and triggers (SDK 1.11, step B3): `plugin.player.subscribe()` and the three `player.onChange()` listeners are gone. A new source (upright and unzoomed again, 倍帧's rate and the transfer read afresh, the GPU rendering state read again) comes from `source.opening`; whether the source is ready (when 倍帧's rate and the transfer are read, also after playing a file again from its end) is a trigger on `when.ready`; `video.reconfigured` gives the geometry editor the decoded shape at once and starts the transfer read (`player.stats()` stays the source of the rate and the transfer). The dropped-frame check reads the state once per 5 s count, only while field output or frame doubling is on. It stays running as before (panel, filter chain, display layer). Same menus, panel, effects and settings. Who must change: nobody.
+
 ## 1.1.15
 
 - The description's last line, starting with `→ `, says where to open the plugin; Store 0.3.1 shows it on the plugin's card, also before install. Description text and its translations only. Who must change: nobody.

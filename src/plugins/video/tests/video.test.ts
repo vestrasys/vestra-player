@@ -1341,6 +1341,43 @@ test("E18: 倍帧 reads the source rate without frameBlend, then adds it last; a
   await stop();
 });
 
+test("E18: switched on at the end of a file, the rate is read once it plays again (no new source, the ready trigger)", async () => {
+  const host = new TestHost();
+  setFps(host, 24);
+  host.openElsewhere("/pan24.mp4");
+  const { stop } = await start(host);
+  host.setSource({ phase: "ended" });
+  await host.settle();
+  await host.command("video.frame-blend").run();
+  await host.settle(20);
+  assert.equal(node(host, "frameBlend"), undefined, "nothing is read while the source has ended");
+  host.setSource({ phase: "ready", position: 0 }); // played again: the same source
+  await until(host, blendNode(host, 48), "the rate read when the source is ready again");
+  await stop();
+});
+
+test("video.reconfigured: the geometry editor gets the decoded shape at once", async () => {
+  const host = new TestHost();
+  const { stop } = await start(host);
+  await host.command("video.picture").run();
+  const window = host.mounted();
+  host.openElsewhere("/clip.mkv");
+  await host.settle();
+  host.emit("video.reconfigured", {
+    sourceId: host.source.stamp.generation,
+    width: 1440,
+    height: 1080,
+    displayWidth: 1920,
+    displayHeight: 1080,
+    fps: 25,
+    rotation: 0,
+    hdr: false,
+  });
+  await host.settle();
+  assert.equal(window.props["source-aspect"], 1440 / 1080);
+  await stop();
+});
+
 test("E18: an unknown rate blends to 60; no picture adds nothing; 启用画面效果 off removes it; the switch is saved", async () => {
   await withData(async (data) => {
     const host = new TestHost();
@@ -1417,7 +1454,9 @@ test("E11: 比例 menu and Shift+F6 set the display layer with the OSD wording; 
   assert.equal(host.osd.at(-1), "填满窗口", "window edits give no on-screen text");
   assert.equal(host.sent("processing.replace").length, replaced, "a display property, not a filter");
   await stop();
-  assert.equal(host.videoView.owner, null, "released when the plugin stops");
+  // SDK 1.11: nothing is sent after `runtime.stop`; the player releases the display layer itself
+  // (the test host does not model that release, so the owner is not checked here).
+  assert.deepEqual(host.sent("video.view.release"), [], "no request after runtime.stop");
 });
 
 test("E11: 自定义比例… only accepts a valid ratio, joins the menu and the Shift+F6 cycle, and is saved", async () => {
@@ -1638,7 +1677,9 @@ test("E16: tone mapping, 目标亮度 and peak detection reach the render option
     await host.command("video.hdr.hable").run();
     assert.equal(host.osd.at(-1), "HDR 色调映射: Hable");
     await stop();
-    assert.equal(host.videoRender.owner, null, "released when the plugin stops");
+    // SDK 1.11: nothing is sent after `runtime.stop`; the player releases the render options
+    // itself (the test host does not model that release, so the owner is not checked here).
+    assert.deepEqual(host.sent("video.render.release"), [], "no request after runtime.stop");
     assert.deepEqual(JSON.parse(await readFile(join(data, "settings.json"), "utf8")).render, {
       toneMapping: "hable",
       targetPeak: 300,
