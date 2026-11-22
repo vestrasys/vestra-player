@@ -86,7 +86,7 @@ flowchart LR
 - **Faults.** A crash stops only that plugin, which restarts after a doubling pause; five crashes in ten minutes turn it off, saying why.
 - **Watchdogs.** Five missed heartbeats restart the shared runner. On Windows a stalled GPU renderer restarts the player where it was.
 
-**From a plugin to the core.** The [SDK](https://vestrasys.github.io/vestra-player-sdk/) turns each call into `vestra/1` lines on the plugin's pipes: requests, answers and events. In the blocks below, `→` is a line the plugin sends to the core and `←` one the core sends back. A plugin learns the player's state by a single read, a discrete event (`source.ready`), a trigger or a stream.
+**From a plugin to the core.** The [SDK](https://vestrasys.github.io/vestra-player-sdk/) turns each call into `vestra/1` lines on the plugin's pipes: requests, answers and events. In the blocks below, as in the diagram (plugins on the right, the core on the left), `←` is a line the plugin sends to the core and `→` one the core sends back. A plugin learns the player's state by a single read, a discrete event (`source.ready`), a trigger or a stream.
 
 A trigger hands the core a condition as data:
 
@@ -103,14 +103,14 @@ export default function activate(plugin: Plugin) {
 ```
 
 ```text
-→ {"id":2,"method":"triggers.set","params":{"trigger":0,"when":{"all":[{"all":[{"phase":["ready"]},{"paused":false}]},{"fullscreen":true}]}}}
-← {"id":2,"result":{"seq":1}}
-→ {"id":3,"method":"triggers.declare","params":{"names":[],"unnamed":1}}
-← {"id":3,"result":null}
+← {"id":2,"method":"triggers.set","params":{"trigger":0,"when":{"all":[{"all":[{"phase":["ready"]},{"paused":false}]},{"fullscreen":true}]}}}
+→ {"id":2,"result":{"seq":1}}
+← {"id":3,"method":"triggers.declare","params":{"names":[],"unnamed":1}}
+→ {"id":3,"result":null}
   … the user plays in fullscreen …
-← {"data":{"edge":"enter","seq":1,"state":{…},"trigger":0},"event":"triggers.fired"}
-→ {"id":6,"method":"window.setAlwaysOnTop","params":{"onTop":true}}
-← {"id":6,"result":null}
+→ {"data":{"edge":"enter","seq":1,"state":{…},"trigger":0},"event":"triggers.fired"}
+← {"id":6,"method":"window.setAlwaysOnTop","params":{"onTop":true}}
+→ {"id":6,"result":null}
 ```
 
 The core stores the condition and re-evaluates it when a fact it reads changes, even without the plugin's process. On a flip the supervisor starts a parked plugin, `triggers.fired` waits until it is ready, and the SDK calls `enter` or `leave`.
@@ -136,14 +136,14 @@ plugin.commands.add({
 ```
 
 ```text
-→ {"id":10,"method":"events.subscribe","params":{"event":"source.state","why":["a stream opened at main.js:12"]}}
-→ {"id":11,"method":"source.state","params":{}}
-← {"id":10,"result":null}
-← {"id":11,"result":{…}}
-← {"data":{…,"paused":false,"phase":"ready","position":6.8,…},"event":"source.state"}    about 10 a second while playing
-→ {"id":12,"method":"ui.set","params":{"id":"position","property":"text","seq":1,"value":"7 s"}}
+← {"id":10,"method":"events.subscribe","params":{"event":"source.state","why":["a stream opened at main.js:12"]}}
+← {"id":11,"method":"source.state","params":{}}
+→ {"id":10,"result":null}
+→ {"id":11,"result":{…}}
+→ {"data":{…,"paused":false,"phase":"ready","position":6.8,…},"event":"source.state"}    about 10 a second while playing
+← {"id":12,"method":"ui.set","params":{"id":"position","property":"text","seq":1,"value":"7 s"}}
   … the user closes the window …
-→ {"id":43,"method":"events.unsubscribe","params":{"event":"source.state"}}
+← {"id":43,"method":"events.unsubscribe","params":{"event":"source.state"}}
 ```
 
 The core forwards each playback-worker state report to the subscriber; the supervisor never parks a plugin with an open stream.
