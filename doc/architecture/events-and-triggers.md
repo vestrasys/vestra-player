@@ -1,6 +1,6 @@
 # Events and triggers (design)
 
-**Status: release A implemented and shipped in SDK 1.10.0 / player 0.10.0 (2026-11-15); release B steps B1 (second batch of events) and B2 (removal of subscribe()/onChange()) implemented on branches (SDK 1.11.0-rc.1), not merged; B3–B6 not started.**
+**Status: release A implemented and shipped in SDK 1.10.0 / player 0.10.0 (2026-11-15). Release B: B1 (second batch of events) merged to the player's main (#438); B2 (removal of subscribe()/onChange()) in SDK 1.11.0-rc.3; B3 (every built-in migrated, on SDK 1.11.0-rc.3) on branch relb-b3, PR #450, reviewed, to be merged with B5/B6 once the SDK is final; B4–B6 not started.**
 
 **For the owner (release B, 2026-11-22).** Points of steps B1 and B2 that are not the implementing agent's to decide; the implementation note in §4.6 has the rest.
 
@@ -820,16 +820,16 @@ The rows of the 11 built-in and 3 store listeners come from the taxonomy and wer
 
 | Plugin | Uses | Afterwards |
 | --- | --- | --- |
-| vestra.history | `source.ready`, `source.ended`; the stream while a file is open (M5) | Parks with no file open |
+| vestra.history | `source.ready`, `source.ended`; the stream while a file is open (M5) | Parks with no file open. **B3, accepted exception**: on a start that is not a wake (first run, restart after a crash, launch with a file open) it stays Resident for that run; an SDK "after ready" hook is a follow-up |
 | vestra.subtitle-online | `source.opening`, `source.ready` | Parks |
 | vestra.window | `source.ready`, `video.reconfigured`, `window.changed`; one trigger with `enter` and `leave` (example 1) | Parks (through 4.8) |
 | vestra.info | While its window or overlay shows: `source.ready` and its existing 1 s timer, or the stream | Parks when nothing shows |
-| vestra.marks | `source.ready`; the "current chapter" check as a range list | Parks (through 4.8); it has more listeners, to be checked |
+| vestra.marks | `source.ready`; the "current chapter" check as a range list | Parks (through 4.8). **B3**: the "chapter" trigger's range list wakes it at each chapter boundary while a file with chapters plays (the radio check follows), so it is woken once per chapter |
 | vestra.audio | `source.opening`, `source.ready`, `audio.reconfigured`, `audio.tracks.changed`, `audio.devices.changed` | Resident: audio filter chain, adjust panel |
-| vestra.subtitles | `source.opening`, `source.ready`, `subtitles.changed` | Resident once a subtitle style is set; else parks |
+| vestra.subtitles | `source.opening`, `source.ready`, `subtitles.changed` | Resident once a subtitle style is set; else parks. **B3, accepted exception**: stays Resident in release B (`subtitles.onChange` holds the source events) |
 | vestra.video | `source.opening`, `source.ready`, `video.reconfigured`; the dropped-frame rate keeps its own timer | Resident: filter chain, shaders, view |
 | vestra.playlist | `source.opening`, `source.ended` with `natural` | Resident: sequence provider |
-| vestra.playback | `source.ended` with `error`, `source.ready`; the stream for the seek bar | Resident: bottom-bar panel (display class) |
+| vestra.playback | `source.ended` with `error`, `source.ready`; the stream for the seek bar | Resident: bottom-bar panel (display class). **B3, accepted**: it holds a stream for as long as the bar is mounted (the plugin's whole run) |
 | vestra.visualizer | `source.ready`, `source.ended`, `layout.changed`; the stream while it shows | Resident: backdrop panel (display class) |
 | capture, hotkeys, preferences, store, workshop | Unchanged (`app.started` for the store's update check) | Park today |
 | zysilm.silenceskip | Example 3 (reference migration, release A) | Parks when silences are more than 30 s apart |
