@@ -394,8 +394,13 @@ export component AiWindow inherits Window {
     // 900px (at least 720), wider only when the result card's buttons need it in this language (sessions 220 +
     // line 1 + card padding 2 × 12 + border 2 × 1 + padding 2 × 8).
     preferred-width: max(900px, card-measure.preferred-width + 263px);
+    // Placed (x, y): an unplaced child of the window adds its layout limits to the window's, and this one's
+    // (the measured buttons, 334 wide) made the window's maximum width smaller than its minimum (720), so
+    // the two swapped: at most 720 wide and down to 334 (Workshop 2.2.47).
     Rectangle {
         visible: false;
+        x: 0;
+        y: 0;
         width: 0;
         height: 0;
         card-measure := HorizontalLayout {

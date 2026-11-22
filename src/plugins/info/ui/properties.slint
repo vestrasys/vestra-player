@@ -43,6 +43,8 @@ export component PropertiesWindow inherits Window {
     private property <length> label-width: max(120px, label-measure.preferred-width + 8px);
     Rectangle {
         visible: false;
+        x: 0;
+        y: 0;
         width: 0;
         height: 0;
         label-measure := Text { text: root.label-sample; font-size: Theme.font-body; }
