@@ -17,6 +17,11 @@ import { Resume } from "./resume.ts";
  * the ready) and stops it when the last source closes; with nothing open the
  * plugin holds nothing and may be stopped while idle, and the next source wakes
  * it.
+ *
+ * Known limit (accepted for this release): a start woken by a source parks again
+ * as described, but on a first run, a restart after a crash or a launch with a
+ * file already open the plugin stays resident for that run. An SDK "after
+ * ready" hook is recorded as a follow-up.
  */
 export default async function activate(plugin: Plugin) {
   const { player, when } = plugin;
