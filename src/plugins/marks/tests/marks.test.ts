@@ -591,7 +591,7 @@ test("B22: the switch empties the layer, is remembered and brings the marks back
   assert.deepEqual(published(again), [[0, "chapter", "Opening"]]);
 });
 
-test("B22: stopping the plugin clears its layer; other plugins' layers stay", { todo: "SDK 1.11 TestHost does not revoke a stopped run's timeline layer (the player does); the plugin no longer sends its own cleanup" }, async () => {
+test("B22: stopping the plugin clears its layer; other plugins' layers stay", async () => {
   const host = new TestHost();
   host.chapters = [{ title: "Opening", start: 0 }];
   const started = await start(host);
