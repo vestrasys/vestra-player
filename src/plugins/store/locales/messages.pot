@@ -1,6 +1,6 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: vestra.store 0.3.2\n"
+"Project-Id-Version: vestra.store 0.3.3\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 

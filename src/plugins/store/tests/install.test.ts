@@ -447,6 +447,71 @@ test("third-party repository: warning banner, unofficial confirmation, remote RE
   }
 });
 
+// The confirmations of another repository's update, reinstall and replace: the current version and the
+// files-and-network sentence, or the repository's warning; nothing about what the code uses or what was checked
+// (user ruling 2026-11-16), even when the index still carries a legacy `scan`.
+const ACCESS = "插件可能读取你的文件或联网。";
+const WARNING =
+  /仓库：[^\n]*（https:\/\/third\.example\/repo\/index\.json）。这个仓库未经 Vestra Player 审核，插件可能读取你的文件或联网。只安装你信任的作者的插件。$/;
+const VIZ = {
+  id: "someone.viz",
+  name: "Viz",
+  versions: [
+    { version: "1.1.0", legacy: { scan: { uses: ["clipboard", "plugins"] } } },
+    { version: "1.0.0", legacy: { scan: { uses: [] } } },
+  ],
+};
+
+async function third(installed: ReturnType<typeof info>) {
+  const net = new FakeNet();
+  publish(net, OFFICIAL, []);
+  publish(net, THIRD, [VIZ]);
+  const started = await start({ net, packages: [BUILTIN, installed] });
+  started.store.settings.save({ ...started.store.settings.value, repos: [THIRD] });
+  started.store.repos.sync([THIRD]);
+  await openStore(started.host);
+  await until(started.host, () => started.store.items.some((i) => i.entry?.id === "someone.viz"), "the repository's entry");
+  return started;
+}
+
+test("another repository's update and reinstall: the current version, then the files-and-network sentence", async () => {
+  const { host, store, stop } = await third(info("someone.viz", { version: "1.0.0", source: { kind: "repository", url: THIRD } }));
+  try {
+    await choose(host, "Viz");
+    host.dialogAnswers.push(no);
+    host.window("store").emit("act", "update");
+    await until(host, () => host.confirms.length === 1, "update question");
+    assert.equal(host.confirmTexts.at(-1)!.message, "更新「Viz」到 1.1.0？");
+    assert.equal(host.confirmTexts.at(-1)!.detail, `当前 1.0.0。\n\n${ACCESS}`);
+
+    const item = store.items.find((i) => i.entry?.id === "someone.viz" && i.repo?.url === THIRD)!;
+    const same = item.entry!.versions.find((v) => v.version === "1.0.0")!;
+    host.dialogAnswers.push(no);
+    await installFromRepository(store, item, same);
+    assert.equal(host.confirmTexts.at(-1)!.message, "安装「Viz」1.0.0（重新安装）？");
+    assert.equal(host.confirmTexts.at(-1)!.detail, `当前 1.0.0。\n\n${ACCESS}`);
+    assert.equal(installs(host).length, 0);
+  } finally {
+    await stop();
+  }
+});
+
+test("another repository's replace: the replace notice, then the repository's warning", async () => {
+  const { host, store, stop } = await third(info("someone.viz", { version: "0.9.0", source: { kind: "file" } }));
+  try {
+    const item = store.items.find((i) => i.entry?.id === "someone.viz" && i.repo?.url === THIRD)!;
+    host.dialogAnswers.push(no);
+    await installFromRepository(store, item, item.entry!.versions[0]!);
+    const confirm = host.confirmTexts.at(-1)!;
+    assert.equal(confirm.message, "替换已安装的「Viz」？");
+    assert.match(String(confirm.detail), /^当前的「Viz」0\.9\.0 来自本地文件。[^\n]*\n\n将安装非官方仓库的 1\.1\.0。\n\n/);
+    assert.match(String(confirm.detail), WARNING);
+    assert.equal(installs(host).length, 0);
+  } finally {
+    await stop();
+  }
+});
+
 test("README links: web addresses open in the browser, anchors are ignored, other schemes refused", async () => {
   const net = new FakeNet();
   publish(net, OFFICIAL, [YT]);
