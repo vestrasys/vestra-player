@@ -34,6 +34,15 @@ export const WAKE_EVENTS = [
     "source.opening",
     "source.ready",
     "source.ended",
+    // SDK 1.11.0: the facts that changed, once per change.
+    "video.reconfigured",
+    "audio.reconfigured",
+    "audio.tracks.changed",
+    "subtitles.changed",
+    "window.changed",
+    "layout.changed",
+    "audio.devices.changed",
+    "app.started",
 ];
 /**
  * The player's answers to a declaration that refuse that one declaration (a
@@ -94,13 +103,6 @@ export class Connection {
      */
     requests;
     #events = new Map();
-    /** The missing `subscribe()` warning was given (once per plugin). */
-    #warnedEvents = false;
-    /**
-     * Event delivery is on: `plugin.player.subscribe()` was called
-     * ({@link Connection.deliver}).
-     */
-    #delivering = false;
     /**
      * The player's state is read again after the plugin's own actions:
      * `plugin.player.read()` was called.
@@ -184,25 +186,6 @@ export class Connection {
         transport.on("commands.execute", (data) => {
             this.commands.get(data.id)?.();
         });
-    }
-    /** Event delivery is on (`plugin.player.subscribe()` was called). */
-    get delivering() {
-        return this.#delivering;
-    }
-    /**
-     * Turn event delivery on (`plugin.player.subscribe()`): every later
-     * listener is subscribed, and so is what was added before and heard
-     * nothing. Idempotent.
-     */
-    deliver() {
-        if (this.#delivering)
-            return;
-        this.#delivering = true;
-        for (const [event, group] of this.#events)
-            if (group.unheard) {
-                group.unheard = false;
-                this.#open(event, group);
-            }
     }
     /** Read the state copy kept by `event` again, if one exists; never rejects. */
     async reread(event) {
@@ -307,15 +290,14 @@ export class Connection {
     }
     /**
      * Host events with one `events.subscribe` per name, however many listeners.
-     * An event that needs delivery (`"events"`) is subscribed only once
-     * `plugin.player.subscribe()` was called; until then its listener simply
-     * never fires.
+     * A plugin listener subscribes its event at once. A `"held"` event (the
+     * default, {@link Needs}) is subscribed only while a listener, a hold or
+     * a stream holds it: a state copy alone (`mirror`) waits, and hears the
+     * events while something else holds the group.
      * `mirror`: the SDK's own copy of the state (`plugin.player.state` and
      * the like), not a listener of the plugin's (see {@link EventGroup}).
      */
-    on(event, listener, 
-    /** `"events"`: it arrives after `plugin.player.subscribe()`; `null`: always. */
-    needs = "events", mirror = false) {
+    on(event, listener, needs = "held", mirror = false) {
         let entry = this.#events.get(event);
         const created = !entry;
         if (!entry) {
@@ -324,6 +306,8 @@ export class Connection {
                 mirrors: new Set(),
                 active: 0,
                 whys: new Map(),
+                held: needs === "held",
+                holders: 0,
             };
             this.#events.set(event, entry);
         }
@@ -334,16 +318,17 @@ export class Connection {
         const token = {};
         if (!mirror) {
             group.active++;
+            group.holders++;
             group.whys.set(token, listenerWhy(this.callSite()));
         }
-        if (created && needs === "events" && !this.#delivering)
-            group.unheard = true;
-        if (!mirror && group.unheard)
-            this.#warnUnheard(event);
-        if (created && !group.unheard)
-            this.#open(event, group);
+        if (created) {
+            if (group.held && group.holders === 0)
+                group.unheard = true;
+            else
+                this.#open(event, group);
+        }
         else
-            this.#tell(event, group);
+            this.#heldBy(event, group, "never");
         let listening = true;
         return {
             dispose: async () => {
@@ -352,18 +337,56 @@ export class Connection {
                 listening = false;
                 group.listeners.delete(listener);
                 group.mirrors.delete(listener);
-                if (!mirror)
+                if (!mirror) {
                     group.active--;
+                    group.holders--;
+                }
                 group.whys.delete(token);
                 if (this.#events.get(event) !== group)
                     return;
                 if (group.listeners.size)
-                    return this.#tell(event, group);
+                    return this.#released(event, group);
                 this.#events.delete(event);
                 const off = await group.off?.catch(() => undefined);
                 await off?.().catch(() => { });
             },
         };
+    }
+    /**
+     * `group` gained a holder (or a mirror joined it): subscribed now if it
+     * waited for one, else the player is told what listens. `catchUp`: when
+     * it opens, the copy is read once more (a change between the last read
+     * and the subscription sent no event): after `read()`, always, or never.
+     */
+    #heldBy(event, group, catchUp) {
+        if (!(group.unheard && group.holders > 0))
+            return this.#tell(event, group);
+        group.unheard = false;
+        this.#open(event, group);
+        const opened = group.off;
+        const again = catchUp === "always" || (catchUp === "read" && this.reads);
+        if (again && opened)
+            void opened
+                .then(() => (group.off === opened ? this.reread(event) : undefined))
+                .catch(() => { });
+    }
+    /**
+     * `group` lost a holder: a held-only group that nothing holds any more is
+     * unsubscribed at the player and waits again, its copy kept as it was;
+     * otherwise the player is told what listens now.
+     */
+    #released(event, group) {
+        if (!(group.held && group.holders === 0 && !group.unheard))
+            return this.#tell(event, group);
+        group.unheard = true;
+        const off = group.off;
+        group.off = undefined;
+        group.told = undefined;
+        group.toldWhy = undefined;
+        void off
+            ?.catch(() => undefined)
+            .then((unsubscribe) => unsubscribe?.())
+            .catch(() => { });
     }
     /** Subscribe `group` to `event` at the player, as it stands now. */
     #open(event, group) {
@@ -391,96 +414,92 @@ export class Connection {
         this.starting(group.off, (error) => console.error(`[${this.manifest.id}] subscribe ${event}:`, error));
     }
     /**
-     * Count `event` as listened to while held: a watcher of a service's
-     * state, a binding that reads it. Nothing when nothing subscribed to it
-     * (no `plugin.player.subscribe()`, or the service did not start).
+     * Hold `event` while the handle lives: a watcher of a service's state
+     * (`MainWindow.onChange`, a panel slot's `onChange`, a media handle's
+     * `ready` and `onEnd`, a scrub). It counts as listened to, and a
+     * held-only group ({@link Needs}) is subscribed while held, with its copy
+     * read once more when the subscription starts after `read()` (or
+     * `always`). Nothing when nothing started the group (the service did
+     * not start).
      */
-    hold(event, why) {
+    hold(event, why, always = false) {
+        return this.#hold(event, why, always ? "always" : "read");
+    }
+    /**
+     * The SDK's own follower of `event`: a handle that sends
+     * its values again when the source changes (`plugin.video.view()`, a
+     * shader channel, a processing node). It subscribes a held-only group
+     * while it lives, as {@link Connection.hold} does, but counts as the SDK's
+     * copy, not as a listener: the player is told `mirror` unless a plugin
+     * listener holds the group too. What the handle holds keeps the plugin
+     * running with its own reason; following the source is not one.
+     */
+    track(event, always = false) {
+        return this.#hold(event, undefined, always ? "always" : "read", false);
+    }
+    /**
+     * {@link Connection.hold} for `plugin.player.stream` (SDK 1.10.0): the
+     * stream reads the state itself when it opens, so the copy is not read
+     * once more here.
+     */
+    follow(event, why) {
+        return this.#hold(event, why, "never");
+    }
+    #hold(event, why, catchUp, listens = true) {
         const group = this.#events.get(event);
         if (!group)
             return { dispose: async () => { } };
-        if (group.unheard)
-            this.#warnUnheard(event);
-        group.active++;
+        if (listens)
+            group.active++;
+        group.holders++;
         const token = {};
-        group.whys.set(token, why ?? listenerWhy(this.callSite()));
-        this.#tell(event, group);
+        if (listens)
+            group.whys.set(token, why ?? listenerWhy(this.callSite()));
+        this.#heldBy(event, group, catchUp);
         let held = true;
         return {
             dispose: async () => {
                 if (!held)
                     return;
                 held = false;
-                group.active--;
+                if (listens)
+                    group.active--;
+                group.holders--;
+                group.whys.delete(token);
+                if (this.#events.get(event) === group)
+                    this.#released(event, group);
+            },
+        };
+    }
+    /**
+     * A binding (or a command's function field) reads `event`'s state: its
+     * reason joins what the player is told while a plugin listener, hold or
+     * stream listens to the group, but the read never makes the plugin a
+     * listener on its own, whether or not the group is subscribed (by a
+     * handle that follows the source, {@link Connection.track}). It never
+     * subscribes a held-only group either: a bound value that reads
+     * `plugin.player.state` shows the newest snapshot the plugin has; a stream
+     * or an event makes it follow the player. Nothing when nothing started
+     * the group.
+     */
+    bindingReads(event, why) {
+        const group = this.#events.get(event);
+        if (!group)
+            return { dispose: async () => { } };
+        const token = {};
+        group.whys.set(token, why);
+        this.#tell(event, group);
+        let reading = true;
+        return {
+            dispose: async () => {
+                if (!reading)
+                    return;
+                reading = false;
                 group.whys.delete(token);
                 if (this.#events.get(event) === group)
                     this.#tell(event, group);
             },
         };
-    }
-    /**
-     * Hear `event` while followed, whether or not event delivery is on, and
-     * count it as listened to (`plugin.player.stream`, SDK 1.10.0): the group
-     * the caller started (a state copy's) is subscribed now if it waited for
-     * `plugin.player.subscribe()`, and only it. When the last follower ends,
-     * such a group waits again as before: its subscription at the player
-     * ends, and the copy stays as it was. Nothing when nothing started the
-     * group.
-     */
-    follow(event, why) {
-        const group = this.#events.get(event);
-        if (!group)
-            return { dispose: async () => { } };
-        group.followers = (group.followers ?? 0) + 1;
-        group.active++;
-        const token = {};
-        group.whys.set(token, why ?? listenerWhy(this.callSite()));
-        if (group.unheard) {
-            group.unheard = false;
-            group.followed = true;
-            this.#open(event, group);
-        }
-        else
-            this.#tell(event, group);
-        let following = true;
-        return {
-            dispose: async () => {
-                if (!following)
-                    return;
-                following = false;
-                group.active--;
-                group.followers = (group.followers ?? 1) - 1;
-                group.whys.delete(token);
-                if (this.#events.get(event) !== group)
-                    return;
-                if (group.followers === 0 && group.followed && !this.#delivering) {
-                    // Back to waiting for `subscribe()`, as before the first follower.
-                    group.followed = false;
-                    group.unheard = true;
-                    const off = group.off;
-                    group.off = undefined;
-                    group.told = undefined;
-                    group.toldWhy = undefined;
-                    const unsubscribe = await off?.catch(() => undefined);
-                    await unsubscribe?.().catch(() => { });
-                    return;
-                }
-                this.#tell(event, group);
-            },
-        };
-    }
-    /**
-     * A development warning, once per plugin, no behaviour change: the plugin
-     * follows `event` (a listener, an `onChange`, a `bind` that reads the
-     * state) before `plugin.player.subscribe()`, so changes made elsewhere
-     * (the user, the player, another plugin) never reach it; the state moves
-     * only after its own calls.
-     */
-    #warnUnheard(event) {
-        if (this.#warnedEvents)
-            return;
-        this.#warnedEvents = true;
-        console.warn(`[${this.manifest.id}] follows ${event} (a listener, onChange, or a bind() that reads the state) before plugin.player.subscribe(): changes made elsewhere will not reach it, only its own calls refresh the state. Call plugin.player.subscribe() first in activate().`);
     }
     /**
      * Tell the player when `group` changes between mirror and listener, and

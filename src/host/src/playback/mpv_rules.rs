@@ -76,7 +76,7 @@ impl Category {
             Input => {
                 "the keyboard and the mouse are the player's (plugin.commands, plugin.bindings)"
             }
-            Clipboard => "the clipboard has its own capability (plugin.clipboard)",
+            Clipboard => "the clipboard has its own API (plugin.clipboard)",
             Managed => {
                 "the player manages it and keeps its own state of it (use the plugin API's member for it)"
             }
@@ -827,7 +827,7 @@ mod tests {
         assert_eq!(
             property_refusal("clipboard/text", false).as_deref(),
             Some(
-                "mpv property \"clipboard/text\" is refused: the clipboard has its own capability (plugin.clipboard)"
+                "mpv property \"clipboard/text\" is refused: the clipboard has its own API (plugin.clipboard)"
             )
         );
         assert_eq!(property_refusal("time-pos", false), None);

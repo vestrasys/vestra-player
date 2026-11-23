@@ -604,6 +604,70 @@ test("B22: stopping the plugin clears its layer; other plugins' layers stay", as
   assert.deepEqual(host.timeline.marks.map((m) => m.plugin), ["vestra.other"]);
 });
 
+// ------------------------------------------------------------------ idle (events and triggers, SDK 1.11)
+
+test("idle: with media open and the window closed it holds nothing; the window streams the state while open", async () => {
+  const host = new TestHost();
+  host.chapters = [{ title: "Opening", start: 0 }];
+  await start(host);
+  await play(host, file(), 600, 10);
+  assert.deepEqual(host.keepsRunning, []);
+  assert.equal(host.listening.has("source.state"), false, "no stream while nothing shows");
+  await press(host, "H");
+  assert.equal(host.listening.has("source.state"), true, "the open window follows the state");
+  host.window("marks").userClose();
+  await host.settle(WAIT);
+  assert.equal(host.listening.has("source.state"), false, "the stream ends with the window");
+  assert.deepEqual(host.keepsRunning, []);
+});
+
+test("idle: in standby the menu state, the current chapter and a close still reach it; P after a wake adds at the position", async () => {
+  const host = new TestHost();
+  host.chapters = [
+    { title: "Opening", start: 0 },
+    { title: "Main", start: 60 },
+  ];
+  await start(host);
+  await play(host, file(), 600, 10);
+  const chapter = (i: number) => host.command(`chapter.${i}`);
+  assert.deepEqual([0, 1].map((i) => chapter(i).state.checked), [true, false]);
+  await host.park();
+  assert.equal(host.parked, true);
+  await at(host, 70); // the "chapter" trigger wakes it
+  await host.settle(WAIT);
+  assert.deepEqual([0, 1].map((i) => chapter(i).state.checked), [false, true]);
+  await at(host, 75);
+  await press(host, "P");
+  assert.equal(host.osd.at(-1), "Bookmark added: Bookmark 1 (01:15)");
+  await host.park();
+  await host.request("source.submit", { operationId: 990001, intent: { kind: "close" } });
+  await host.settle(WAIT);
+  assert.equal(host.command("marks.add").state.enabled, false);
+  assert.equal(host.command("marks.add").state.reason, "No media open");
+  assert.deepEqual(menuLines(host, "marks-chapters"), []);
+  assert.deepEqual(menuLines(host, "marks-bookmarks"), []);
+});
+
+test("window: a file closed after it played to its end leaves the list empty", async () => {
+  const host = new TestHost();
+  host.chapters = [{ title: "Opening", start: 0 }];
+  await start(host);
+  await play(host, file(), 600, 20);
+  await press(host, "P");
+  await press(host, "H");
+  const window = host.window("marks");
+  assert.equal((window.props.rows as WindowRow[]).length, 2);
+  // The end: `source.ended` comes now; the close afterwards sends no further source event.
+  host.setSource({ phase: "ended", terminalReason: "natural", position: 600 });
+  await host.settle(WAIT);
+  assert.equal(window.props.media, true, "an ended file is still open");
+  await host.request("source.submit", { operationId: 990002, intent: { kind: "close" } });
+  await host.settle(WAIT);
+  assert.equal(window.props.media, false);
+  assert.deepEqual(window.props.rows, [], "the closed file's bookmarks are gone from the window");
+  assert.equal(host.command("marks.add").state.reason, "No media open");
+});
+
 // ------------------------------------------------------------------ menus
 
 /** The fixed commands by order: title (as declared or as shown), order, group, keys. */

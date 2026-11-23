@@ -36,6 +36,8 @@ type Track = {
   holding: boolean;
   /** The resume decision has been started (or was not wanted). */
   decided: boolean;
+  /** Taken over at activation while open, so not resumed (`decided`), until its `source.opening` says otherwise. */
+  adopted: boolean;
   /** Played to the end; recording starts again on a replay. */
   ended: boolean;
 };
@@ -160,6 +162,7 @@ export class Resume {
         ready: null,
         holding: false,
         decided: initial && state.phase !== "loading",
+        adopted: initial && state.phase !== "loading",
         ended: false,
       };
     }
@@ -187,6 +190,25 @@ export class Resume {
       track.decided = true;
       void this.#resume(track);
     } else if (state.paused && !wasPaused) this.#record(track, true);
+  }
+
+  /**
+   * `source.opening` of `sourceId`. A plugin woken from standby by a source
+   * that opened finds it open at activation, as after a reload, and hears its
+   * opening only afterwards: the source was opened now after all, so it is
+   * resumed as for a plugin that was running (the position is not recorded
+   * until that is decided).
+   */
+  opened(sourceId: number) {
+    const track = this.#track;
+    if (!track || track.sourceId !== sourceId || !track.adopted) return;
+    track.adopted = false;
+    track.decided = false;
+    track.holding = true;
+    if (track.ready && track.duration !== null) {
+      track.decided = true;
+      void this.#resume(track);
+    }
   }
 
   /** Whether B25 applies to this source; resolves `audio` with `player.stats()` when the extension says nothing. */

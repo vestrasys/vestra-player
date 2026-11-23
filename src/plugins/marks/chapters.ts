@@ -38,10 +38,14 @@ export class Chapters {
     return this.#list;
   }
 
-  /** Follow the player: forget on a new source, read once it is ready. */
+  /**
+   * Follow the player: forget on a new source and on a close (which keeps the source id, with no
+   * source open), read once it is ready.
+   */
   observe(state: PlayerState) {
-    if (state.sourceId !== this.#sourceId) {
-      this.#sourceId = state.sourceId;
+    const open = state.source === null ? null : state.sourceId;
+    if (open !== this.#sourceId) {
+      this.#sourceId = open;
       this.#loaded = null;
       if (this.#list.length) this.#set([]);
     }
@@ -80,6 +84,36 @@ export function currentChapter(chapters: readonly Chapter[], position: number | 
     if (chapter.start <= position + 0.05) index = i;
   });
   return index;
+}
+
+/**
+ * The ranges in which each of the first `count` chapters is the current one
+ * (`currentChapter`: from 0.05 s before its start to 0.05 s before the next
+ * one's), for a trigger's `when.position.in`; `chapters[i]` is the chapter of
+ * `ranges[i]`. A chapter that is never the current one (another starts at the
+ * same time) has no range.
+ */
+export function chapterRanges(
+  list: readonly Chapter[],
+  count: number,
+): { ranges: { start: number; end?: number }[]; chapters: number[] } {
+  const ranges: { start: number; end?: number }[] = [];
+  const chapters: number[] = [];
+  for (let i = 0; i < Math.min(list.length, count); i++) {
+    const start = Math.max(0, list[i]!.start - 0.05);
+    const next = list[i + 1];
+    if (!next) {
+      ranges.push({ start });
+      chapters.push(i);
+      continue;
+    }
+    // The last chapter listed ends where the next (unlisted) one begins: no check past it.
+    const end = next.start - 0.05;
+    if (end <= start) continue;
+    ranges.push({ start, end });
+    chapters.push(i);
+  }
+  return { ranges, chapters };
 }
 
 /**

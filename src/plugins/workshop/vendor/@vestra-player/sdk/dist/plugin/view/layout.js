@@ -1,3 +1,35 @@
+/** The SDK's view of a wire layout. */
+function layoutOfWire(raw) {
+    const view = (slot) => slot && {
+        preferred: slot.preferred,
+        effective: slot.effective,
+        reason: slot.reason,
+        detached: slot.detached,
+    };
+    const tabs = (slot) => slot?.panels
+        ? Object.freeze(slot.panels.map((panel) => Object.freeze({
+            plugin: panel.plugin,
+            title: panel.title,
+            active: panel.owner === slot.owner,
+        })))
+        : null;
+    const adjust = raw.adjust ?? null;
+    return {
+        bottom: view(raw.bottom),
+        sidebar: view(raw.sidebar),
+        adjust: view(adjust),
+        tabs: {
+            bottom: tabs(raw.bottom),
+            sidebar: tabs(raw.sidebar),
+            adjust: tabs(adjust),
+        },
+        backdrop: raw.backdrop
+            ? Object.freeze({ effective: raw.backdrop.effective === true })
+            : null,
+    };
+}
+/** `layout.changed`'s data as the listener gets it (`ScopeImpl.fact`). */
+export const layoutChanged = (runtime, data) => layoutOf(runtime).event(data);
 /**
  * Both positions, one per plugin: read with `layout.state` after every
  * `window.state` event (one read in flight; events during it cause one more)
@@ -29,7 +61,7 @@ export class LayoutService {
             return;
         this.#started = true;
         // A mirror: panels listen through `watch`.
-        this.#runtime.on("window.state", () => void this.read(), "events", true);
+        this.#runtime.on("window.state", () => void this.read(), "held", true);
         void this.read();
     }
     watch(listener) {
@@ -56,44 +88,41 @@ export class LayoutService {
                 const raw = await this.#runtime.host.layout.state().catch(() => null);
                 if (!raw)
                     continue;
-                const view = (slot) => slot && {
-                    preferred: slot.preferred,
-                    effective: slot.effective,
-                    reason: slot.reason,
-                    detached: slot.detached,
-                };
-                const tabs = (slot) => slot?.panels
-                    ? Object.freeze(slot.panels.map((panel) => Object.freeze({
-                        plugin: panel.plugin,
-                        title: panel.title,
-                        active: panel.owner === slot.owner,
-                    })))
-                    : null;
-                const adjust = raw.adjust ?? null;
-                const next = {
-                    bottom: view(raw.bottom),
-                    sidebar: view(raw.sidebar),
-                    adjust: view(adjust),
-                    tabs: {
-                        bottom: tabs(raw.bottom),
-                        sidebar: tabs(raw.sidebar),
-                        adjust: tabs(adjust),
-                    },
-                    backdrop: raw.backdrop
-                        ? Object.freeze({ effective: raw.backdrop.effective === true })
-                        : null,
-                };
-                if (JSON.stringify(next) === JSON.stringify(this.state))
-                    continue;
-                this.state = next;
-                for (const listener of [...this.#listeners])
-                    listener(next);
-                this.#runtime.invalidate();
+                this.#accept(layoutOfWire(raw));
             } while (this.#again);
         }
         finally {
             this.#reading = false;
         }
+    }
+    #accept(next) {
+        if (JSON.stringify(next) === JSON.stringify(this.state))
+            return;
+        this.state = next;
+        for (const listener of [...this.#listeners])
+            listener(next);
+        this.#runtime.invalidate();
+    }
+    /**
+     * `layout.changed`'s data (SDK 1.11.0): the copy takes it first when it
+     * is in use; the listener gets `{ slots }`.
+     */
+    event(raw) {
+        const next = layoutOfWire(raw);
+        if (this.#started)
+            this.#accept(next);
+        const position = (name) => {
+            const slot = next[name];
+            return slot && Object.freeze({ ...slot, panels: next.tabs[name] ?? [] });
+        };
+        return {
+            slots: Object.freeze({
+                bottom: position("bottom"),
+                sidebar: position("sidebar"),
+                adjust: position("adjust"),
+                backdrop: next.backdrop,
+            }),
+        };
     }
     async set(slot, change) {
         this.start();

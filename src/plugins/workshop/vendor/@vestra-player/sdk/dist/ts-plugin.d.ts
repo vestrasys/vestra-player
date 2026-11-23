@@ -1,9 +1,8 @@
 /**
  * The TypeScript language-service plugin `@vestra-player/sdk/ts-plugin`.
- * Up to 1.8 it showed the capability checker's findings in the editor, with
- * the quick fix "Add '<capability>' to manifest.json". SDK 1.9.0 removed
- * manifest capabilities, and with them the checker: the plugin now changes
- * nothing and is kept only so that a tsconfig.json that lists it
+ * Up to 1.8 it showed a manifest checker's findings in the editor. SDK 1.9.0
+ * removed that checker: the plugin now changes nothing and is kept only so
+ * that a tsconfig.json that lists it
  *
  *   { "compilerOptions": { "plugins": [{ "name": "@vestra-player/sdk/ts-plugin" }] } }
  *

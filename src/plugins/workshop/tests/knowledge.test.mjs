@@ -119,7 +119,7 @@ async function docsTool() {
 test("docs: the vendored SDK's tree from the root down to a member", async () => {
   const run = await docsTool();
   const root = await run("docs", {});
-  assert.match(root, /^\/ · Vestra Player SDK \d+\.\d+\.\d+ documentation/);
+  assert.match(root, /^\/ · Vestra Player SDK \d+\.\d+\.\d+(-[\w.]+)? documentation/);
   for (const path of ["/Overview", "/Guides", "/API"]) assert.ok(root.includes(`- ${path}`), path);
   assert.equal(await run("docs", { path: "/" }), root);
   const member = await run("docs", { path: "/API/Media/Snapshot/export" });

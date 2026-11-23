@@ -15,7 +15,9 @@ const view = (facts) => Object.freeze({
 });
 /**
  * One per plugin: read before activation, then kept current from
- * `window.state` events (after `plugin.player.subscribe()`) and after this plugin's own changes.
+ * `window.state` events while something holds them (`onChange`, a
+ * `window.state` listener), from `window.changed`, and after this
+ * plugin's own changes.
  */
 export class WindowService {
     #runtime;
@@ -50,7 +52,7 @@ export class WindowService {
                 this.accept(facts);
             else
                 void this.read();
-        }, "events", true);
+        }, "held", true);
         void this.read();
     }
     /** The palette, as the `window.state` reply carried it (`plugin.appearance`). */
@@ -98,6 +100,16 @@ export class WindowService {
             },
         };
     }
+}
+/**
+ * `window.changed`'s data as the listener gets it (`ScopeImpl.fact`,
+ * SDK 1.11.0): the copy takes the facts first, so `plugin.window.state`
+ * holds them when the listener runs.
+ */
+export function windowChanged(runtime, data) {
+    const facts = data;
+    windowOf(runtime).accept(facts);
+    return view(facts);
 }
 export const windowOf = (runtime) => runtime.service("window", () => new WindowService(runtime));
 export function mainWindow(scope) {

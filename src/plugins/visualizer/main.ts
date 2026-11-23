@@ -62,7 +62,16 @@ function size(bytes: number) {
  * (README, known behaviour).
  */
 export default async function activate(plugin: Plugin) {
-  plugin.player.subscribe(); // B3: removed in SDK 1.11; migrate (events-and-triggers.md §7)
+  // A source closed (phase `empty`): a source that had already ended (its
+  // `source.ended` came at its end) closes without another source event, so the
+  // player's condition says it. Declared before the first await (triggers are);
+  // the handler is set once the scene exists.
+  let closed: (() => void) | null = null;
+  let closedEarly = false;
+  plugin
+    .trigger()
+    .firesOn(plugin.when.open)
+    .leave(() => (closed ? closed() : void (closedEarly = true)));
   await plugin.player.read(); // was "playback.read"
   const { player } = plugin;
   // Headless hosts refuse the display; that never fails the action itself.
@@ -196,9 +205,17 @@ export default async function activate(plugin: Plugin) {
   });
   // The backdrop came back while a ready source counts as video: look again
   // (stats() may have been read before the video track was known).
-  plugin.panels.backdrop.onChange((state) => {
+  // `layout.changed` (a wake event) replaces the backdrop's `onChange`, which held
+  // `window.state` for it; the backdrop's copy (read once here) follows the event.
+  let shown = JSON.stringify(plugin.panels.backdrop.state);
+  player.on("layout.changed", ({ slots }) => {
+    const next = JSON.stringify(slots.backdrop);
+    if (next === shown) return;
+    shown = next;
+    // `kind` is "video" only from a source's `source.ready` to its end, so the
+    // newest snapshot the plugin has (taken from that event) is that source's.
     const now = player.state;
-    if (state?.effective && kind === "video" && (now.phase === "ready" || now.phase === "ended")) void judge(now);
+    if (slots.backdrop?.effective && kind === "video" && (now.phase === "ready" || now.phase === "ended")) void judge(now);
   });
 
   // ------------------------------------------------------------------ actions
@@ -318,6 +335,35 @@ export default async function activate(plugin: Plugin) {
     refreshUsage();
     osd("Cover cache cleared");
   });
-  player.onChange(observe); // B3: Player.onChange is removed in SDK 1.11
+  // The source events, not the state stream: the scene changes only when a
+  // source opens, is ready or ends; nothing here follows the position.
+  player.on("source.opening", ({ state }) => {
+    observe(state);
+    plugin.update();
+  });
+  player.on("source.ready", ({ state }) => {
+    observe(state);
+    plugin.update();
+  });
+  player.on("source.ended", ({ state }) => {
+    // Still open (phase `ended`: at its end, or stopped there; `error`): the
+    // event's state is the player's. Closed: the trigger above. Replaced: the
+    // next source's `source.opening` follows.
+    if (state.phase !== "ended" && state.phase !== "error") return;
+    observe(state);
+    plugin.update();
+  });
+  // Closed: the idle screen, unless the next source opened meanwhile (its own
+  // events judge it); `refresh()` answers the newest state the plugin has.
+  closed = () =>
+    void player.refresh().then(
+      (now) => {
+        if (now.phase !== "empty") return;
+        observe(now);
+        plugin.update();
+      },
+      () => {},
+    );
   observe(player.state);
+  if (closedEarly) closed();
 }

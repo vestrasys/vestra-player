@@ -65,14 +65,14 @@ fn install_sidebar_plugin(store: &Path, kind: ThirdParty) {
     let (capabilities, listen) = match kind {
         ThirdParty::Resident => (
             ["ui.mount", "events", "playback.read"].as_slice(),
-            "plugin.player.onChange(() => {});\n",
+            "plugin.player.on(\"source.state\", () => {});\n",
         ),
         // Its first run (the warm-up) records it resident; from the next
         // start on it exits as soon as its panel is in the shell (each run
         // mounts it, then crashes: the crash loop).
         ThirdParty::Crashing => (
             ["ui.mount", "events", "playback.read"].as_slice(),
-            "plugin.player.onChange(() => {});\n\
+            "plugin.player.on(\"source.state\", () => {});\n\
              const mark = join(plugin.dataDirectory, \"ran\");\n\
              crash = existsSync(mark);\n\
              if (!crash) { mkdirSync(plugin.dataDirectory, { recursive: true }); \
@@ -436,7 +436,7 @@ fn crash_loop_failures(name: &str, compiles: &[Compile], log: &str) -> Vec<Strin
             "{name}: {with} compile(s) of its panel (a restart compiled)"
         ));
     }
-    // It listens to the player (`player.onChange`): the host writes to it
+    // It listens to the player (a `source.state` listener): the host writes to it
     // during playback, also as it crashes. A write to its closed pipe is
     // dropped; it never stops it for good before its restart (it did).
     if log.contains(&format!("({THIRD_PARTY}) transport:")) {

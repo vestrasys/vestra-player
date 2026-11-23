@@ -1,5 +1,7 @@
 # Feature requirements: one chapter per plugin
 
+> Requirements record of 2026-10-20. Its "Manifest capabilities" lines and "New capability" columns are the manifest declarations of that time; player 0.9.0 removed them, and since the user ruling of 2026-11-16 nothing lists what a plugin uses.
+
 Date: 2026-10-20. Source: the items in the [feature catalog](feature-catalog.md) that are not implemented (✗) or partly implemented (◐); after the cut review, 78 items remain. Interface language (H14) is handled separately and is out of scope here.
 
 One chapter per plugin. Each chapter gives, in order:
@@ -250,7 +252,7 @@ Current state: "Reopen" (order 121) is available only after a failed load; it ha
 **Entry point**: top-level "Reopen Current/Last File", Ctrl+Y (the former "Reopen", renamed).
 
 **Behavior details**
-1. Record the "last source": listen to `player.onChange`.
+1. Record the "last source": follow the source (the bottom bar's `player.stream` while it is mounted; release B).
    - When `kind === "media"`, `source` is non-empty and `phase` first becomes `ready`, write `last.json`.
    - Plugin simulator streams (`kind: "stream"`) are not recorded, because they cannot be reopened.
    - The source can have been opened by any plugin (playlist, YouTube, etc.).
@@ -266,7 +268,7 @@ Current state: "Reopen" (order 121) is available only after a failed load; it ha
 
 **Persistence**: `plugin.dataDirectory/last.json`: `{ "source": string, "openedAt": ISO time }`. Write a temporary file first, then rename it.
 
-**Core dependencies**: `player.open`, `player.seek`, `media.ready()`, `player.onChange`. No new core API needed.
+**Core dependencies**: `player.open`, `player.seek`, `media.ready()`, `player.stream`. No new core API needed.
 
 **Acceptance**
 - Play a.mp4 to 1:00 and press Ctrl+Y: it reloads and returns to about 1:00.
@@ -721,7 +723,7 @@ When the setting "Append when opening or dropping; don't clear the list" (off by
 
 **Behavior details**:
 
-1. Trigger: `player.onChange` sees a new `sourceId`, `kind === "media"`, `source` is an absolute local path (no `://`), and this source was **not opened by this plugin** (every `Media` returned by this plugin's `player.open` is recorded). URLs and simulator streams do not trigger it.
+1. Trigger: `source.opening` reports a new `sourceId`, `kind === "media"`, `source` is an absolute local path (no `://`), and this source was **not opened by this plugin** (every `Media` returned by this plugin's `player.open` is recorded). URLs and simulator streams do not trigger it.
 2. Deciding "similar files" and "all files": follow the "same-kind file rules" of IA-PL-01 in interaction-spec.md (`media.ts` `siblings` / `similarStep`). In short: same folder, not recursive; video only matches video, audio only matches audio; "similar" requires the opened file name to contain a space, `-`, `_` or an ASCII digit, then four comparison steps S1–S4; "all" only collects files of the same group; files starting with `.` are skipped (macOS `._*`).
 3. No separate adjustable limit; when more than 5000 files match, 5000 are taken centered on the opened file, and the OSD ends with "limit of 5000 reached".
 4. How files are added: by default the list is cleared first (no confirmation), then files are added in natural order, including the opened file itself and the files before it. With the "append" setting on, they are appended to the end of the list instead, skipping files already in the list (`realpath`).
@@ -738,7 +740,7 @@ When the setting "Append when opening or dropping; don't clear the list" (off by
 
 **Persistence**: the mode is stored in `settings.openMode` (`"only" | "similar" | "folder"`, see C17). An old file with `settings.version` below 2 has `openMode` and `appendOnOpen` migrated once to the new defaults (similar files, no append) when read; the other settings are kept. It is then saved as version 2, and values the user changes later are saved as usual.
 
-**Core dependencies**: the existing `player.onChange`, `player.state` (`sourceId`, `source`, `phase`, `endReason`), `player.open({ ifCurrent })`, `player.restart`, `provideSequence`. Nothing new: adoption only relies on public state and does not need another plugin's `Media`.
+**Core dependencies**: the events `source.opening` and `source.ended`, `player.state` (`sourceId`, `source`, `phase`, `endReason`), `player.open({ ifCurrent })`, `player.restart`, `provideSequence`. Nothing new: adoption only relies on public state and does not need another plugin's `Media`.
 
 **Acceptance**:
 - The list has 3 items, default mode, the folder has `A01.mkv A02.mkv A03.mkv B.mkv song.mp3`; open `A02.mkv` with the bottom bar's "Open File": the list becomes `A01 A02 A03`, `A02` is the blue current row; after it ends, `A03` plays automatically.
@@ -2988,7 +2990,7 @@ Notes:
 
 **Behavior details**:
 
-1. **When to record**: in `player.onChange`, record once when a `sourceId` first reaches `phase === "ready"` with `kind === "media"` and a non-empty `source`. Sources with `phase === "error"` are not recorded. `kind === "stream"` sources such as simulators are not recorded. Replays of the same `sourceId` are not recorded again.
+1. **When to record**: at `source.ready`, record once when a `sourceId` first reaches `phase === "ready"` with `kind === "media"` and a non-empty `source`. Sources with `phase === "error"` are not recorded. `kind === "stream"` sources such as simulators are not recorded. Replays of the same `sourceId` are not recorded again.
 2. **Identity**: local files use `realpath` (the original path when that fails); URLs use the literal text with the `#` fragment removed. If it already exists, it moves to the top and its time is updated.
 3. **Capacity**: at most 100 entries are saved and the first 20 are shown in the menu; beyond 100, the oldest are discarded.
 4. **Menu item text**: `<number 1–9, 0, then none>  <display name>`, followed by `(12:34)` when there is a B25 saved position. Display name: the file name for local files; `host › last path segment` for URLs (decoded, at most 60 characters, shortened in the middle). When a URL carries credentials (`user:pass@`), the display name leaves them out, while storage keeps the original. Menu text is at most 80 characters.
@@ -3001,7 +3003,7 @@ Notes:
 
 **Persistence**: `<dataDirectory>/recent.json`: `{ version: 1, enabled: true, items: [{ key, source, kind: "file"|"url", openedAt }] }`, read and written with `plugin.storage.json("recent")`, written 1 second after the last change (temporary file plus rename). File permissions follow the system default (after the round 2 migration to `storage`, 0600 is no longer set separately; the data directory is under `~/Library`, which only this user can enter). A corrupt file is renamed to `.bad-<timestamp>`.
 
-**Core dependencies**: the existing `player.state`, `player.onChange`, `player.open`, `commands.add` + child scope rebuild.
+**Core dependencies**: the existing `player.state`, the event `source.ready`, `player.open`, `commands.add` + child scope rebuild.
 
 **Acceptance**:
 - Open a, then b, then a again from the bottom bar: the menu order is a, b.
@@ -3039,7 +3041,7 @@ Notes:
 
 **Persistence**: `<dataDirectory>/positions.json`: `{ version: 1, mode: "auto"|"ask"|"off", audio: false, items: { [key]: { position, duration, size, updatedAt } } }`; read and written with `plugin.storage.json("positions")`; saved positions are updated every 5 seconds, written 300 ms after content changes, and fully written when the plugin is disabled.
 
-**Core dependencies**: the existing `player.onChange` (`position`, `duration`, `phase`, `endReason`, `sourceId`), `player.seek({ ifCurrent })`, `player.stats()`, `windows.create`, `osd.show`, `plugin.dataDirectory`. Nothing new: restoring seeks conditioned on the ready state, and when it conflicts with other plugins' actions it yields naturally through `stale`.
+**Core dependencies**: `player.stream` while a media source is open (`position`, `duration`, `phase`, `endReason`, `sourceId`; release B), the events `source.opening` and `source.ready`, `player.seek({ ifCurrent })`, `player.stats()`, `windows.create`, `osd.show`, `plugin.dataDirectory`. Nothing new: restoring seeks conditioned on the ready state, and when it conflicts with other plugins' actions it yields naturally through `stale`.
 
 **Acceptance**:
 - Play a 10-minute video to 05:00 and close it, then open it from any entry point (bottom bar, list, recent playback): it starts at 04:58, OSD "Resuming from 05:00".

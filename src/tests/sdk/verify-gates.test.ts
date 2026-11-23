@@ -185,7 +185,7 @@ test("test files are recognised by directory and by name", () => {
   ])
     assert.ok(isTestPath(path), path);
   for (const path of [
-    "src/host/src/capabilities/mod.rs",
+    "src/host/src/api/mod.rs",
     "src/testing/host.ts",
     "docs/testing.md",
     "src/contest/tests.rs.txt",

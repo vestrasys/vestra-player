@@ -78,7 +78,7 @@ fn target_main(id: &str, version: &str, broken: bool) -> String {
     };
     format!(
         "export default async function activate(plugin) {{\n\
-         plugin.player.onChange(() => {{}});\n\
+         plugin.player.on(\"source.state\", () => {{}});\n\
          const mark = (await plugin.storage.session.get(\"mark\")) ?? \"none\";\n\
          console.error(`{id} start {version} mark ${{mark}}`);\n\
          await plugin.storage.session.set(\"mark\", \"set\");\n\
@@ -160,7 +160,7 @@ fn installer(root: &Path, steps: &[Step]) -> PathBuf {
              }};\n\
              const sleep = (ms) => new Promise((done) => setTimeout(done, ms));\n\
              export default function activate(plugin) {{\n\
-             plugin.player.onChange(() => {{}});\n\
+             plugin.player.on(\"source.state\", () => {{}});\n\
              setTimeout(async () => {{\n\
              for (const step of {steps}) {{\n\
              if (step.enable) {{\n\

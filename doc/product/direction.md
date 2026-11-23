@@ -148,19 +148,18 @@ UI button ─────┘
 
 Menus are organised by user domain (File, Playback, Video, Audio, Subtitles…), not by plugin. Commands from several plugins merge into one menu tree.
 
-### The manifest only describes identity and capabilities
+### The manifest only describes identity
 
 ```json
 {
   "id": "example.video-tools",
   "version": "0.1.0",
   "apiVersion": "vestra/1",
-  "entry": "main.ts",
-  "capabilities": ["commands", "playback.control"]
+  "entry": "main.ts"
 }
 ```
 
-Commands, windows and panels are declared in code (`commands.add`, `windows.create`, `panels.mount`), so declaration and handling live together. The manifest does not repeat these contributions; it only says who the plugin is and which player capabilities it needs. The host uses it to reject undeclared calls; this is a contract, not a security sandbox.
+Commands, windows and panels are declared in code (`commands.add`, `windows.create`, `panels.mount`), so declaration and handling live together. The manifest does not repeat these contributions and declares nothing about what the plugin may call (since player 0.9.0); it only says who the plugin is. The host validates each request it serves; this is a contract, not a security sandbox.
 
 ### Check capabilities before offering features
 

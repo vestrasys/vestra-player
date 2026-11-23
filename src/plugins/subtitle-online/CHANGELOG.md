@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.9
+
+- Events instead of `subscribe()` and `player.onChange` (removed in SDK 1.11.0): a new source (`source.opening`) aborts what ran for the old one and clears the results, and the automatic search runs at `source.ready`. The download window streams the state only while it is open. The plugin holds nothing otherwise and may be stopped while idle; a video that opens wakes it and is searched as when it was running. One edge: a source still loading when the plugin starts is now searched once it is ready (only the source already ready at start is left alone), since a plugin woken by an opening source starts the same way. Menus, windows and texts are unchanged. Who must change: nobody.
+- Playing the same file again after its end keeps the search results: `source.opening` comes for that restart too, and only a new source id clears the results and aborts what ran (as the video plugin compares it). Test: a restart keeps the results, another source clears them.
+
 ## 0.1.8
 
 - The description's last line, starting with `→ `, says where to open the plugin; Store 0.3.1 shows it on the plugin's card, also before install. Description text and its translations only. Who must change: nobody.

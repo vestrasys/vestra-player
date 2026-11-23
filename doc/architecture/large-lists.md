@@ -88,7 +88,7 @@ The three existing property writes (`ui.setMount`, `ui.set`, `settings.set`) tak
 
 - Ops apply in order, each to the result of the one before. `move` takes `count` rows out at `from` and puts them back at `to`, an index of the list without them.
 - At most `MAX_PATCH_OPS` = 1,024 ops per patch; the rows a patch carries share one value budget (`MAX_NODES`, `MAX_TEXT_BYTES`, depth counted as for rows of the whole value), and the result may have at most `MAX_ARRAY` rows.
-- The player advertises the feature in `plugin.app`'s start-up data: `"features": ["ui.patch"]` (`process::set_app_info`, `main.rs`). The SDK reads it from the handshake (`Runtime.features`); it is not part of the plugin API. No `apiVersion` change, no new method, no new capability: the writes keep their capability (`ui.mount`, `ui.window`, `ui.settings`) and lazy-activation behaviour.
+- The player advertises the feature in `plugin.app`'s start-up data: `"features": ["ui.patch"]` (`process::set_app_info`, `main.rs`). The SDK reads it from the handshake (`Runtime.features`); it is not part of the plugin API. No `apiVersion` change, no new method, no new area of the API: the writes keep their area (`ui.mount`, `ui.window`, `ui.settings`) and lazy-activation behaviour.
 
 ### 2.3 Base and sequence numbers
 

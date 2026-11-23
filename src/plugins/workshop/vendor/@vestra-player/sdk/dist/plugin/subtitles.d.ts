@@ -1,5 +1,6 @@
+import type { Runtime } from "./runtime.ts";
 import type { ScopeImpl } from "./scope.ts";
-import type { Subtitles } from "./types.ts";
+import type { Subtitles, SubtitlesState } from "./types.ts";
 /**
  * The player's limits on subtitle files a plugin loads with
  * {@link Subtitles.load}, which `TestHost` enforces with the player's codes.
@@ -59,4 +60,8 @@ export declare const SUBTITLE_LIMITS: Readonly<{
     /** Loads of every plugin in progress at the same time (8). */
     readonly uploads: 8;
 }>;
+/** `subtitles.changed`'s data as the listener gets it (`ScopeImpl.fact`). */
+export declare function subtitlesChanged(runtime: Runtime, data: unknown): {
+    state: SubtitlesState;
+};
 export declare function subtitles(scope: ScopeImpl): Subtitles;

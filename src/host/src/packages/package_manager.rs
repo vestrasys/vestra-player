@@ -756,7 +756,7 @@ impl Core {
                 // user: "Don't ask again" for the old one does not carry over
                 // (an update from the same source keeps it).
                 if new_source {
-                    crate::capabilities::forget_command_trust(self, &id);
+                    crate::api::forget_command_trust(self, &id);
                 }
                 // Garbage is collected off the UI thread, not here. Staging
                 // reuses an identical directory still in the library, so it
@@ -1532,7 +1532,7 @@ impl Core {
         self.failures.edit().remove(&id);
         // "Don't ask again" for its commands goes too (Ask Vestra UX §4.7):
         // a later install of the same id asks again.
-        crate::capabilities::forget_command_trust(self, &id);
+        crate::api::forget_command_trust(self, &id);
         // Session values go with every uninstall, whether or not the files do.
         if let Some(instance) = &installed.instance {
             self.session_storage
@@ -1608,7 +1608,7 @@ impl Core {
         self.packages.receipts = self.packages.store.operations();
         self.hold_freed(&freed);
         self.failures.edit().remove(id);
-        crate::capabilities::forget_command_trust(self, id);
+        crate::api::forget_command_trust(self, id);
         if let Some(guid) = guid {
             let key = DataKey::Instance(guid.clone());
             // As every uninstall: its session values and source references.

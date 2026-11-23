@@ -808,6 +808,52 @@ test("B25 the playing position is saved every tick, so a forced quit loses littl
   await third.stop();
 });
 
+const userClose = (host: TestHost) =>
+  host.request("source.submit", { operationId: 990000 + host.sent("source.submit").length, intent: { kind: "close" } });
+
+test("idle: the state is streamed only while a source is open; with none it holds nothing", async () => {
+  const a = file("a.mkv");
+  const { host, stop } = await start();
+  assert.deepEqual(host.keepsRunning, []);
+  assert.equal(host.listening.has("source.state"), false, "no stream with nothing open");
+  await play(host, a);
+  assert.equal(host.listening.has("source.state"), true, "a stream while a source is open");
+  host.setSource({ position: 300, paused: true });
+  await userClose(host);
+  await host.settle(WAIT);
+  assert.equal(host.source.phase, "empty");
+  assert.equal(host.listening.has("source.state"), false, "the stream ends when nothing is open");
+  assert.deepEqual(host.keepsRunning, []);
+  assert.equal(records(host)[0], "1  a.mkv（05:00）");
+  await stop();
+});
+
+test("idle: in standby, a source that opens wakes it; it is recorded and resumed, and its position is saved", async () => {
+  const data = mkdtempSync(join(scratch, "data-"));
+  const [a, b] = [file("a.mkv"), file("b.mkv")];
+  const { host, stop } = await start(undefined, data);
+  await play(host, a);
+  host.setSource({ position: 300 });
+  await play(host, b);
+  await userClose(host);
+  await host.settle(WAIT);
+  await host.park();
+  assert.equal(host.parked, true);
+
+  await play(host, a);
+  assert.equal(host.parked, false, "woken by the source");
+  assert.deepEqual(pluginSeeks(host), [298], "resumed as when it was running");
+  assert.equal(host.osd.at(-1), "从 05:00 继续播放");
+  assert.deepEqual(records(host), ["1  a.mkv（05:00）", "2  b.mkv"]);
+  assert.equal(host.listening.has("source.state"), true, "followed while open");
+  host.setSource({ position: 400 });
+  await host.settle(timing.positionTick * 2 + WAIT);
+  type Saved = { items: Record<string, { position: number }> };
+  const saved = await written<Saved>(host, join(data, "positions.json"), (s) => s.items?.[a]?.position === 400);
+  assert.equal(saved?.items[a].position, 400, "the playing position is saved after the wake");
+  await stop();
+});
+
 test("B25 stopping the plugin remembers the last position", async () => {
   const data = mkdtempSync(join(scratch, "data-"));
   const a = file("a.mkv");
@@ -833,20 +879,15 @@ test("stopping: a menu change during the teardown rebuilds nothing (no 'already 
   await host.settle(WAIT);
   assert.equal(records(host)[0], "1  a.mkv（05:00）");
   // The points are cleared (the menu lines change) just before stop(); the
-  // merge window ends while stop() is removing the submenu.
-  let removing = false;
-  host.handle("commands.unregister", async (p) => {
-    if (!removing && String(p.id).startsWith("recent.")) {
-      removing = true;
-      await new Promise((resolve) => setTimeout(resolve, timing.menuRebuild + WAIT));
-    }
-    host.commands.delete(String(p.id));
-    return null;
-  });
+  // merge window ends after the plugin stopped. From SDK 1.11 a stopping plugin
+  // sends no request (its cleanup included): the host removes its commands, and
+  // the rebuild that comes due afterwards must declare nothing again.
+  const registered = host.sent("commands.register").length;
   const cleared = host.command("resume.clear").run();
   await stop();
   await cleared;
-  assert.ok(removing, "the submenu was removed");
+  await new Promise((resolve) => setTimeout(resolve, timing.menuRebuild + WAIT));
+  assert.equal(host.sent("commands.register").length, registered, "nothing declared again");
   assert.deepEqual(recentMenu(host), []);
 });
 

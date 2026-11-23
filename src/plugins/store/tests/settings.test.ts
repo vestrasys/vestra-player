@@ -117,3 +117,26 @@ test("at most 16 third-party repositories", async () => {
     await stop();
   }
 });
+
+test("an automatic check writes nothing to the settings page (no write near an idle stop); the page catches up at the next use", async () => {
+  const net = new FakeNet();
+  publish(net, OFFICIAL, []);
+  const { host, store, stop } = await start({ net });
+  try {
+    const notes = () => (pageProps(host)["repos"] as RepoRow[]).map((r) => r.note);
+    const before = notes();
+    const writes = host.sent("settings.set").length;
+    await store.autoCheck();
+    await host.settle(20);
+    assert.equal(host.sent("settings.set").length, writes, "the timer's check sent no settings.set");
+    assert.deepEqual(notes(), before);
+    assert.notEqual(store.repos.official.fetchedAt, null, "the check itself ran");
+    // The next pass something else causes (here the page's own Add) shows the result.
+    host.settingsPage("store.repos").emit("startAdd");
+    await host.settle();
+    assert.match(notes()[0]!, /已更新|最新/);
+    assert.notDeepEqual(notes(), before);
+  } finally {
+    await stop();
+  }
+});

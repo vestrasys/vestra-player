@@ -678,25 +678,25 @@ msgid "No panel is in the adjust column"
 msgstr "調整列にパネルがありません"
 
 #. Title of the dialog that finds a moved video again ({}: its file name).
-#: src/capabilities/media_sources.rs
+#: src/api/media_sources.rs
 #, x-machine
 msgid "Locate {}"
 msgstr "{} を探す"
 
 #. commands.run: the OSD line naming what a built-in plugin ran ({plugin}: its name, {command}: the command's palette label, {step}/{of}: the step of its request).
-#: src/capabilities/commands_run.rs
+#: src/api/commands_run.rs
 #, x-machine
 msgid "{plugin} · {step}/{of} · {command}"
 msgstr "{plugin} · {step}/{of} · {command}"
 
 #. commands.run: the OSD line naming what a built-in plugin ran ({plugin}: its name, {command}: the command's palette label).
-#: src/capabilities/commands_run.rs
+#: src/api/commands_run.rs
 #, x-machine
 msgid "{plugin} · {command}"
 msgstr "{plugin} · {command}"
 
 #. The status strip (the command palette lead's status while the palette is closed): the line naming the step a built-in plugin ran ({step}/{of}: the step of its request, {command}: the command's palette label).
-#: src/capabilities/commands_run.rs
+#: src/api/commands_run.rs
 #, x-machine
 msgid "{step}/{of} · {command}"
 msgstr "{step}/{of} · {command}"
@@ -720,19 +720,19 @@ msgid "Run these {n} commands?"
 msgstr "これら {n} 件のコマンドを実行しますか？"
 
 #. The approval sheet: why a step asks, for a command of a plugin that is not built in.
-#: src/capabilities/commands_run.rs
+#: src/api/commands_run.rs
 #, x-machine
 msgid "Not built in"
 msgstr "組み込みではありません"
 
 #. The approval sheet: why the player's Close asks.
-#: src/capabilities/commands_run.rs
+#: src/api/commands_run.rs
 #, x-machine
 msgid "Closes the video"
 msgstr "動画を閉じます"
 
 #. The approval sheet: why the player's Quit asks.
-#: src/capabilities/commands_run.rs
+#: src/api/commands_run.rs
 #, x-machine
 msgid "Quits the player"
 msgstr "プレーヤーを終了します"
@@ -756,7 +756,7 @@ msgid "Don't Run"
 msgstr "実行しない"
 
 #. palette.lead: refused because another plugin holds the command palette's first row ({}: its id).
-#: src/capabilities/palette_lead.rs
+#: src/api/palette_lead.rs
 #, x-machine
 msgid "The command palette's first row is {}'s"
 msgstr "コマンドパレットの先頭行は {} が使用しています"
@@ -798,7 +798,7 @@ msgid "Ask Again Before Plugin Commands"
 msgstr "プラグインのコマンドの前に再び確認する"
 
 #. The OSD line after Ask Again Before Plugin Commands.
-#: src/capabilities/commands_run.rs
+#: src/api/commands_run.rs
 #, x-machine
 msgid "Plugin commands will ask again"
 msgstr "プラグインのコマンドは再び確認します"

@@ -572,7 +572,7 @@ Plugins cannot read mpv properties, so there is no alternative; this is one more
 **Core API** [New core API]:
 
 ```ts
-// Needs the new capability input.videoDrag
+// A new core API
 plugin.input.onVideoDrag(
   modifiers: "alt" | "ctrl" | "shift",
   listener: (e: { phase: "start" | "move" | "end"; dx: number; dy: number; videoArea: { width: number; height: number } }) => unknown,
@@ -602,7 +602,7 @@ Changes only to host behaviour or semantics, with no API change: G-01 (`SlotStat
 | `window.moveBy(dx, dy)` | Same as above | None | IA-CORE-15 |
 | `window.setAspectLock(ratio \| null)` | Resizing by user drag is handled by the system and the host | None | IA-CORE-15 |
 | `PlaybackStats.cacheSpeed` | mpv property | None | IA-CORE-16 |
-| `plugin.input.onVideoDrag(modifiers, listener)`; capability `input.videoDrag` | Only the host receives drags on the video area | Discrete bindings (poor feel), possible downgrade | IA-CORE-17 |
+| `plugin.input.onVideoDrag(modifiers, listener)` | Only the host receives drags on the video area | Discrete bindings (poor feel), possible downgrade | IA-CORE-17 |
 
 ---
 
@@ -744,7 +744,7 @@ In fullscreen, `reason === "fullscreen"` means the overlay is retracted (G-01) a
 4. **Attached panel on / off** (41×40, flush right, with a 1 px separator on its left): same as `sidebar.toggle()`; shows the "close" icon when the sidebar is attached and visible, otherwise the "open" icon.
 5. Hiding of each button in a narrow window follows IA-PB-02.
 
-**Implementation constraints**: the manifest adds the `subtitles.read` and `subtitles.control` capabilities.
+**Implementation constraints**: uses the existing subtitle API (`plugin.subtitles`); nothing is declared.
 
 **Core API**: depends on IA-CORE-14 (closed caption tracks); the rest uses the existing API.
 

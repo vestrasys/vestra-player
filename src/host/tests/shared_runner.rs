@@ -65,7 +65,7 @@ fn builtin_with(
                 &capabilities,
                 &format!(
                     "export default async function activate(plugin) {{\n\
-                 plugin.player.onChange(() => {{}});\n\
+                 plugin.player.on(\"source.state\", () => {{}});\n\
                  const n = ((await plugin.storage.session.get(\"starts\")) ?? 0) + 1;\n\
                  await plugin.storage.session.set(\"starts\", n);\n\
                  console.error(`{id} start ${{n}} pid ${{process.pid}}`);\n\
@@ -410,7 +410,7 @@ fn log_stop(id: &str) -> String {
 fn resident(main: &str) -> String {
     main.replacen(
         "activate(plugin) {\n",
-        "activate(plugin) {\nplugin.player.onChange(() => {});\n",
+        "activate(plugin) {\nplugin.player.on(\"source.state\", () => {});\n",
         1,
     )
 }

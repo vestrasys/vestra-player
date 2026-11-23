@@ -216,7 +216,7 @@ fn a_plugin_with_the_mpv_capability_drives_mpv_within_the_rules() {
     // A filter and an observer keep it running: never in standby.
     assert!(!log.contains(&format!("lazy: {ID} parked")), "{log}");
     // Player 0.9.0: a plugin that is not built-in uses it without a
-    // declaration (before: each call failed `capability`).
+    // declaration (before player 0.9.0 each call was refused without one).
     for expected in [
         r#"THIRD get {"value":0}"#,
         r#"THIRD command {"result":null}"#,

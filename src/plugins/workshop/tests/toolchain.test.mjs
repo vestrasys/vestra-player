@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
-import { Toolchain, checkOwner, nodeOption, parseTap, parseTsc } from "../toolchain.ts";
+import { Toolchain, checkOwner, minPlayerVersion, nodeOption, parseTap, parseTsc } from "../toolchain.ts";
 import { runTool } from "../toolhost.ts";
 import { dataDirectory } from "./fixture.mjs";
 import { unzip } from "./unzip.mjs";
@@ -93,9 +93,10 @@ test("scaffold → typecheck → test → check → pack: the template passes ev
     await fs.access(path.join(project, file));
   const manifest = JSON.parse(await fs.readFile(path.join(project, "manifest.json"), "utf8"));
   assert.equal(manifest.id, "octocat.demo");
-  // SDK 1.9.0: no capabilities in the manifest (player 0.9.0 refuses the field; an older one requires it) and no editor plugin in tsconfig.json.
+  // SDK 1.9.0: no declarations in the manifest (player 0.9.0 refuses the field as unknown; an older one requires it) and no editor plugin in tsconfig.json.
   assert.equal("capabilities" in manifest, false);
-  assert.equal(manifest.minPlayerVersion, "0.9.0");
+  // No player in the test: the floor, the first player with SDK 1.11's events and triggers.
+  assert.equal(manifest.minPlayerVersion, "0.11.0");
   assert.equal(JSON.parse(await fs.readFile(path.join(project, "tsconfig.json"), "utf8")).compilerOptions.plugins, undefined);
   // The SDK copy where the project resolves it, without the CLI.
   await fs.access(path.join(data, "node_modules/@vestra-player/sdk/dist/plugin/testing.js"));
@@ -332,7 +333,7 @@ test("parsers: tsc lines and the TAP report", () => {
   assert.deepEqual(parseTap(tap, "/p"), { passed: 3, failed: 1, failures: [{ name: "adds", error: "boom", location: "tests/a.test.ts:2:1" }] });
 });
 
-test("SDK 1.9.0: an SDK call needs no declaration; a manifest that still lists capabilities fails with what to write instead", async () => {
+test("SDK 1.9.0: an SDK call needs no declaration; a manifest field the SDK does not know fails, a former one too", async () => {
   const { session, toolchain } = await setup();
   await toolchain.scaffold(session, { name: "demo" }, "");
   const project = path.join(session.work, "local.demo");
@@ -348,6 +349,16 @@ test("SDK 1.9.0: an SDK call needs no declaration; a manifest that still lists c
     assert.equal(run.ok, false, run.text);
     const report = JSON.parse(run.text.slice(run.text.indexOf("\n") + 1));
     assert.equal(report.undeclared, undefined);
-    assert.match(report.problems.join("\n"), /"capabilities", which SDK 1\.9\.0 \(player 0\.9\.0\) removed: delete the field/);
+    // An unknown field (SDK 1.11.0: no message of its own; before, one that said to delete it).
+    assert.match(report.problems.join("\n"), /"capabilities"/);
   }
+});
+
+test("a new plugin's minPlayerVersion is the running player's version, at least 0.11.0", () => {
+  assert.equal(minPlayerVersion(undefined), "0.11.0");
+  assert.equal(minPlayerVersion("0.10.3"), "0.11.0");
+  assert.equal(minPlayerVersion("0.11.0"), "0.11.0");
+  assert.equal(minPlayerVersion("0.12.4"), "0.12.4");
+  assert.equal(minPlayerVersion("1.0.0-rc.1"), "1.0.0", "a pre-release suffix is dropped");
+  assert.equal(minPlayerVersion("dev"), "0.11.0", "not a version: the floor");
 });

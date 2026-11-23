@@ -1,5 +1,4 @@
 import type { I18n, ListStyle, TextArg, TextValue } from "@vestra-player/sdk";
-import type { CapabilityText } from "./labels.ts";
 
 /**
  * Every sentence the store builds at run time is a `Msg`: an English
@@ -33,11 +32,10 @@ export const WINDOW = [
   "“{}” has the same id as a built-in plugin and cannot be installed",
   "This plugin has the same id as a built-in plugin and cannot be installed",
   "Plugins are being installed or cleaned up; try again later",
-  "The Plugin Store lacks the “Manage plugins” permission",
+  "This player does not let the Plugin Store manage plugins",
   "This plugin no longer exists",
   "The plugin package does not match the repository's description (id); not installed",
   "The plugin package does not match the repository's description (version); not installed",
-  "The plugin package does not match the repository's description (permissions); not installed",
   "You can only install from https:// links",
   "Not installed",
   "Installed {} {}",
@@ -241,8 +239,6 @@ export const WINDOW = [
   "Tools",
   "Games",
   "Other",
-  // A banner (the permissions are a list).
-  "The new version needs new permissions: {}",
 ] as const;
 
 /** Parts of other sentences (labels, reasons); their arguments are plain. */
@@ -291,8 +287,6 @@ export const PART = [
   "Enter a repository address starting with https://",
   "The address cannot contain a user name or password",
   "The repository address is too long",
-  // A capability the store does not know.
-  "Unknown permission: {}",
 ] as const;
 
 /** Only on the OSD or in confirmations, never in a window. */
@@ -302,37 +296,29 @@ export const HOST = [
   // Confirmation: install from a repository.
   "Replace the installed “{}”?",
   "{1}\n\nWill install {2} from the official repository.\n\n{3}",
-  // Another repository's: its warning, then the note that its permissions were not checked.
+  // Another repository's: its warning.
   "{1}\n\nWill install {2} from the unofficial repository.\n\n{3}",
-  "Update “{}” to {}? The new version needs more permissions",
-  "Added:\n{2}\n\nCurrent: {3}.",
   "Update “{}” to {}?",
   "Current: {2}.",
-  // Another repository's update or reinstall: then the files-and-network sentence and the note.
+  // Another repository's update or reinstall: then the files-and-network sentence.
   "Current: {2}.\n\n{3}",
   "Install “{}” {} (reinstall)?",
-  "Current: {2}.\n\nThis version needs more permissions:\n{3}",
   "Install “{}” {}?",
   "From the Vestra Player official repository, author {2}.\n\n{3}",
   "Install “{}” {} from an unofficial repository?",
   "{2}\n\n{3}",
+  "{2}",
   "{1}",
   "This plugin has already been installed from another source. Replacing it continues with the data from an earlier install from this source, if there was one, otherwise with new, empty data. The original plugin's data is kept and is used again when you reinstall it from the original source.",
   // Parts of those confirmations.
   "The current “{}” {} comes from {}. Replacing it continues with the data from an earlier install from this source, if there was one, otherwise with new, empty data. The original plugin's data is kept and is used again when you reinstall it from the original source.",
   "Repository: {} ({}). This repository is not reviewed by Vestra Player; its plugins may read your files or use the network. Only install plugins from authors you trust.",
   "Repository: {} ({}). This repository is not reviewed by Vestra Player; its plugins may read your files or use the network. Only install plugins from authors you trust. This is a test repository on this machine, without encryption.",
-  "It will be able to:\n{}",
   // Every plugin, from any source (the unofficial repository's own text says it already).
   "Plugins may read your files or use the network.",
-  // A scan that found no category.
-  "It uses none of the player's sensitive features.",
-  // Any package not from the official repository (another repository, a file, a link): in place of a scan.
-  "It is not from the official repository, so its permissions were not checked.",
   "Unknown",
-  // The permission list: one line each, at most 20.
+  // One line of a list, and the count after a cut list.
   "· {}",
-  "· Uses none of the player's features",
   "{} in total",
   // Confirmation: a package from a file or a link.
   "Replace the installed version with the plugin package “{}” {}?",
@@ -386,7 +372,7 @@ export const LABELS = [
 
 export type WindowTemplate = (typeof WINDOW)[number];
 export type PartTemplate = (typeof PART)[number];
-export type Template = WindowTemplate | PartTemplate | (typeof HOST)[number] | CapabilityText;
+export type Template = WindowTemplate | PartTemplate | (typeof HOST)[number];
 export type Label = (typeof LABELS)[number];
 
 export type Arg = string | number | Msg | Many;

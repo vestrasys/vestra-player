@@ -191,7 +191,7 @@ impl Root {
 /// this way: a listener of the player's state makes a plugin resident, and
 /// a resident plugin never stands by (supervisor.md §2). Inside
 /// `activate(plugin)`.
-const RESIDENT: &str = "plugin.player.onChange(() => {});\n";
+const RESIDENT: &str = "plugin.player.on(\"source.state\", () => {});\n";
 /// What `RESIDENT` needs in the manifest.
 const RESIDENT_CAPABILITIES: [&str; 2] = ["events", "playback.read"];
 
@@ -469,7 +469,7 @@ fn a_parked_plugin_is_listed_running_idle_and_its_park_announces_nothing() {
         &format!(
             "const shown = (list) => {{ const p = list.find((p) => p.id === \"{IDLE}\"); return `${{p?.state}} ${{p?.process}}`; }};\n\
              export default function activate(plugin) {{\n\
-             plugin.player.onChange(() => {{}});\n\
+             plugin.player.on(\"source.state\", () => {{}});\n\
              const key = (list) => JSON.stringify(list.map((p) => ({{ ...p, process: undefined }})));\n\
              let last = null;\n\
              plugin.packages.onChange((list) => {{ const now = key(list); console.error(`{WATCH} changed ${{shown(list)}} same=${{now === last}}`); last = now; }});\n\
@@ -1074,7 +1074,7 @@ fn standby_holds_wake_enable_and_uninstall_until_the_parked_process_is_gone() {
              const code = (promise) => promise.then(() => \"ok\", (e) => e.code);\n\
              const sleep = (ms) => new Promise((done) => setTimeout(done, ms));\n\
              export default function activate(plugin) {{\n\
-             plugin.player.onChange(() => {{}});\n\
+             plugin.player.on(\"source.state\", () => {{}});\n\
              const p = plugin.packages;\n\
              const state = async (id) => {{ const e = (await p.list()).find((x) => x.id === id); return `${{e?.state}} ${{e?.process}}`; }};\n\
              const idle = async (id) => {{ while (!(await state(id)).endsWith(\" idle\")) await sleep(20); }};\n\

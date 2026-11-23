@@ -342,11 +342,11 @@ fn a_built_in_lead_gets_the_query_and_runs_commands_with_its_ticket() {
     // Not built-in: refused both, by provenance.
     let third = lines(&log, "THIRD ");
     assert!(
-        third.contains("THIRD set error capability"),
+        third.contains("THIRD set error builtin-only"),
         "{third}\n{log}"
     );
     assert!(
-        third.contains("THIRD list error capability"),
+        third.contains("THIRD list error builtin-only"),
         "{third}\n{log}"
     );
 }

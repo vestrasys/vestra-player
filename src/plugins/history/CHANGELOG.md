@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.11
+
+- Events and triggers instead of `subscribe()` and `player.onChange` (removed in SDK 1.11.0): the state is followed with `player.stream` only while a media source is open, from a trigger on `when.open` (given again at every start, so its `enter` reaches the plugin after it is ready) until the source closes; `source.opening` and `source.ready` carry the states before the stream's first one. With nothing open the plugin holds nothing and may be stopped while idle; the next source wakes it, and a source that woke it is resumed as when it was running (its `source.opening` tells it apart from a reload, which still does not resume). On a first run, a restart after a crash or a launch with a file already open the plugin stays resident for that run (accepted; an SDK "after ready" hook is a follow-up). Menus, the ask window, what is recorded and the 5 s position save are unchanged. Who must change: nobody.
+
 ## 0.1.10
 
 - The description's last line, starting with `→ `, says where to open the plugin; Store 0.3.1 shows it on the plugin's card, also before install. Description text and its translations only. Who must change: nobody.

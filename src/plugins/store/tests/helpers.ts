@@ -35,8 +35,8 @@ export function vxp(manifest: Partial<PackageManifest> & { id: string; version: 
 
 export type VersionSpec = {
   version: string;
-  /** The entry's legacy `capabilities` (signed indexes from before SDK 1.9.0 carry it); not given: none. */
-  capabilities?: string[];
+  /** Keys a signed index from an older SDK carries on the entry and the store ignores (`capabilities`, `scan`). */
+  legacy?: Record<string, unknown>;
   minPlayerVersion?: string | null;
   apiVersion?: string;
   published?: string;
@@ -128,7 +128,7 @@ export function buildIndex(
             version: v.version,
             apiVersion: v.apiVersion ?? "vestra/1",
             minPlayerVersion: v.minPlayerVersion === undefined ? "0.2.0" : v.minPlayerVersion,
-            ...(v.capabilities ? { capabilities: v.capabilities } : {}),
+            ...v.legacy,
             downloadUrl: url,
             sha256: sha256(body),
             size: body.length,

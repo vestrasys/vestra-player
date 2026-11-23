@@ -678,25 +678,25 @@ msgid "No panel is in the adjust column"
 msgstr "No hay ningún panel en la columna de ajustes"
 
 #. Title of the dialog that finds a moved video again ({}: its file name).
-#: src/capabilities/media_sources.rs
+#: src/api/media_sources.rs
 #, x-machine
 msgid "Locate {}"
 msgstr "Buscar {}"
 
 #. commands.run: the OSD line naming what a built-in plugin ran ({plugin}: its name, {command}: the command's palette label, {step}/{of}: the step of its request).
-#: src/capabilities/commands_run.rs
+#: src/api/commands_run.rs
 #, x-machine
 msgid "{plugin} · {step}/{of} · {command}"
 msgstr "{plugin} · {step}/{of} · {command}"
 
 #. commands.run: the OSD line naming what a built-in plugin ran ({plugin}: its name, {command}: the command's palette label).
-#: src/capabilities/commands_run.rs
+#: src/api/commands_run.rs
 #, x-machine
 msgid "{plugin} · {command}"
 msgstr "{plugin} · {command}"
 
 #. The status strip (the command palette lead's status while the palette is closed): the line naming the step a built-in plugin ran ({step}/{of}: the step of its request, {command}: the command's palette label).
-#: src/capabilities/commands_run.rs
+#: src/api/commands_run.rs
 #, x-machine
 msgid "{step}/{of} · {command}"
 msgstr "{step}/{of} · {command}"
@@ -720,19 +720,19 @@ msgid "Run these {n} commands?"
 msgstr "¿Ejecutar estos {n} comandos?"
 
 #. The approval sheet: why a step asks, for a command of a plugin that is not built in.
-#: src/capabilities/commands_run.rs
+#: src/api/commands_run.rs
 #, x-machine
 msgid "Not built in"
 msgstr "No integrado"
 
 #. The approval sheet: why the player's Close asks.
-#: src/capabilities/commands_run.rs
+#: src/api/commands_run.rs
 #, x-machine
 msgid "Closes the video"
 msgstr "Cierra el vídeo"
 
 #. The approval sheet: why the player's Quit asks.
-#: src/capabilities/commands_run.rs
+#: src/api/commands_run.rs
 #, x-machine
 msgid "Quits the player"
 msgstr "Cierra el reproductor"
@@ -756,7 +756,7 @@ msgid "Don't Run"
 msgstr "No ejecutar"
 
 #. palette.lead: refused because another plugin holds the command palette's first row ({}: its id).
-#: src/capabilities/palette_lead.rs
+#: src/api/palette_lead.rs
 #, x-machine
 msgid "The command palette's first row is {}'s"
 msgstr "La primera fila de la paleta de comandos es de {}"
@@ -798,7 +798,7 @@ msgid "Ask Again Before Plugin Commands"
 msgstr "Volver a preguntar antes de los comandos de complementos"
 
 #. The OSD line after Ask Again Before Plugin Commands.
-#: src/capabilities/commands_run.rs
+#: src/api/commands_run.rs
 #, x-machine
 msgid "Plugin commands will ask again"
 msgstr "Los comandos de complementos volverán a preguntar"

@@ -1,6 +1,6 @@
 //! The `Host` and its `Core`. The core ([`Core`], behind `Host::link`) is the
 //! state and the code that never touch the interface: the lifecycle of
-//! plugins, the dispatch of their requests (`crate::capabilities`), the
+//! plugins, the dispatch of their requests (`crate::api`), the
 //! supervisor, triggers, packages; its turn takes the core alone (plan step
 //! S2f(3): `Core::handle`, `Core::report`, `Core::STEPS`), and what it
 //! asks of the interface waits in its outbox (`outbox.rs`). The `Host` is
@@ -59,8 +59,8 @@ use crate::ui::{
     ui_image, ui_state, ui_values, view, window_control, window_state,
 };
 use crate::{
-    bindings, capabilities, commands, core_actions, i18n, input_trace, open_files, platform, power,
-    process, session_storage, timeline,
+    api, bindings, commands, core_actions, i18n, input_trace, open_files, platform, power, process,
+    session_storage, timeline,
 };
 use anyhow::{Result, bail};
 use serde::{Deserialize, Serialize};
@@ -414,7 +414,7 @@ pub(crate) struct Core {
     /// (`Core::note_panel_plugins`).
     pub(crate) panel_plugins: std::collections::BTreeSet<String>,
     /// `commands.run` tickets and rates.
-    pub(crate) command_runs: crate::capabilities::CommandRuns,
+    pub(crate) command_runs: crate::api::CommandRuns,
     pub(crate) clock: Instant,
     /// The sequence provider: owner, can-next, can-previous (C6).
     pub(crate) sequence: Option<(u64, bool, bool)>,
@@ -567,7 +567,7 @@ pub(crate) struct Core {
     /// S2c(5)): admission, the recording and the holder's lifecycle are
     /// the core's; the interface is told of each change as
     /// `UiCommand::Lead` and draws the row, the strip and the bar's icon.
-    pub(crate) lead: Option<crate::capabilities::Lead>,
+    pub(crate) lead: Option<crate::api::Lead>,
     /// The panel policy's tabs as the interface last reported them with
     /// the window facts (rule R9; plan step S2c(5)). The policy stays the
     /// interface's; the core judges `ui.interaction`'s and `layout.set`'s

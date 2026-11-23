@@ -26,7 +26,6 @@ import type { Osd } from "./texts.ts";
  * (B23, moved from the marks plugin: the `ab.*` commands and the panel's A-B Loop section).
  */
 export default async function activate(plugin: Plugin) {
-  plugin.player.subscribe(); // B3: removed in SDK 1.11; migrate (events-and-triggers.md §7)
   await plugin.player.read(); // was "playback.read"
   const { player } = plugin;
   const bar = plugin.panels.mount("bottom", "ui/bar.slint");
@@ -43,6 +42,8 @@ export default async function activate(plugin: Plugin) {
   const reopener = new Reopener(plugin, osd);
   const openUrl = new OpenUrl(plugin, settings, osd);
   const keyframes = new Keyframes(plugin, playback);
+  keyframes.changed = () => commands?.regate();
+  playback.busyChanged = () => commands?.regate();
   const thumbnails = new Thumbnails(plugin, settings, (id) => keyframes.video(id));
   // B29: the host holds the assertion while playing; a failed start is only in its log.
   const sleep = () => plugin.power.preventSleep(settings.value.preventSleep ? "playing" : "off");
@@ -61,7 +62,7 @@ export default async function activate(plugin: Plugin) {
           .run(delta < 0 ? "seek-backward" : "seek-forward", { seconds: Math.abs(delta) })
           .catch((error) => playback.report(error))
       : playback.seekBy(delta);
-  let commands: { setSteps(steps: SeekSteps): Promise<void> } | null = null;
+  let commands: { setSteps(steps: SeekSteps): Promise<void>; regate(): void } | null = null;
   // B06: the seek steps and "Jump to keyframes only", saved and applied at once (the
   // Playback panel's Seek steps): the core's step, and the tier 2–4 titles when they changed.
   const applySteps = async (steps: SeekSteps, seekKeyframes: boolean) => {
@@ -76,7 +77,7 @@ export default async function activate(plugin: Plugin) {
   const jumpToStart = () => playback.jumpToStart();
   const loop = new AbLoop(plugin, settings, osd);
   const panel = new PlaybackPanel(plugin, { playback, keyframes, settings, applySteps, jumpToStart, loop });
-  addLoopCommands(plugin, loop);
+  const loopCommands = addLoopCommands(plugin, loop);
 
   commands = addCommands(plugin, plugin.i18n, playback, {
     openUrl,
@@ -102,10 +103,16 @@ export default async function activate(plugin: Plugin) {
   // The core's step is 5 s exact until someone sets it, and returns to that when this plugin stops.
   void stepSeek();
 
+  // The bar shows the player's state as it changes (the seek line, the time, the
+  // buttons' and commands' states that read `player.state`), so it follows the
+  // player with a stream for as long as the bar is mounted: the plugin's whole run
+  // (it is never unmounted; the fullscreen overlay and a hidden bar come back without
+  // a new mount). Each change also drives what follows playback here: the A-B loop's
+  // passes, the remembered volume and mute, the seek bar's thumbnails, the last file.
   // Another source, or anyone else's change during a drag, ends the gesture;
   // further pointer moves wait for the next press. A failed load is announced once.
   let { sourceId, phase } = player.state;
-  player.onChange(async (state) => { // B3: Player.onChange is removed in SDK 1.11
+  player.stream(async (state) => {
     const replaced = state.sourceId !== sourceId;
     if (state.phase === "error" && (replaced || phase !== "error"))
       if (state.error) osd("Open failed: {}", [state.error]);
@@ -118,6 +125,9 @@ export default async function activate(plugin: Plugin) {
     thumbnails.observe(state);
     output.observe(state);
     panel.observe();
+    // The commands' conditions built from this plugin's facts (a path, loop points) follow them.
+    commands?.regate();
+    loopCommands.regate();
     await Promise.resolve(); // the drag gesture observes the same change first
     if (replaced || playback.gestureLost) {
       playback.clearSeek();
@@ -127,5 +137,12 @@ export default async function activate(plugin: Plugin) {
     }
     if (replaced) panel.sourceChanged();
   });
+  // The other facts the bar, the panel and the commands read, kept current by their
+  // events (the SDK's copies take each one before these listeners): the fullscreen
+  // button (`plugin.window.state`), the Playback panel's place (its slot's state) and
+  // everyone's marks and ranges on the seek line (`plugin.timeline`).
+  player.on("window.changed", () => {});
+  player.on("layout.changed", () => {});
+  player.on("timeline.changed", () => {});
 }
 

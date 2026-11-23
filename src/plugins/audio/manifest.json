@@ -1,6 +1,6 @@
 {
   "id": "vestra.audio",
-  "version": "1.5.13",
+  "version": "1.5.14",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "name": "Audio",

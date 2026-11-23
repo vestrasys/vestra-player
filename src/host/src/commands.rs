@@ -66,7 +66,7 @@ pub struct Declaration {
     pub home: Option<String>,
     /// Running it cannot be taken back (`CommandOptions.destructive`):
     /// a run through `commands.run` asks the user first
-    /// (capabilities/commands_run.rs). Optional; absent is `false`.
+    /// (api/commands_run.rs). Optional; absent is `false`.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub destructive: bool,
     /// What the menu shows (doc/architecture/i18n.md §5), in the interface

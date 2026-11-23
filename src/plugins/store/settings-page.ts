@@ -15,6 +15,8 @@ export class SettingsPage {
   #adding = false;
   #working = false;
   #message: { text: Msg | null; warn: boolean } = { text: null, warn: false };
+  /** The repository notes last written, by URL: kept while an automatic check runs (`Store.automatic`). */
+  #notes = new Map<string, { text: Msg | null; warn: boolean }>();
 
   constructor(store: Store) {
     this.#store = store;
@@ -50,13 +52,15 @@ export class SettingsPage {
 
   #props() {
     const store = this.#store;
+    if (!store.automatic) this.#notes = new Map(store.repos.list.map((repo) => [repo.url, repo.status]));
+    const note = (repo: { url: string; status: { text: Msg | null; warn: boolean } }) => this.#notes.get(repo.url) ?? repo.status;
     return {
       autoCheck: store.settings.value.autoCheck,
       repos: store.repos.list.map((repo) => ({
         name: store.shown(repo.official ? msg("Vestra Player official repository") : repo.origin),
         url: repo.url,
-        note: store.shown(repo.status.text),
-        tone: repo.status.warn ? 2 : 0,
+        note: store.shown(note(repo).text),
+        tone: note(repo).warn ? 2 : 0,
         removable: !repo.official,
       })),
       adding: this.#adding,

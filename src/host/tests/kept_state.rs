@@ -136,7 +136,6 @@ fn tone(directory: &Path) -> String {
 fn watcher(tag: &str, then: &str) -> String {
     format!(
         "export default function activate(plugin) {{\n\
-         plugin.player.subscribe();\n\
          const summary = (marks) => {{ const n = {{}};\n\
          for (const m of marks) n[m.plugin] = (n[m.plugin] ?? 0) + 1;\n\
          return Object.keys(n).sort().map((k) => `${{k}}:${{n[k]}}`).join(\",\") || \"-\"; }};\n\

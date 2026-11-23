@@ -547,10 +547,10 @@ test("lazy activation: the window reads the player's state and follows the sourc
     await host.command("info.properties").run();
     host.window("properties").emit("tab-changed", 1);
     await until(() => value(host, "格式") === "first");
-    // While open: the source listener and the window's binding, both added when it opened.
+    // While open: the state's stream and the window's binding, both added when it opened (SDK 1.11: a stream, was onChange).
     const why = host.listeningWhy.get("source.state") ?? [];
     assert.equal(why.length, 2, why.join("; "));
-    assert.ok(why.some((line) => /^a listener added at dialog\.ts:\d+$/.test(line)), why.join("; "));
+    assert.ok(why.some((line) => /^a stream opened at dialog\.ts:\d+$/.test(line)), why.join("; "));
     assert.ok(why.some((line) => /^a view's bind reads plugin\.player\.state \(dialog\.ts:\d+\)$/.test(line)), why.join("; "));
     host.window("properties").userClose();
     await host.settle();

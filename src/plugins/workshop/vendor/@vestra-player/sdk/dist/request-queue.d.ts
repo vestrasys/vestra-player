@@ -58,9 +58,13 @@ export declare class RequestQueue {
     get waiting(): number;
     request<T>(method: string, params?: Json, options?: RequestOptions): Promise<T>;
     /**
-     * The plugin stops: every waiting request rejects with `error` (the one
-     * the runner gives the requests in flight), and later ones go to the
-     * transport as they come, which refuses them while stopping.
+     * The plugin stops (the player sent `runtime.stop`): every waiting
+     * request rejects with `error` (the one the runner gives the requests in
+     * flight), and every later one is refused here with `disabled`, neither
+     * sent nor queued: after `runtime.stop` the player has let go of the
+     * plugin and would drop it unanswered (it undoes what the plugin held by
+     * itself), so the plugin's cleanup and a late write (a debounced setting,
+     * a settings page's last patch) learn at once that it was not sent.
      */
     close(error?: Error): void;
 }

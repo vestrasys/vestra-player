@@ -1,7 +1,7 @@
 // What the player would do with Ask Vestra's status texts, checked after each
 // test of a file that calls `guard(test)`: every `palette.lead.set` status
 // text, translated and filled in, is 1–80 characters counted as the player
-// counts them (Unicode scalar values: host capabilities/palette_lead.rs
+// counts them (Unicode scalar values: host api/palette_lead.rs
 // `text`), and the plugin logged no refused lead row ("lead row: …", the
 // SDK's `update` rejected). The TestHost does not measure the shown text the
 // player's way, so a plugin call it accepts may still be refused by the

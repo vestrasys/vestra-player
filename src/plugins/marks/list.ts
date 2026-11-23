@@ -1,5 +1,5 @@
-import type { Plugin, Text } from "@vestra-player/sdk";
-import type { Actions } from "./actions.ts";
+import type { Plugin, StateStream, Text } from "@vestra-player/sdk";
+import { type Actions, addBlocked } from "./actions.ts";
 import { type Bookmarks, bookmarkName, cleanTitle } from "./bookmarks.ts";
 import { type Chapters, chapterTitle, hasMedia } from "./chapters.ts";
 import { parseTime, precise } from "./format.ts";
@@ -44,6 +44,8 @@ export class ListWindow {
   #names = { chapter: "Chapter {}", bookmark: "Bookmark {}" };
   #status: Status = NO_STATUS;
   #rows: { key: string; rows: Row[] } = { key: "", rows: [] };
+  /** Follows the player's state while the window is open (its media, Add and the time limit read it). */
+  #feed: StateStream | null = null;
 
   constructor(plugin: Plugin, chapters: Chapters, bookmarks: Bookmarks, actions: Actions) {
     this.#plugin = plugin;
@@ -62,6 +64,7 @@ export class ListWindow {
     marksWindow.on("commitTitle", (text: string) => this.#commitTitle(text));
     marksWindow.on("commitTime", (text: string) => this.#commitTime(text));
     marksWindow.on("add", () => this.#add());
+    marksWindow.onClose(() => this.#unfollow());
     marksWindow.on("remove", () => this.#remove());
     marksWindow.on("clear", () => this.#clear());
     marksWindow.bind(() => {
@@ -73,7 +76,7 @@ export class ListWindow {
         media,
         fileChanged: media && bookmarks.fileChanged,
         filtering: this.#filter !== "",
-        canAdd: !actions.addBlocked(),
+        canAdd: !addBlocked(state),
         canRemove: !!bookmark,
         canClear: bookmarks.items.length > 0,
         editing: !!bookmark,
@@ -98,7 +101,18 @@ export class ListWindow {
 
   /** H: open, or bring the open window to the front. */
   async show() {
-    await this.#marksWindow.show();
+    this.#feed ??= this.#plugin.player.stream(() => {});
+    try {
+      await this.#marksWindow.show();
+    } catch (error) {
+      if (!this.#marksWindow.opened) this.#unfollow();
+      throw error;
+    }
+  }
+
+  #unfollow() {
+    this.#feed?.stop();
+    this.#feed = null;
   }
 
   #bookmark() {
@@ -168,8 +182,10 @@ export class ListWindow {
   }
   #activate(rowId: string) {
     this.#select(rowId);
-    if (rowId.startsWith("c")) return this.#actions.jumpChapter(Number(rowId.slice(1)));
-    return this.#actions.jumpBookmark(Number(rowId.slice(1)));
+    // The window's stream keeps the state current.
+    const state = this.#plugin.player.state;
+    if (rowId.startsWith("c")) return this.#actions.jumpChapter(Number(rowId.slice(1)), state);
+    return this.#actions.jumpBookmark(Number(rowId.slice(1)), state);
   }
 
   #commitTitle(text: string) {
@@ -195,8 +211,8 @@ export class ListWindow {
     this.#loadEdit();
   }
 
-  #add() {
-    const bookmark = this.#actions.add();
+  async #add() {
+    const bookmark = await this.#actions.add(this.#plugin.player.state);
     if (!bookmark) return;
     this.#filter = "";
     this.#marksWindow.set({ searchText: "" });
