@@ -2,7 +2,7 @@
 <p align="center"><b>Next-generation media player.<br>Built to extend, enhanced by AI.</b></p>
 <p align="center">
   <a href="https://github.com/vestrasys/vestra-player/actions/workflows/main.yml"><img src="https://github.com/vestrasys/vestra-player/actions/workflows/main.yml/badge.svg?branch=main" alt="CI"></a>
-  <a href="https://github.com/vestrasys/vestra-player/releases"><img src="https://img.shields.io/badge/release-v0.10.3-blue" alt="Latest release"></a>
+  <a href="https://github.com/vestrasys/vestra-player/releases"><img src="https://img.shields.io/badge/release-v0.11.0-blue" alt="Latest release"></a>
   <img src="https://img.shields.io/badge/platforms-macOS%20%C2%B7%20Windows-lightgrey" alt="Platforms: macOS and Windows">
   <a href="https://vestrasys.github.io/vestra-player-sdk/"><img src="https://img.shields.io/badge/plugin%20API-vestra%2F1-6f42c1" alt="Plugin API vestra/1"></a>
   <a href="https://www.npmjs.com/package/@vestra-player/sdk"><img src="https://img.shields.io/npm/v/@vestra-player/sdk?label=SDK&logo=npm&color=cb3837" alt="SDK on npm"></a>
@@ -65,30 +65,30 @@ flowchart LR
     IO <-->|"vestra/1"| TP
 ```
 
-**Player and plugins.** The player is one Rust program: it plays video with libmpv, draws the interface with Slint and runs the plugins. Everything else (playlist, subtitles, Plugin Store, Vestra Player AI) is a TypeScript plugin in a Node process: the built-ins share one to save memory, each third-party plugin has its own, isolated but not sandboxed. Plugin interfaces are Slint files compiled by the player.
+**Player and plugins.** The player is one Rust program: it plays video with libmpv, draws the interface with Slint and runs the plugins. Everything else (playlist, subtitles, Plugin Store, Vestra Player AI) is a TypeScript plugin in a Node process: the built-ins share one to save memory, each third-party plugin has its own, isolated but not sandboxed.
 
-**Threads.** Whatever can wait has its own thread, so one wait never holds unrelated work:
+**Threads.** Whatever can wait has its own thread, so no wait holds unrelated work:
 
-- **UI thread.** Slint's event loop: windows, input, drawing, compiling plugin interfaces.
-- **`vestra-core`.** The core, a single-threaded state machine that takes no locks and never waits: it routes plugin requests, keeps the registries, runs the plugin supervisor, evaluates triggers and directs playback. It sleeps on one event queue between events.
-- **Playback.** One worker sends every mpv command; a render thread hands the interface only the newest frame, so a slow interface skips frames, never lags.
-- **Plugin I/O and helpers.** A reader and a writer per plugin process; helpers for blocking calls (process creation, files, clipboard).
+- **UI thread.** Slint's event loop: windows, input, drawing, compiling plugins' Slint files.
+- **`vestra-core`.** A single-threaded state machine that takes no locks and never waits: it routes plugin requests, runs the supervisor, evaluates triggers and directs playback.
+- **Playback.** One worker sends every mpv command; a render thread hands the interface only the newest frame, so a slow interface skips frames.
+- **Plugin I/O and helpers.** A reader and writer per plugin process; helpers for blocking calls (process creation, files, clipboard).
 
-**The interface is the core's client.** The two exchange only messages, so a stalled UI thread (a window compiling or being dragged, a GPU wait) freezes only the window: plugins, triggers and playback control carry on. Only requests whose answer depends on the interface (opening a window, mounting a panel) wait for it; the rest never queue behind.
+**The interface is the core's client.** The two exchange only messages, so a stalled UI thread (a window compiling or dragged, a GPU wait) freezes only the window: plugins, triggers and playback control carry on.
 
-**Plugin supervisor.** Part of the core decides when each process exists: pure decision logic, tested by deterministic simulation.
+**Plugin supervisor.** Part of the core decides when each process exists: pure logic, tested by deterministic simulation.
 
 - **On-demand start.** A plugin's first run is recorded (commands, keys, settings pages, event subscriptions). These then appear without a process; first use starts it.
-- **Automatic standby.** A plugin holding nothing only its process can serve (a window, panel, stream or filter chain) stops after 30 s without use.
-- **Held events.** Clicks and events arriving while a plugin starts wait in order until it is ready.
+- **Automatic standby.** A plugin holding nothing only its process can serve (a window, panel, stream or filter chain) stops after 30 s idle.
+- **Held events.** Clicks and events wait in order while a plugin starts.
 - **Kept through standby.** Trigger conditions (still evaluated), timeline marks, the always-on-top setting, session storage.
-- **Limits.** Third-party plugins start a few at a time, clicks first. Their count follows the machine's memory (3 to 16), each has a heap cap, and low memory puts the longest-unused idle ones in standby.
-- **Faults.** A crash stops only that plugin, not playback. It restarts after a doubling pause; five crashes in ten minutes turn it off with a reason.
-- **Watchdogs.** The shared runner restarts after five missed heartbeats. On Windows a stalled GPU renderer counts as a lost device: the player restarts where it was.
+- **Limits.** Third-party plugins start a few at a time, clicks first; memory sets their count (3 to 16), each has a heap cap, and low memory parks the longest-idle.
+- **Faults.** A crash stops only that plugin, which restarts after a doubling pause; five crashes in ten minutes turn it off, saying why.
+- **Watchdogs.** Five missed heartbeats restart the shared runner. On Windows a stalled GPU renderer restarts the player where it was.
 
-**From a plugin to the core.** The [SDK](https://vestrasys.github.io/vestra-player-sdk/) turns the line protocol into handles. A plugin learns the player's state by reading it once, a discrete event (`source.ready`), a trigger or a stream; only the stream keeps it running.
+**From a plugin to the core.** The [SDK](https://vestrasys.github.io/vestra-player-sdk/) turns each call into `vestra/1` lines on the plugin's pipes: requests, answers and events. In the blocks below, as in the diagram (plugins on the right, the core on the left), `←` is a line the plugin sends to the core and `→` one the core sends back. A plugin learns the player's state by a single read, a discrete event (`source.ready`), a trigger or a stream. Following the lines of two examples shows how the core works.
 
-A trigger hands the core a condition as data, evaluated even while the plugin has no process; on a flip the core starts one if needed, and the SDK calls `enter` or `leave`:
+A trigger hands the core a condition as data:
 
 ```ts
 import type { Plugin } from "@vestra-player/sdk";
@@ -102,25 +102,55 @@ export default function activate(plugin: Plugin) {
 }
 ```
 
-A stream delivers every state change until `stop()`:
+```text
+← {"id":2,"method":"triggers.set","params":{"trigger":0,"when":{"all":[{"all":[{"phase":["ready"]},{"paused":false}]},{"fullscreen":true}]}}}
+→ {"id":2,"result":{"seq":1}}
+← {"id":3,"method":"triggers.declare","params":{"names":[],"unnamed":1}}
+→ {"id":3,"result":null}
+  … the user plays in fullscreen …
+→ {"data":{"edge":"enter","seq":1,"state":{…},"trigger":0},"event":"triggers.fired"}
+← {"id":6,"method":"window.setAlwaysOnTop","params":{"onTop":true}}
+→ {"id":6,"result":null}
+```
+
+- **`← triggers.set`.** The plugin's reader thread parses the line and puts it on the core's one event queue, beside the playback worker's reports and the interface's. The core sleeps on that queue until an event arrives or its periodic steps are due (every 16 ms). A turn handles interface reports first, then the other events in order: at least 128, then as many as fit in 4 ms. The rest wait a turn, which keeps the periodic steps on time. The core stores the condition and answers through the plugin's writer thread.
+- **`→ triggers.fired`.** The playback worker reports "playing"; the interface reports "fullscreen" and ends its 16 ms tick with `FactsSettled`, on which the core broadcasts `window.state`. In that turn the core re-evaluates the stored condition. On the flip the supervisor starts a parked plugin, the event waits until it is ready, and the SDK calls `enter`.
+- **`← window.setAlwaysOnTop`.** The core never touches a window. It records the setting, answers at once and pushes a numbered command onto one queue for the UI thread; a last-value-wins snapshot replaces a waiting one of its kind. It wakes Slint's event loop with `invoke_from_event_loop`, at most one wake pending; the wake applies everything waiting, in order, and reports `Applied(n)`.
+
+A stream follows every state change while a window shows it:
 
 ```ts
 // inside activate(plugin); StateStream is an SDK type
-const view = plugin.windows.create("ui/left.slint");
+const label = plugin.windows.create("ui/position.slint");
 let feed: StateStream | undefined;
-view.onClose(() => feed?.stop());
+label.onClose(() => feed?.stop()); // window closed: stop the stream
 plugin.commands.add({
-  id: "left",
-  path: ["Tools", "Time Left"],
+  id: "position",
+  path: ["Tools", "Position"],
   run: async () => {
-    await view.show();
+    await label.show(); // the user opens the window
     feed?.stop();
-    feed = plugin.player.stream((s) =>
-      view.set({ text: `${Math.round((s.duration ?? 0) - (s.position ?? 0))} s` }),
+    feed = plugin.player.stream((state) =>
+      label.set({ text: `${Math.round(state.position ?? 0)} s` }),
     );
   },
 });
 ```
+
+```text
+← {"id":10,"method":"events.subscribe","params":{"event":"source.state","why":["a stream opened at main.js:12"]}}
+← {"id":11,"method":"source.state","params":{}}
+→ {"id":10,"result":null}
+→ {"id":11,"result":{…}}
+→ {"data":{…,"paused":false,"phase":"ready","position":6.8,…},"event":"source.state"}    about 10 a second while playing
+← {"id":12,"method":"ui.set","params":{"id":"position","property":"text","seq":1,"value":"7 s"}}
+  … the user closes the window …
+← {"id":43,"method":"events.unsubscribe","params":{"event":"source.state"}}
+```
+
+- **`← events.subscribe`, `← source.state`.** The core records the subscription and passes the read to the playback worker, whose result returns on the same queue. An open stream keeps the supervisor from parking the plugin.
+- **`→ source.state`.** The core forwards each playback-worker report in the turn it arrives. Another plugin's flood cannot slow this: besides the turn budget, a reader thread answers `limit` itself once its plugin has 320 requests or 4 MiB unanswered, and a plugin that leaves 1024 messages unread is stopped.
+- **`← ui.set`.** Unlike `setAlwaysOnTop`, the answer depends on the interface: the command takes the same queue and wake, the UI thread writes the property and reports the result, and only then does the core answer. A stalled interface delays just these answers; the stream keeps flowing.
 
 ## License
 

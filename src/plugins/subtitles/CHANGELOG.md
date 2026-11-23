@@ -2,6 +2,7 @@
 
 ## 0.4.15
 
+- Command states that the player can evaluate are conditions (`plugin.when`): Add Secondary Subtitle… (a ready media file), the Subtitle Track items' and Show Subtitles' / Off's check marks (`when.subtitleTrack`), and Cycle. The style toggles, the secondary track's Off, the dialogue jumps and Remove External Subtitle read `plugin.subtitles.state`, which no condition expresses, and stay functions. Behaviour is unchanged.
 - `subscribe()` and `player.onChange` are gone (SDK 1.11.0): the same-name subtitle scan also runs at `source.ready` (was every player state change); `plugin.player.read()` stays the start-up read. Everything else follows the player as before through `plugin.subtitles.onChange`, which holds the source events and so keeps `player.state` current for the commands' state and the panel; the plugin stays resident as before and does not park in this release (parking needs `subtitles.changed` to cover style changes, a follow-up). Behaviour is unchanged. Who must change: nobody.
 
 ## 0.4.14

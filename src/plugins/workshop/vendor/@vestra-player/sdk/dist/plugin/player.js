@@ -271,7 +271,7 @@ export class PlayerService {
      * more when the subscription starts, also without `read()`.
      */
     /**
-     * A fact event's fields of the state (1.11.0-rc.2): taken into the copy
+     * A fact event's fields of the state: taken into the copy
      * when `belongs` holds for it, as `accept` takes a state (a precise
      * pass for the fields that changed); its event sequence is kept, so the
      * next `source.state` is accepted as before.
@@ -636,7 +636,7 @@ function provideSequence(scope, provider) {
 /**
  * `audio.tracks.changed`'s data as the listener gets it (`ScopeImpl.fact`,
  * SDK 1.11.0): the tracks as {@link PlayerState.audioTracks} lists them.
- * The copy takes them first (1.11.0-rc.2), when they are of its source.
+ * The copy takes them first, when they are of its source.
  */
 export function audioTracksChanged(runtime, data) {
     const { sourceId, audioTracks } = data;
@@ -646,7 +646,7 @@ export function audioTracksChanged(runtime, data) {
     return { sourceId, audioTracks: audioTracks.map(audioTrack) };
 }
 /**
- * `audio.devices.changed`'s data as the listener gets it (1.11.0-rc.2):
+ * `audio.devices.changed`'s data as the listener gets it:
  * as the player sent it; the copy takes `requested` and `active` into
  * {@link PlayerState.audioOutput} first.
  */

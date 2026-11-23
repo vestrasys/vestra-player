@@ -1,3 +1,5 @@
 node_modules/
 host/target/
 artifacts/
+# scripts/verify-command-states.mjs: the revisions it compares, while it runs
+.verify-command-states/

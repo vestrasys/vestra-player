@@ -426,7 +426,7 @@ export class Connection {
         return this.#hold(event, why, always ? "always" : "read");
     }
     /**
-     * The SDK's own follower of `event` (SDK 1.11.0-rc.4): a handle that sends
+     * The SDK's own follower of `event`: a handle that sends
      * its values again when the source changes (`plugin.video.view()`, a
      * shader channel, a processing node). It subscribes a held-only group
      * while it lives, as {@link Connection.hold} does, but counts as the SDK's
@@ -472,18 +472,20 @@ export class Connection {
         };
     }
     /**
-     * Count `event` as listened to while a binding reads its state: the
-     * binding's reason joins what the player is told while the group is
-     * subscribed, but it never subscribes a held-only group on its own (a
-     * bound value that reads `plugin.player.state` shows the newest snapshot
-     * the plugin has; a stream or an event makes it follow the player).
-     * Nothing when nothing started the group.
+     * A binding (or a command's function field) reads `event`'s state: its
+     * reason joins what the player is told while a plugin listener, hold or
+     * stream listens to the group, but the read never makes the plugin a
+     * listener on its own, whether or not the group is subscribed (by a
+     * handle that follows the source, {@link Connection.track}). It never
+     * subscribes a held-only group either: a bound value that reads
+     * `plugin.player.state` shows the newest snapshot the plugin has; a stream
+     * or an event makes it follow the player. Nothing when nothing started
+     * the group.
      */
     bindingReads(event, why) {
         const group = this.#events.get(event);
         if (!group)
             return { dispose: async () => { } };
-        group.active++;
         const token = {};
         group.whys.set(token, why);
         this.#tell(event, group);
@@ -493,7 +495,6 @@ export class Connection {
                 if (!reading)
                     return;
                 reading = false;
-                group.active--;
                 group.whys.delete(token);
                 if (this.#events.get(event) === group)
                     this.#tell(event, group);

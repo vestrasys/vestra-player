@@ -1,4 +1,4 @@
-import type { Plugin } from "@vestra-player/sdk";
+import type { Command, Condition, Plugin } from "@vestra-player/sdk";
 import type { AbLoop } from "./loop.ts";
 import { COUNTS } from "./settings.ts";
 
@@ -27,6 +27,28 @@ export const COUNT_TITLES = ["Endless", "Once", "2 Times", "3 Times", "5 Times",
  */
 export function addLoopCommands(plugin: Plugin, loop: AbLoop) {
   const usable = () => loop.blocked();
+  // The states are conditions the player evaluates; whether the source takes a loop and which
+  // points are set are this plugin's facts, so each command's condition is given again when
+  // they change (`regate`: after a run, and on the player's changes).
+  const { when } = plugin;
+  const always = when.ready.or(when.ready.not());
+  const never = when.ready.and(when.ready.not());
+  type Gated = { command: Command; gate: () => { enabled: Condition; reason: string | null }; last: string };
+  const gated: Gated[] = [];
+  const keyOf = (g: { enabled: Condition; reason: string | null }) => `${g.enabled === always}|${g.reason}`;
+  const regate = () => {
+    for (const entry of gated) {
+      const next = entry.gate();
+      const key = keyOf(next);
+      if (key === entry.last) continue;
+      entry.last = key;
+      entry.command.set({ enabled: next.enabled, reason: next.reason });
+    }
+  };
+  const gate = (command: Command, fn: Gated["gate"]) => {
+    gated.push({ command, gate: fn, last: keyOf(fn()) });
+    return command;
+  };
   const hasA = () => loop.a !== null;
   const hasB = () => loop.b !== null;
   const has = { a: hasA, b: hasB, range: () => hasA() && hasB() };
@@ -45,7 +67,15 @@ export function addLoopCommands(plugin: Plugin, loop: AbLoop) {
   ] as const;
   for (const item of items) {
     const ok = item.needs === null ? () => true : has[item.needs];
-    plugin.commands.add({
+    const state = () => {
+      const blocked = usable();
+      return {
+        enabled: !blocked && ok() ? always : never,
+        reason: blocked ?? (ok() || item.needs === null ? null : MISSING[item.needs]),
+      };
+    };
+    const first = state();
+    const command = plugin.commands.add({
       id: item.id,
       title: item.title,
       category: AB_CATEGORY,
@@ -54,13 +84,24 @@ export function addLoopCommands(plugin: Plugin, loop: AbLoop) {
       group: item.group,
       bindings: [item.binding],
       ...("repeat" in item ? { repeat: item.repeat } : {}),
-      enabled: () => !usable() && ok(),
-      reason: () => usable() ?? (ok() || item.needs === null ? null : MISSING[item.needs]),
-      run: item.run,
+      enabled: first.enabled,
+      reason: first.reason,
+      run: () => {
+        item.run();
+        regate();
+      },
     });
+    gate(command, state);
   }
   // `\`: on while any loop runs (another plugin's too), so it can always stop one.
-  plugin.commands.add({
+  const toggleState = () => {
+    const blocked = usable();
+    return {
+      enabled: !blocked && loop.toggleable() ? always : never,
+      reason: blocked ?? (loop.toggleable() ? null : MISSING.range),
+    };
+  };
+  const toggle = plugin.commands.add({
     id: "ab.toggle",
     title: "A-B Loop On/Off",
     category: AB_CATEGORY,
@@ -68,11 +109,15 @@ export function addLoopCommands(plugin: Plugin, loop: AbLoop) {
     order: 281,
     group: "ab-toggle",
     bindings: ["\\"],
-    enabled: () => !usable() && loop.toggleable(),
-    reason: () => usable() ?? (loop.toggleable() ? null : MISSING.range),
-    checked: () => !!plugin.player.state.loop,
-    run: () => loop.toggle(),
+    enabled: toggleState().enabled,
+    reason: toggleState().reason,
+    checked: when.looping, // anyone's loop, as the player keeps it
+    run: () => {
+      loop.toggle();
+      regate();
+    },
   });
+  gate(toggle, toggleState);
   COUNTS.forEach((count, i) =>
     plugin.commands.add({
       id: `ab.count.${count ?? "endless"}`,
@@ -86,4 +131,6 @@ export function addLoopCommands(plugin: Plugin, loop: AbLoop) {
       run: () => loop.setCount(count),
     }),
   );
+  loop.changed = regate;
+  return { regate };
 }

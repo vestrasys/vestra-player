@@ -1,6 +1,6 @@
 import { readdir } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join } from "node:path";
-import type { AudioDevice, AudioTrack, Panel, Plugin, PlayerState, PluginError, Scope } from "@vestra-player/sdk";
+import type { AudioDevice, AudioTrack, Command, Condition, Panel, Plugin, PlayerState, PluginError, Scope } from "@vestra-player/sdk";
 import {
   SELECTED_DEVICE,
   SYNC_STEP_MS,
@@ -54,6 +54,13 @@ export default async function activate(plugin: Plugin) {
   const flip = () => (flipped ? flipped() : void (missed = true));
   plugin.trigger().firesOn(plugin.when.ready).enter(flip).leave(flip);
   plugin.trigger().firesOn(plugin.when.open).leave(flip);
+  // Resident for the whole run (0.11.0, as in 0.10.x): the Audio tab of the adjust column must
+  // compile when the column first shows and never later, when a file opens (user ruling
+  // 2026-11-11; tests/startup_compiles.rs). A plugin in standby has no panel to compile, so this
+  // one must not park: it follows the player with a stream from its activation, the reason the
+  // player names for keeping it running. Opened before the first await, so the first run's
+  // classification sees it.
+  plugin.player.stream(() => undefined);
   await plugin.player.read(); // was "playback.read"
   const { player } = plugin;
   const { text } = plugin.i18n;
@@ -116,6 +123,53 @@ export default async function activate(plugin: Plugin) {
     return phase === "ready" && (audioTracks === null || audioTracks.some((t) => t.selected));
   };
   const busy = () => filter.status.state === "applying";
+
+  // The commands' enabled states are conditions the player evaluates (`plugin.when`), also while the
+  // plugin is stopped; only what has no condition (the track list, the channel count) is taken from
+  // the plugin's newest snapshot, and the conditions are given again when that changes.
+  const { when } = plugin;
+  const never = when.ready.and(when.ready.not());
+  /** `ready()` as a condition: a ready source with a selected audio track (or no track list). */
+  const readyWhen = (): Condition => {
+    const list = player.state.audioTracks;
+    if (list === null) return when.phase("ready");
+    const [first, ...rest] = list.map((t) => when.audioTrack(t.id));
+    return first ? when.phase("ready").and(first.or(...rest)) : never;
+  };
+  type Gate = "edit" | "channels" | "load" | "cycle";
+  const gated: [Command, Gate][] = [];
+  const gate = (command: Command, kind: Gate) => void gated.push([command, kind]);
+  let gateKey = "";
+  /** `ready()` as of the last change (`conditions()`), for the reasons, which must not read the state. */
+  let readyNow = false;
+  function conditions() {
+    // Nothing gated yet: the commands (and what their reasons read) come further down.
+    if (!gated.length) return;
+    readyNow = ready();
+    const tracked = player.state.audioTracks;
+    const { phase, kind } = player.state;
+    const selected = tracked?.filter((t) => t.selected).map((t) => t.id) ?? null;
+    const key = JSON.stringify([tracked?.map((t) => t.id) ?? null, selected, mono(), gated.length, phase, kind]);
+    if (key === gateKey) return;
+    gateKey = key;
+    const readyCond = readyWhen();
+    for (const [command, kind] of gated)
+      command.set({
+        enabled:
+          kind === "edit"
+            ? readyCond
+            : kind === "channels"
+              ? mono()
+                ? never
+                : readyCond
+              : kind === "cycle"
+                ? tracks().length > 0
+                  ? when.open
+                  : never
+                : when.phase("ready").and(when.stream.not()),
+        ...(kind === "load" ? { reason: loadReason() } : kind === "cycle" ? { reason: tracks().length > 0 ? null : noTracks() } : {}),
+      });
+  }
   const apply = () => filter.set({ nodes: nodes(settings, { mono: mono() }), delayMs: settings.delayMs });
   /** Command and panel edits are ignored without a selected track, like the disabled controls. */
   const edit = (next: Settings) => {
@@ -155,6 +209,7 @@ export default async function activate(plugin: Plugin) {
     if (count === channelCount) return;
     channelCount = count;
     apply();
+    conditions();
     plugin.update();
   };
   /** The count the player reports when the decoded audio changes (`audio.reconfigured`); a read on its way is dropped. */
@@ -163,6 +218,7 @@ export default async function activate(plugin: Plugin) {
     if (count === channelCount) return;
     channelCount = count;
     apply();
+    conditions();
     plugin.update();
   };
 
@@ -318,7 +374,7 @@ export default async function activate(plugin: Plugin) {
           home: HOME,
           order: TRACKS_ORDER,
           radio: true,
-          checked: () => tracks().some((x) => x.id === t.id && x.selected),
+          checked: when.audioTrack(t.id), // the player keeps the mark current
           run: () => selectTrack(t.id),
         }),
       );
@@ -650,22 +706,25 @@ export default async function activate(plugin: Plugin) {
   // player's, opens the column at its last tab). Everything else is in the Audio panel and, by name,
   // in the command palette ("Category: Title", with the panel as its home); ids and keys are those
   // of the old Audio ▸ menu.
-  plugin.commands.add({
+  const load = plugin.commands.add({
     id: "audio.load",
     path: ["@open", "Load External Audio…"],
     category: category.audio,
     home: HOME,
     order: 114,
     group: "open",
-    enabled: () => loadReason() === null,
+    enabled: never,
     busy: () => loading,
-    reason: loadReason,
     run: loadExternal,
   });
-  const reason = (): "No audio track selected" | null => (ready() ? null : "No audio track selected");
-  const editing = { enabled: ready, busy, reason };
+  gate(load, "load");
+  // A reason shows while the condition is false, or while the command is busy: none then, as before.
+  const reason = "No audio track selected";
+  const editing = { enabled: never, busy, reason: () => (busy() ? null : reason) };
   // Repeating keys must not be swallowed while a change is applying (the filter keeps the last value).
-  const repeating = { enabled: ready, reason, repeat: true };
+  const repeating = { enabled: never, reason, repeat: true };
+  /** Adds a command whose enabled state follows `kind` (`conditions()`). */
+  const gatedAdd = (kind: Gate, options: Parameters<typeof plugin.commands.add>[0]) => gate(plugin.commands.add(options), kind);
   // Opens the adjust column at the Audio tab, and closes it when that tab is already shown (Alt+2,
   // like the player's own Alt+1…4 for its other panels).
   plugin.commands.add({
@@ -675,30 +734,31 @@ export default async function activate(plugin: Plugin) {
     bindings: ["Alt+2"],
     run: () => panel.toggle(),
   });
-  plugin.commands.add({
+  const cycle = plugin.commands.add({
     id: "audio.track.cycle",
     title: "Cycle Tracks",
     category: category.track,
     home: HOME,
     bindings: ["Alt+A"],
-    enabled: () => tracks().length > 0,
-    reason: () => (tracks().length > 0 ? null : noTracks()),
+    enabled: never,
     run: cycleTrack,
   });
+  gate(cycle, "cycle");
   for (const { id, label } of channelModes)
-    plugin.commands.add({
+    gatedAdd("channels", {
       id: `audio.channels.${id}`,
       title: label,
       category: category.channels,
       home: HOME,
       radio: true,
-      enabled: () => ready() && !mono(),
+      enabled: never,
       busy,
-      reason: () => reason() ?? (mono() ? "The current track is mono" : null),
+      // As before: none while busy; no selected track first, then a mono track.
+      reason: () => (busy() ? null : !readyNow ? reason : mono() ? "The current track is mono" : null),
       checked: () => settings.channels === id,
       run: () => setChannels(id),
     });
-  plugin.commands.add({
+  gatedAdd("edit", {
     id: "audio.equalizer",
     title: "Equalizer",
     category: category.audio,
@@ -711,7 +771,7 @@ export default async function activate(plugin: Plugin) {
     },
   });
   presets.forEach(({ label, osd }, index) =>
-    plugin.commands.add({
+    gatedAdd("edit", {
       id: `audio.preset.${index}`,
       title: label,
       category: category.preset,
@@ -730,8 +790,8 @@ export default async function activate(plugin: Plugin) {
     { id: "audio.sync.later", title: "50 ms Later", binding: "<", run: () => syncBy(1) },
   ] as const;
   for (const { id, title, binding, run } of syncSteps)
-    plugin.commands.add({ id, title, category: category.sync, home: HOME, bindings: [binding], ...repeating, run });
-  plugin.commands.add({
+    gatedAdd("edit", { id, title, category: category.sync, home: HOME, bindings: [binding], ...repeating, run });
+  gatedAdd("edit", {
     id: "audio.sync.reset",
     title: "Reset",
     category: category.sync,
@@ -753,7 +813,7 @@ export default async function activate(plugin: Plugin) {
       run: () => setKeep(id),
     }),
   );
-  plugin.commands.add({
+  gatedAdd("edit", {
     id: "audio.normalize",
     title: "Normalize",
     category: category.processing,
@@ -765,7 +825,7 @@ export default async function activate(plugin: Plugin) {
       if (edit({ ...settings, normalize: !settings.normalize })) quiet(plugin.osd.show(settings.normalize ? "Normalize: On" : "Normalize: Off"));
     },
   });
-  plugin.commands.add({
+  gatedAdd("edit", {
     id: "audio.clarity",
     title: "Crystalizer",
     category: category.processing,
@@ -778,7 +838,7 @@ export default async function activate(plugin: Plugin) {
         quiet(plugin.osd.show(settings.clarity.on ? "Crystalizer: On" : "Crystalizer: Off"));
     },
   });
-  plugin.commands.add({
+  gatedAdd("edit", {
     id: "audio.reset",
     title: "Reset",
     category: category.processing,
@@ -805,8 +865,10 @@ export default async function activate(plugin: Plugin) {
     follow(state);
     void rebuildTracks();
     void autoLoadFor(state);
+    conditions();
     plugin.update();
   };
+  conditions();
   const reread = () => void player.refresh().then(changed, () => undefined);
   player.on("source.opening", () => {
     volumeWorks(); // a new source may bring the output back
