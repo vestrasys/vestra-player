@@ -1600,3 +1600,19 @@ fn the_input_rate_is_measured_out_of_the_chain_and_kept_in_it() {
         "measured again for the next video"
     );
 }
+
+#[test]
+fn overload_names_what_could_not_keep_up_by_renderer() {
+    // GPU rendering: the GPU (the converter and the drawing).
+    let gpu = overload_message(true, "51.2 of 60 fps");
+    assert!(gpu.starts_with("the GPU could not keep up"), "{gpu}");
+    assert!(gpu.ends_with("51.2 of 60 fps"), "{gpu}");
+    // Software rendering: the CPU copying and drawing the doubled frames
+    // (the GPU was 25–40 % busy, 2026-11-23), and what helps. Either engine.
+    let cpu = overload_message(false, "51.2 of 60 fps");
+    assert_eq!(
+        cpu,
+        "rendering on the CPU could not keep up with this video's doubled frames (51.2 of 60 fps); GPU Rendering (Picture ▸ Rendering) helps"
+    );
+    assert!(!cpu.contains("GPU could not"), "{cpu}");
+}

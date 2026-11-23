@@ -210,7 +210,8 @@ pub enum Reason {
     Upscaling,
     /// The converter stopped on this video (`failed`; not fixed).
     Failed(String),
-    /// The GPU did not keep up on this video (`overload`; not fixed).
+    /// The converter's output did not keep up on this video: the GPU, or the
+    /// CPU drawing it with software rendering (`overload`; not fixed).
     Overload(String),
     /// The video's rate does not fit (`rate`; not fixed).
     Rate(String),
@@ -591,7 +592,7 @@ pub struct Motion {
     disabled: bool,
     /// The converter's (or the filter graph's) last error line.
     last_error: Option<String>,
-    /// The GPU did not keep up on this video.
+    /// The output did not keep up on this video ([`overload_message`]).
     overload: Option<String>,
     /// This video's fallback step: the motion search on downscaled frames.
     performance: bool,
@@ -1316,9 +1317,8 @@ impl Motion {
                 diag!(
                     "motion: still behind with the faster motion search ({behind}); off for this video"
                 );
-                self.overload = Some(format!(
-                    "the GPU could not keep up with this video, even with the faster motion search: {behind}"
-                ));
+                let gpu_rendering = render.now().0 && render.gpu().is_some();
+                self.overload = Some(overload_message(gpu_rendering, &behind));
                 self.remove(mpv, effects);
             } else {
                 diag!("motion: behind ({behind}); the faster motion search");
@@ -1557,6 +1557,23 @@ pub fn bit_depth(format: &str) -> u32 {
     name.rfind('p')
         .and_then(|at| name[at + 1..].parse::<u32>().ok())
         .unwrap_or(8)
+}
+
+/// The `overload` message: what could not keep up with the doubled frames.
+/// With software rendering that is the player's CPU copying and drawing
+/// them, not the converter (measured 2026-11-23, NVIDIA 4K30 → 60: 300–500
+/// frames dropped in 20 s with the GPU 25–40 % busy), so it names that and
+/// what helps; with GPU rendering it is the GPU. The same for either engine.
+pub fn overload_message(gpu_rendering: bool, behind: &str) -> String {
+    if gpu_rendering {
+        format!(
+            "the GPU could not keep up with this video, even with the faster motion search: {behind}"
+        )
+    } else {
+        format!(
+            "rendering on the CPU could not keep up with this video's doubled frames ({behind}); GPU Rendering (Picture ▸ Rendering) helps"
+        )
+    }
 }
 
 /// Whether a converter failure means the engine cannot start on this
