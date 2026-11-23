@@ -27,7 +27,7 @@ Vestra Player is an open-source video player for macOS and Windows. It aims for 
     <td><a href=".github/readme/vestranes.webp"><img src=".github/readme/vestranes.webp" alt="An NES game running in the player with the VestraNES window"></a><br><b>VestraNES</b>: a plugin can be a whole NES emulator, running inside the player.</td>
   </tr>
   <tr>
-    <td><a href=".github/readme/seek-preview.webp"><img src=".github/readme/seek-preview.webp" alt="A thumbnail preview above the seek bar"></a><br><b>Seek-bar preview</b>: a thumbnail of the frame under the pointer as it moves along the bar.</td>
+    <td><a href=".github/readme/ai-video.webp"><img src=".github/readme/ai-video.webp" alt="Left: Big Buck Bunny at 480p with AI Upscaling off and with RTX Video Super Resolution. Right: 30 fps frames shown twice against 60 fps with new in-between frames"></a><br><b>AI Upscaling and Motion Smoothing</b>: sharper low-res video, and 30 fps doubled to 60 fps.</td>
     <td><a href=".github/readme/ai-workshop.webp"><img src=".github/readme/ai-workshop.webp" alt="Vestra Player AI window, a new chat, over a playing video"></a><br><b>Vestra Player AI</b> (experimental): describe a plugin and it writes, checks and tests it.</td>
   </tr>
 </table>
