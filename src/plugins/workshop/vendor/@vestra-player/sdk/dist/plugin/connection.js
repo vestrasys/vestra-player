@@ -452,6 +452,15 @@ export class Connection {
     follow(event, why) {
         return this.#hold(event, why, "never");
     }
+    /**
+     * Whether `event` is subscribed at the player now: something holds it
+     * (a listener, a hold, a stream, a handle that follows the source), so a
+     * state copy kept by it follows the player's events. False while a
+     * held-only group waits for a holder, and when nothing started it.
+     */
+    following(event) {
+        return this.#events.get(event)?.off !== undefined;
+    }
     #hold(event, why, catchUp, listens = true) {
         const group = this.#events.get(event);
         if (!group)

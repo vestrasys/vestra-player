@@ -195,6 +195,13 @@ export declare class Connection {
      */
     follow(event: string, why?: Why): Disposable;
     /**
+     * Whether `event` is subscribed at the player now: something holds it
+     * (a listener, a hold, a stream, a handle that follows the source), so a
+     * state copy kept by it follows the player's events. False while a
+     * held-only group waits for a holder, and when nothing started it.
+     */
+    following(event: string): boolean;
+    /**
      * A binding (or a command's function field) reads `event`'s state: its
      * reason joins what the player is told while a plugin listener, hold or
      * stream listens to the group, but the read never makes the plugin a

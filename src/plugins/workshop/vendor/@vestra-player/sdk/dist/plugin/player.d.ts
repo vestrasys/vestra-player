@@ -42,8 +42,6 @@ export declare class PlayerService implements StreamSource {
      * a read that failed is tried again by the next call.
      */
     read(): Promise<void>;
-    /** Whether the mirror is registered yet. */
-    get started(): boolean;
     /**
      * Register the SDK's copy of the state (a mirror of `source.state`; a
      * plugin listens through `watch`, `follow` and `player.on`). It hears
@@ -52,8 +50,23 @@ export declare class PlayerService implements StreamSource {
      * starts. Resolves at once.
      */
     start(): Promise<void>;
-    /** The state as the player has it now, for a call that needs a source. */
+    /**
+     * The state as the player has it now, for a call that acts on the
+     * current state (a capture): the copy as it is while it follows the
+     * player's events, else read first ({@link fresh}).
+     */
     current(): Promise<PlayerState>;
+    /**
+     * Wait until the copy is the player's current state, for a call that
+     * acts on it (a control, a step, a capture, a scrub). While something
+     * holds `source.state` the copy follows the player's events: nothing to
+     * wait for. Otherwise it is the newest snapshot the plugin has, which an
+     * admitted intent since (a pause, a seek, a new file, by anyone) made
+     * stale: it is read first. Calls in a burst share one read ({@link inTurn}
+     * keeps their order). A read that fails leaves the copy as it was; the
+     * call goes on with it.
+     */
+    fresh(): Promise<void> | undefined;
     /** Drop anything older than what was already delivered. */
     accept(raw: SourceState): void;
     /**
@@ -113,6 +126,22 @@ export declare class PlayerService implements StreamSource {
     expected(state: PlayerState | undefined): {
         expected?: SourceStamp;
     };
+    /**
+     * Send a call in its turn among the plugin's calls on the source: at
+     * once (in the same tick) when no read is on its way, else right after
+     * that read, with the calls that waited for it in the order they were
+     * made. `read`: the call acts on the current state, so a read starts
+     * first when the copy does not follow the player ({@link fresh}).
+     */
+    inTurn<T>(send: () => Promise<T>, read?: boolean): Promise<T>;
+    /**
+     * `send` with the stamp a call sends, in its turn ({@link inTurn}):
+     * `ifCurrent`'s when given (as it is), else the current state's, read
+     * first when the copy does not follow the player.
+     */
+    withStamp<T>(ifCurrent: PlayerState | undefined, send: (stamp: {
+        expected?: SourceStamp;
+    }) => Promise<T>): Promise<T>;
     control(intent: SourceIntent, options?: Conditional): Promise<void>;
     /** Close only if `generation` is still the player's source. */
     closeIfCurrent(generation: number): Promise<void>;

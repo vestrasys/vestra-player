@@ -175,6 +175,10 @@ export class PlayerService {
     #started = false;
     /** `read()`'s one read, once asked for. */
     #read;
+    /** The read that calls acting on the current state wait for (`fresh`). */
+    #fresh;
+    /** The sends waiting for that read, in the order they were made (`inTurn`). */
+    #waiting = [];
     output;
     constructor(runtime) {
         this.runtime = runtime;
@@ -211,10 +215,6 @@ export class PlayerService {
             }
         })());
     }
-    /** Whether the mirror is registered yet. */
-    get started() {
-        return this.#started;
-    }
     /**
      * Register the SDK's copy of the state (a mirror of `source.state`; a
      * plugin listens through `watch`, `follow` and `player.on`). It hears
@@ -229,10 +229,44 @@ export class PlayerService {
         this.runtime.on("source.state", (data) => this.accept(data), "held", true);
         return Promise.resolve();
     }
-    /** The state as the player has it now, for a call that needs a source. */
+    /**
+     * The state as the player has it now, for a call that acts on the
+     * current state (a capture): the copy as it is while it follows the
+     * player's events, else read first ({@link fresh}).
+     */
     async current() {
         await this.start();
+        const fresh = this.fresh();
+        if (fresh)
+            await fresh;
         return this.state;
+    }
+    /**
+     * Wait until the copy is the player's current state, for a call that
+     * acts on it (a control, a step, a capture, a scrub). While something
+     * holds `source.state` the copy follows the player's events: nothing to
+     * wait for. Otherwise it is the newest snapshot the plugin has, which an
+     * admitted intent since (a pause, a seek, a new file, by anyone) made
+     * stale: it is read first. Calls in a burst share one read ({@link inTurn}
+     * keeps their order). A read that fails leaves the copy as it was; the
+     * call goes on with it.
+     */
+    fresh() {
+        if (this.#fresh)
+            return this.#fresh;
+        // Note: `following` stays true when the subscription failed (its
+        // `off` is then a rejected promise); the copy is then sent as it is.
+        if (this.runtime.following("source.state"))
+            return undefined;
+        const fresh = this.refresh().then(() => { }, () => { });
+        // Once read: cleared, then the waiting sends go out in one go, in the
+        // order they were made; a call after them starts a read of its own.
+        this.#fresh = fresh.then(() => {
+            this.#fresh = undefined;
+            for (const send of this.#waiting.splice(0))
+                send();
+        });
+        return this.#fresh;
     }
     /** Drop anything older than what was already delivered. */
     accept(raw) {
@@ -394,11 +428,37 @@ export class PlayerService {
         const raw = raws.get(state ?? this.state);
         return raw && raw.eventSequence >= 0 ? { expected: raw.stamp } : {};
     }
-    async control(intent, options) {
-        await this.submit({
-            ...intent,
-            ...this.expected(options?.ifCurrent),
+    /**
+     * Send a call in its turn among the plugin's calls on the source: at
+     * once (in the same tick) when no read is on its way, else right after
+     * that read, with the calls that waited for it in the order they were
+     * made. `read`: the call acts on the current state, so a read starts
+     * first when the copy does not follow the player ({@link fresh}).
+     */
+    inTurn(send, read = false) {
+        if (!(read ? this.fresh() : this.#fresh))
+            return send();
+        return new Promise((resolve, reject) => {
+            this.#waiting.push(() => {
+                try {
+                    resolve(send());
+                }
+                catch (error) {
+                    reject(error);
+                }
+            });
         });
+    }
+    /**
+     * `send` with the stamp a call sends, in its turn ({@link inTurn}):
+     * `ifCurrent`'s when given (as it is), else the current state's, read
+     * first when the copy does not follow the player.
+     */
+    withStamp(ifCurrent, send) {
+        return this.inTurn(() => send(this.expected(ifCurrent)), !ifCurrent);
+    }
+    async control(intent, options) {
+        await this.withStamp(options?.ifCurrent, (stamp) => this.submit({ ...intent, ...stamp }));
     }
     /** Close only if `generation` is still the player's source. */
     async closeIfCurrent(generation) {
@@ -500,14 +560,14 @@ class ScrubHandle {
     #service;
     constructor(service) {
         this.#service = service;
-        // A scrub follows the source. When it is the first thing to need the
-        // state (the mirror starts now), the gesture starts from the state read
-        // right after subscribing, not from the copy of start-up.
-        const late = !service.started;
-        const fresh = service.start();
-        let ready = !late;
+        // A scrub follows the source. When the copy did not follow it yet (the
+        // mirror starts now, or nothing held `source.state`), the gesture
+        // starts from the state read now, not from the plugin's old copy.
+        void service.start();
+        const fresh = service.fresh();
+        let ready = !fresh;
         this.#allowed = { ...service.raw.stamp };
-        if (late)
+        if (fresh)
             void fresh.then(() => {
                 ready = true;
                 if (this.#active && !this.#pending)
@@ -521,7 +581,7 @@ class ScrubHandle {
                 this.end();
         });
         this.#queue = new Latest(async ({ seconds, keyframes }) => {
-            if (late)
+            if (fresh)
                 await fresh;
             if (!this.#active)
                 throw superseded;
@@ -743,12 +803,15 @@ export function player(scope) {
                 throw abortError();
             let ticket;
             try {
-                ticket = await service().submit({
+                // In its turn: after a read on its way for earlier controls.
+                ticket = await service().inTurn(() => service().submit({
                     kind: "open",
                     source,
                     startPaused: options.paused ?? false,
-                    ...(options.ifCurrent ? service().expected(options.ifCurrent) : {}),
-                }, { signal, accepted: (accepted) => (ticket = accepted) });
+                    ...(options.ifCurrent
+                        ? service().expected(options.ifCurrent)
+                        : {}),
+                }, { signal, accepted: (accepted) => (ticket = accepted) }));
             }
             catch (error) {
                 // Cancelling a pending open (e.g. a URL still being resolved) closes it.
@@ -815,8 +878,7 @@ export function player(scope) {
             };
         },
         async addAudioTrack(path, options = {}) {
-            const { expected } = service().expected(options.ifCurrent);
-            const added = await scope.runtime.host.audio.add(path, options.select ?? true, expected);
+            const added = await service().withStamp(options.ifCurrent, ({ expected }) => scope.runtime.host.audio.add(path, options.select ?? true, expected));
             await service()
                 .refresh()
                 .catch(() => { });
@@ -827,8 +889,7 @@ export function player(scope) {
                 throw failure("invalid", "unit is frame or keyframe");
             if (direction !== "backward" && direction !== "forward")
                 throw failure("invalid", "direction is backward or forward");
-            const { expected } = service().expected(options.ifCurrent);
-            await scope.runtime.host.step.step(unit, direction, expected);
+            await service().withStamp(options.ifCurrent, ({ expected }) => scope.runtime.host.step.step(unit, direction, expected));
             await service()
                 .refresh()
                 .catch(() => { });
@@ -868,19 +929,17 @@ export function player(scope) {
                     (!Number.isInteger(count) || count < 1 || count > 1_000_000))
                     throw failure("invalid", "count must be an integer 1–1000000");
             }
-            const { expected } = service().expected(options.ifCurrent);
-            await scope.runtime.host.marks.setLoop(loop && {
+            await service().withStamp(options.ifCurrent, ({ expected }) => scope.runtime.host.marks.setLoop(loop && {
                 a: loop.a,
                 b: loop.b,
                 ...(loop.count === undefined ? {} : { count: loop.count }),
-            }, expected);
+            }, expected));
             await service()
                 .refresh()
                 .catch(() => { });
         },
         async selectAudioTrack(id, options = {}) {
-            const { expected } = service().expected(options.ifCurrent);
-            await scope.runtime.host.audio.select(id, expected);
+            await service().withStamp(options.ifCurrent, ({ expected }) => scope.runtime.host.audio.select(id, expected));
             return service().refresh();
         },
     };

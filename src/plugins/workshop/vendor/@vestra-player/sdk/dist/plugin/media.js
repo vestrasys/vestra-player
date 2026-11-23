@@ -261,7 +261,8 @@ export function mediaCapture(scope) {
             const service = serviceOf(runtime);
             const player = playerOf(runtime);
             // The source now: a capture needs one, even from a plugin that never
-            // read the state (its copy then starts following the player).
+            // read the state; read first when the copy does not follow the
+            // player (`PlayerService.current`).
             const at = options.ifCurrent ?? (await player.current());
             const { expected } = player.expected(at);
             if (!expected)
@@ -444,7 +445,8 @@ function mediaSources(scope) {
             const expected = options?.ifCurrent === undefined
                 ? undefined
                 : playerOf(scope.runtime).expected(options.ifCurrent).expected;
-            return host().remember(expected);
+            // In its turn among the plugin's calls on the source.
+            return playerOf(scope.runtime).inTurn(() => host().remember(expected));
         },
         get: async (value) => host().get(token(value)),
         locate: async (value) => host().locate(token(value)),
