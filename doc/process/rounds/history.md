@@ -228,6 +228,21 @@ The user handed the remaining technical follow-ups to an unattended loop ([agent
 
 #### Loop log (newest first)
 
+- 11-22: **T8 started (user).** The T8 comparison is done (report at :4181/t8/). The NVIDIA engine is FFmpeg 9.1's `fruc_vulkan` (RTX 30+): real time at 1080p and 4K on the fast setting. RIFE has the best quality but is not real time at 4K, so it is deferred (possibly for offline export later). The user said to go ahead on a separate branch:
+  - build a libmpv on FFmpeg ≥ 9.1, with the mpv patch for a Vulkan device in the vf chain;
+  - add the host `video.motion` NVIDIA engine and an "NVIDIA Motion Smoothing" store plugin;
+  - run experiments and a full regression of the new libmpv;
+  - open draft PRs that stay open for the user's own review.
+
+  Release B continues unaffected. Other changes:
+  - **merged:** #438 (L1 player events), #444 (Store/Workshop window limits), #445 (Windows Segment Heap: GPU window check passed; memory 925 → 592 MB after a resize burst);
+  - SDK 1.11.0-rc.1 to rc.3 published under `next`;
+  - B3: all four migrator groups are done, and the `api/` rename is proven names-only. Integration into relb-b3 is under way; the 5 store plugins are still to migrate.
+  - **Decisions:**
+    - subtitles stays resident in this release (follow-up: widen `subtitles.changed`);
+    - history stays resident on non-wake starts (follow-up: an SDK "after ready" hook);
+    - playback holds a stream while the bar is mounted;
+    - the store's notes lag after an automatic check (accepted).
 - 11-22 night: **The user is asleep for about 8 h.** Running:
   - Release B L1/L2;
   - the T8 experiment (NVIDIA vs RIFE, report at :4181/t8/; the user picks after reading it);

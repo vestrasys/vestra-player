@@ -323,8 +323,8 @@ The palette with a lead (nothing changes without one):
   Shift+Enter itself, which leaves it on the lead row.
 - `PaletteState::cursor` counts the lead as row 0; `Run(slot)` from the view uses the same slots
   (the lead's is 0), so the command rows' slot is `i + 1`.
-- The bottom bar's palette cell shows `search-ai` (a speech bubble with the AI sparkle breaking out at its
-  top right, design B) and the tip "Command Palette… and <title>" while a lead is set; `search` otherwise.
+- The bottom bar's palette cell shows `search-ai` (a magnifier with the AI icon's four-point sparkle at its
+  top right) and the tip "Command Palette… and <title>" while a lead is set; `search` otherwise.
 - Headless tests activate the row with `VESTRA_TEST_EXECUTE=lead:<query>@<ms>`
   (`host/supervisor/probe.rs`), as Enter would.
 
