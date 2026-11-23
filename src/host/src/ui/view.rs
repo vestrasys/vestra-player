@@ -1224,6 +1224,117 @@ export component W inherits Window {
         }
     }
 
+    /// A panel as wide as `panel_width` says draws its widest row whole:
+    /// the title's pixels are the same as in a panel 100px wider. A panel
+    /// menu's rows have no keys; the empty key text took 4px of the title
+    /// there, so "Remove the selected item" (SDK example panel-menu) showed
+    /// as "Remove the selected it…" (2026-11-23). Checked at 1x and at the
+    /// user's 1.75 scale, with and without keys, and busy.
+    #[test]
+    fn a_menu_panel_shows_its_widest_row_unelided() {
+        let window = headless_window();
+        crate::ui::ui_fonts::install("en");
+        let source = r#"
+import { MenuView, MenuLevel } from "menu-view.slint";
+export component W inherits Window {
+    width: 600px; height: 120px;
+    background: black;
+    in property <[MenuLevel]> levels;
+    MenuView { width: root.width; height: root.height; levels: root.levels; }
+}"#;
+        let result = pollster::block_on(
+            compiler().build_from_source(source.into(), ui_dir().join("t.slint")),
+        );
+        let instance = result.component("W").unwrap().create().unwrap();
+        let rows = |items: &[(&str, &str, bool)]| {
+            items
+                .iter()
+                .enumerate()
+                .map(|(i, (title, keys, busy))| {
+                    json!({"token":format!("c:1:{i}"),"title":title,"enabled":true,
+                        "checked":false,"radio":false,"busy":busy,"reason":"",
+                        "has-children":false,"open":false,"keys":keys,"icon":"",
+                        "separator":false,"y":2. + 24. * i as f64})
+                })
+                .collect::<Vec<_>>()
+        };
+        let cases: [&[(&str, &str, bool)]; 4] = [
+            &[
+                ("Select the first item", "", false),
+                ("Remove the selected item", "", false),
+            ],
+            &[("Remove the selected item", "Ctrl+D", false)],
+            &[("Remove the selected item", "", true)],
+            &[("Entfernt das ausgewählte Element aus der Liste", "", false)],
+        ];
+        let (x0, y0) = (10., 10.);
+        for scale in [1.0f32, 1.75] {
+            window.dispatch_event(slint::platform::WindowEvent::ScaleFactorChanged {
+                scale_factor: scale,
+            });
+            let (w, h) = ((600. * scale).ceil() as u32, (120. * scale).ceil() as u32);
+            instance.window().set_size(slint::PhysicalSize::new(w, h));
+            instance.show().unwrap();
+            for items in cases {
+                let rows = rows(items);
+                let width = crate::ui::menu::panel_width(&rows);
+                // The widest title, from the check column to its end (2px
+                // of Slint's rounding and the busy mark included).
+                let (title, busy) = items
+                    .iter()
+                    .map(|(t, _, b)| (*t, *b))
+                    .max_by(|a, b| {
+                        crate::ui::menu::text_width(a.0)
+                            .total_cmp(&crate::ui::menu::text_width(b.0))
+                    })
+                    .unwrap();
+                let mut title_width = crate::ui::menu::text_width(title) + 3.;
+                if busy {
+                    title_width += crate::ui::menu::text_width(" …");
+                }
+                let left = x0 + 28.;
+                let height = 4. + 24. * rows.len() as f64;
+                let draw = |panel_width: f64| {
+                    let level = json!([{"rows":rows,"x":x0,"y":y0,"width":panel_width,
+                        "height":height,"open":-1,"scroll":false,"viewport-y":0.}]);
+                    instance
+                        .set_property("levels", crate::ui::ui_values::from_json(&level).unwrap())
+                        .unwrap();
+                    settle_layout(instance.window());
+                    let mut buffer = vec![
+                        slint::platform::software_renderer::PremultipliedRgbaColor::default();
+                        (w * h) as usize
+                    ];
+                    window.request_redraw();
+                    headless_window().draw_if_needed(|renderer| {
+                        renderer.set_repaint_buffer_type(
+                            slint::platform::software_renderer::RepaintBufferType::NewBuffer,
+                        );
+                        renderer.render(&mut buffer, w as usize);
+                    });
+                    let s = f64::from(scale);
+                    let px = |v: f64| (v * s) as usize;
+                    (px(y0 + 2.)..px(y0 + height - 2.))
+                        .flat_map(|y| {
+                            let line = y * w as usize;
+                            buffer[line + px(left)..line + px(left + title_width)]
+                                .iter()
+                                .map(|p| (p.red, p.green, p.blue))
+                                .collect::<Vec<_>>()
+                        })
+                        .collect::<Vec<_>>()
+                };
+                let sized = draw(width);
+                let wide = draw(width + 100.);
+                assert!(
+                    sized == wide,
+                    "{title:?} elided in a {width}px panel at scale {scale}"
+                );
+            }
+            instance.hide().unwrap();
+        }
+    }
+
     /// IA-CORE-01: Escape closes the deepest level first; on the top level it
     /// dismisses the menu.
     #[test]
