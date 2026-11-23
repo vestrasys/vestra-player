@@ -1285,20 +1285,18 @@ export component W inherits Window {
     }
 }"#;
 
-/// One step of a sheet: label, plugin, reason, asks, built in.
+/// One step of a sheet: label, plugin, reason, asks.
 fn sheet_step(
     label: &str,
     plugin: &str,
     reason: &str,
     asks: bool,
-    builtin: bool,
 ) -> crate::host::review_sheet::Step {
     crate::host::review_sheet::Step {
         label: label.into(),
         plugin: plugin.into(),
         reason: reason.into(),
         asks,
-        builtin,
     }
 }
 
@@ -1327,12 +1325,11 @@ fn sheet_value_remembering(
 }
 
 /// §4.3: the palette's place and width (520px, at most the window less
-/// 16px); 72px of request box and question, 28px a step, the note when a
-/// step is not built in, the 44px footer.
+/// 16px); 72px of request box and question, 28px a step, the 44px footer.
 #[test]
 fn the_review_sheet_sizes_to_its_steps() {
     let w = build(SHEET, 1100., 600.);
-    let reset = sheet_step("Reset: Picture", "Video", "", true, true);
+    let reset = sheet_step("Reset: Picture", "Video", "", true);
     w.set_property(
         "s",
         sheet_value(
@@ -1348,35 +1345,20 @@ fn the_review_sheet_sizes_to_its_steps() {
         (290., 16., 520.)
     );
     assert_eq!(number(&w, "ph"), 72. + 28. + 44.);
-    let export = sheet_step(
-        "Export: Export Last 30 Seconds",
-        "Clip Export",
-        "Not built in",
-        true,
-        false,
-    );
-    let mute = sheet_step("Vestra Player: Mute", "Vestra Player", "", false, true);
+    let export = sheet_step("Export: Export Last 30 Seconds", "Clip Export", "", true);
+    let mute = sheet_step("Vestra Player: Mute", "Vestra Player", "", false);
     w.set_property(
         "s",
         sheet_value("Ask Vestra", "reset, mute, export", &[reset, mute, export]),
     )
     .unwrap();
     settle();
-    let height = number(&w, "ph");
-    // One line of note in 520px, and 8px around it.
-    assert!(
-        height > 72. + 84. + 44. + 8. && height < 72. + 84. + 44. + 30.,
-        "{height}"
-    );
+    assert_eq!(number(&w, "ph"), 72. + 84. + 44.);
     let narrow = build(SHEET, 300., 600.);
     narrow
         .set_property(
             "s",
-            sheet_value(
-                "Ask Vestra",
-                "x",
-                &[sheet_step("A: B", "C", "", true, true)],
-            ),
+            sheet_value("Ask Vestra", "x", &[sheet_step("A: B", "C", "", true)]),
         )
         .unwrap();
     settle();
@@ -1393,7 +1375,7 @@ fn the_review_sheet_answers_enter_esc_and_its_buttons_but_not_a_repeat() {
         sheet_value(
             "Ask Vestra",
             "reset the picture",
-            &[sheet_step("Reset: Picture", "Video", "", true, true)],
+            &[sheet_step("Reset: Picture", "Video", "", true)],
         ),
     )
     .unwrap();
@@ -1458,13 +1440,7 @@ fn ctrl_enter(w: &ComponentInstance) {
 #[test]
 fn the_review_sheet_offers_dont_ask_again_by_click_or_ctrl_enter() {
     let w = build(SHEET, 1100., 600.);
-    let export = sheet_step(
-        "Export: Export Last 30 Seconds",
-        "Clip Export",
-        "Not built in",
-        true,
-        false,
-    );
+    let export = sheet_step("Export: Export Last 30 Seconds", "Clip Export", "", true);
     w.set_property(
         "s",
         sheet_value_remembering(
@@ -1542,7 +1518,7 @@ fn the_review_sheet_offers_dont_ask_again_by_click_or_ctrl_enter() {
 /// proposed/r03-approve-*.png and detail-*.png): the top 1100×400 of the
 /// window over the spec's video still at 2×, both palettes; one step (a
 /// destructive one; one of a plugin not built in), several steps with one
-/// not built in, Close, and eight steps: `VESTRA_SHEET_SHOTS=<dir>`,
+/// not built in (no reason), Close, and eight steps: `VESTRA_SHEET_SHOTS=<dir>`,
 /// `VESTRA_SHEET_LANG=en|zh-Hans` (one language per process: run this test
 /// alone), `VESTRA_SHEET_BACKDROP=<png>` (optional).
 #[test]
@@ -1564,12 +1540,10 @@ fn render_review_sheet_states() {
     crate::ui::ui_fonts::install(locale);
     let zh = locale == "zh-Hans";
     let pick = |en: &'static str, zh_text: &'static str| if zh { zh_text } else { en };
-    let not_built_in = crate::i18n::tr("Not built in");
     let reset = sheet_step(
         pick("Reset: Picture", "重置: 画面"),
         pick("Video", "视频"),
         "",
-        true,
         true,
     );
     let mute = sheet_step(
@@ -1577,20 +1551,17 @@ fn render_review_sheet_states() {
         "Vestra Player",
         "",
         false,
-        true,
     );
     let export = sheet_step(
         pick("Export: Export Last 30 Seconds", "导出: 导出最后 30 秒"),
         "Clip Export",
-        &not_built_in,
+        "",
         true,
-        false,
     );
     let close = sheet_step(
         pick("Vestra Player: Close", "Vestra Player: 关闭"),
         "Vestra Player",
         &crate::i18n::tr("Closes the video"),
-        true,
         true,
     );
     let fullscreen = sheet_step(
@@ -1598,7 +1569,6 @@ fn render_review_sheet_states() {
         "Vestra Player",
         "",
         false,
-        true,
     );
     let request = pick(
         "reset the picture, mute, export the last 30 s",
@@ -1607,9 +1577,8 @@ fn render_review_sheet_states() {
     let frame = sheet_step(
         pick("Auto Frame: Frame the Speaker", "Auto Frame: 跟随说话人"),
         "Auto Frame",
-        &not_built_in,
+        "",
         true,
-        false,
     );
     let eight: Vec<_> = [
         reset.clone(),
@@ -1620,7 +1589,6 @@ fn render_review_sheet_states() {
             pick("Audio", "音频"),
             "",
             false,
-            true,
         ),
         frame.clone(),
         export.clone(),
@@ -1628,7 +1596,6 @@ fn render_review_sheet_states() {
             pick("Playlist: Remove All", "播放列表: 全部移除"),
             pick("Playlist", "播放列表"),
             "",
-            true,
             true,
         ),
         close.clone(),
@@ -2163,19 +2130,11 @@ fn the_smallest_window_scrolls_a_long_message_and_keeps_the_buttons() {
 /// T5: a plan of eight steps in the smallest window scrolls its steps under
 /// the question and keeps the buttons in the window; in a tall window
 /// nothing scrolls and the panel is as before (the question, 28px a step,
-/// the note, the footer).
+/// the footer).
 #[test]
 fn the_smallest_window_scrolls_a_plans_steps_and_keeps_the_buttons() {
     let steps: Vec<_> = (0..8)
-        .map(|n| {
-            sheet_step(
-                &format!("Export: Export Part {n}"),
-                "Clip Export",
-                "Not built in",
-                true,
-                false,
-            )
-        })
+        .map(|n| sheet_step(&format!("Export: Export Part {n}"), "Clip Export", "", true))
         .collect();
     let (width, height) = (320., 182.);
     let w = build(SHEET, width, height);
@@ -2198,11 +2157,7 @@ fn the_smallest_window_scrolls_a_plans_steps_and_keeps_the_buttons() {
         .unwrap();
     settle();
     assert!(!boolean(&tall, "detail-scrolls"));
-    let ph = number(&tall, "ph");
-    assert!(
-        ph > 72. + 8. * 28. + 44. && ph < 72. + 8. * 28. + 44. + 40.,
-        "{ph}"
-    );
+    assert_eq!(number(&tall, "ph"), 72. + 8. * 28. + 44.);
 }
 
 /// T5 (H5 review follow-up 2): while the body scrolls its text ends left of

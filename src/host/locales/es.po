@@ -719,12 +719,6 @@ msgstr "¿Ejecutar este comando?"
 msgid "Run these {n} commands?"
 msgstr "¿Ejecutar estos {n} comandos?"
 
-#. The approval sheet: why a step asks, for a command of a plugin that is not built in.
-#: src/api/commands_run.rs
-#, x-machine
-msgid "Not built in"
-msgstr "No integrado"
-
 #. The approval sheet: why the player's Close asks.
 #: src/api/commands_run.rs
 #, x-machine
@@ -736,12 +730,6 @@ msgstr "Cierra el vídeo"
 #, x-machine
 msgid "Quits the player"
 msgstr "Cierra el reproductor"
-
-#. The approval sheet's note under the steps, when a step's plugin is not built in.
-#: src/host/review_sheet.rs
-#, x-machine
-msgid "The player cannot tell what commands of plugins that are not built in will do."
-msgstr "El reproductor no puede saber qué harán los comandos de los complementos no integrados."
 
 #. The approval sheet's button that runs the plan.
 #: src/host/review_sheet.rs

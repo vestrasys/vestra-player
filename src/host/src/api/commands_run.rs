@@ -898,7 +898,6 @@ fn ask(
             plugin: step.item.plugin.clone(),
             reason: reason(&step.item, step.builtin),
             asks: step.dangerous(),
-            builtin: step.builtin,
         })
         .collect();
     // The sheet is the interface's (`UiCommand::Review`, plan step S2c(5)).
@@ -914,11 +913,12 @@ fn ask(
 }
 
 /// The reason a step shows on the sheet (Ask Vestra UX §4.5, user ruling 2
-/// of 2026-11-12: facts only, none for a destructive command): a plugin
-/// that is not built in, the player's Close and Quit.
+/// of 2026-11-12: facts only, none for a destructive command): the
+/// player's Close and Quit; none for a plugin that is not built in (user,
+/// 2026-11-23: the confirmation is enough).
 fn reason(item: &Item, builtin: bool) -> String {
     if !builtin {
-        return i18n::tr("Not built in");
+        return String::new();
     }
     if item.owner != bindings::HOST {
         return String::new();
@@ -1436,20 +1436,18 @@ mod tests {
         assert!(!runs.take_planned(1, &ticket, "d/close"));
     }
 
-    /// H7: the sheet's reasons are facts: a plugin that is not built in,
-    /// the player's Close and Quit; none for a destructive command (user
-    /// ruling 2 of 2026-11-12) or a plain one.
+    /// H7: the sheet's reasons are facts: the player's Close and Quit;
+    /// none for a destructive command (user ruling 2 of 2026-11-12), a plain
+    /// one or one of a plugin that is not built in (user, 2026-11-23).
     #[test]
     fn the_sheet_gives_reasons_only_for_facts() {
         let mut reset = item(4, "reset", &["Picture", "Reset"]);
         reset.destructive = true;
         assert_eq!(reason(&reset, true), "");
         assert_eq!(reason(&item(4, "louder", &["Audio"]), true), "");
-        assert_eq!(reason(&reset, false), "Not built in");
-        assert_eq!(
-            reason(&item(9, "last30", &["Export"]), false),
-            "Not built in"
-        );
+        assert_eq!(reason(&reset, false), "");
+        assert_eq!(reason(&item(9, "last30", &["Export"]), false), "");
+        assert_eq!(reason(&item(bindings::HOST, "stop", &["Close"]), false), "");
         assert_eq!(
             reason(&item(bindings::HOST, "stop", &["Close"]), true),
             "Closes the video"

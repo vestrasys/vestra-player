@@ -616,11 +616,6 @@ msgstr "运行这条命令？"
 msgid "Run these {n} commands?"
 msgstr "运行这 {n} 条命令？"
 
-#. The approval sheet: why a step asks, for a command of a plugin that is not built in.
-#: src/api/commands_run.rs
-msgid "Not built in"
-msgstr "非内置插件"
-
 #. The approval sheet: why the player's Close asks.
 #: src/api/commands_run.rs
 msgid "Closes the video"
@@ -630,11 +625,6 @@ msgstr "会关闭当前视频"
 #: src/api/commands_run.rs
 msgid "Quits the player"
 msgstr "会退出播放器"
-
-#. The approval sheet's note under the steps, when a step's plugin is not built in.
-#: src/host/review_sheet.rs
-msgid "The player cannot tell what commands of plugins that are not built in will do."
-msgstr "播放器无法判断非内置插件的命令会做什么。"
 
 #. The approval sheet's button that runs the plan.
 #: src/host/review_sheet.rs

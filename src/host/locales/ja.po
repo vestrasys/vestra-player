@@ -719,12 +719,6 @@ msgstr "このコマンドを実行しますか？"
 msgid "Run these {n} commands?"
 msgstr "これら {n} 件のコマンドを実行しますか？"
 
-#. The approval sheet: why a step asks, for a command of a plugin that is not built in.
-#: src/api/commands_run.rs
-#, x-machine
-msgid "Not built in"
-msgstr "組み込みではありません"
-
 #. The approval sheet: why the player's Close asks.
 #: src/api/commands_run.rs
 #, x-machine
@@ -736,12 +730,6 @@ msgstr "動画を閉じます"
 #, x-machine
 msgid "Quits the player"
 msgstr "プレーヤーを終了します"
-
-#. The approval sheet's note under the steps, when a step's plugin is not built in.
-#: src/host/review_sheet.rs
-#, x-machine
-msgid "The player cannot tell what commands of plugins that are not built in will do."
-msgstr "プレーヤーは、組み込みではないプラグインのコマンドが何をするかを判断できません。"
 
 #. The approval sheet's button that runs the plan.
 #: src/host/review_sheet.rs
