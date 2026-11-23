@@ -228,6 +228,17 @@ The user handed the remaining technical follow-ups to an unattended loop ([agent
 
 #### Loop log (newest first)
 
+- 11-23: **Release B shipped: player 0.11.0 (tag v0.11.0 on 4f88f54e, #450; GitHub release published, latest), SDK 1.11.0 (#130, npm latest), store plugins on 1.11.0 needing player 0.11.0 (plugins #75: autoframe 0.1.3, clipexport 0.8.3, loudness 0.1.2, shaderupscale 0.3.3, vestratube 0.5.6).** A 0.10.3 store keeps the installed versions and shows the new ones as needing a newer player (checked statically). Also in 0.11.0: Segment Heap (#445), store window limits (#444), the palette button's new icon (#459, the user's option A: a magnifier with the AI sparkle, same colours as the other bar buttons).
+  - **B5 findings fixed before release:** an SDK view/filter/shader follow counted as a plugin listener (rc.4); a binding read made a listener claim (rc.5); docs said an empty filter keeps a plugin running. The command-state migration to `plugin.when` (audio, playback, subtitles) first changed eight states; a differential check (`src/scripts/verify-command-states.mjs`, 448 states × 2 plus busy scenarios, old vs new) now shows none.
+  - **Coordinator decision while the user slept (to discuss):** vestra.audio stays resident in 0.11.0 (a stream opened in activate, reason named), because a parked audio missed the 11-11 rule "the adjust column compiles its tabs when it first shows; opening a file compiles nothing". The alternative (the host compiles a parked plugin's recorded tab) is a new host duty and waits for the user.
+  - **User rulings (11-22/23):**
+    - `when` vocabulary may cover state the SDK already exposes (player.state, subtitles.state); never words for one plugin, above all a third-party one. Next: an issue for SDK 1.12 general SubtitlesState words (shown, count, secondary, owned, style).
+    - Every test run is silent (ao=null / --silent).
+    - No GPL written offer now: nothing is distributed outside; source publication goes with the public release and open-sourcing.
+    - T8 no longer waits for the user's review: normal review, verification, merge and a 0.11.x release.
+    - Long term: let plugins bring their own temporal processing (frame interpolation); recorded as #460, not scheduled.
+  - **T8 state:** synced to Release B; independent review done and fixed (loader scoping only narrows, probed adapter, children unscoped, drop hint needs two readings); libmpv shipped as pinned pre-releases (libmpv-ffmpeg9.1-20261122, deps-20261122.1; FFmpeg tools carried over byte-identical). Next: sync to main 0.11.0, then the libmpv-swap regression (d3d11va, d3d11vpp, frc_amf on 9.1, subtitles, network) and the on-screen drop-hint check on an idle GPU. Follow-ups for the next libmpv bump: #458.
+  - **Follow-ups:** a file passed at launch plays about 1 s from 0 before history's resume seek (also on 0.10.3); Release B worktrees and target dirs removed; many older worktrees remain (T3).
 - 11-22: **T8 started (user).** The T8 comparison is done (report at :4181/t8/). The NVIDIA engine is FFmpeg 9.1's `fruc_vulkan` (RTX 30+): real time at 1080p and 4K on the fast setting. RIFE has the best quality but is not real time at 4K, so it is deferred (possibly for offline export later). The user said to go ahead on a separate branch:
   - build a libmpv on FFmpeg ≥ 9.1, with the mpv patch for a Vulkan device in the vf chain;
   - add the host `video.motion` NVIDIA engine and an "NVIDIA Motion Smoothing" store plugin;
