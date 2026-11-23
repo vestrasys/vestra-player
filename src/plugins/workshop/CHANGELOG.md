@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.49
+
+- The vendored SDK is 1.11.2 as published on npm (`npm run vendor:sdk`), the version the player now uses. 1.11.2 adds `TestHost.strictErrors` (default `true`: a host error the plugin leaves to its log fails the test), `TestHost.expectError(code)` and `TestHost.loggedErrors`, with security fixes and new example screenshots; the documentation tree and `llms.txt` follow. Who must change: nobody.
+
 ## 2.2.48
 
 - The vendored SDK is 1.11.1 as published on npm (`npm run vendor:sdk`), the version the player now uses. 1.11.1 adds NVIDIA motion smoothing (`plugin.video.motion("nvidia")`, the `other-engine` reason code, `TestHost.nvidiaMotion`); the documentation tree and `llms.txt` follow. The Workshop uses none of it. Who must change: nobody.

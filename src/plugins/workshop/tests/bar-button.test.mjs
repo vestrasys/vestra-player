@@ -8,7 +8,7 @@ import { until } from "./fixture.mjs";
 
 test("the bottom bar's AI button: icon, order, tooltip, and a click opens the window like the menu", async (t) => {
   const host = new TestHost();
-  const started = await startPlugin(activate, { directory: new URL("..", import.meta.url), host });
+  const started = await startPlugin(activate, { directory: new URL("..", import.meta.url), host, builtin: true });
   t.after(() => started.stop());
   assert.equal(host.barButtons.length, 1);
   const [button] = host.barButtons;

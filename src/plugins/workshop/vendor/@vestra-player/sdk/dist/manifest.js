@@ -3,7 +3,7 @@
  * player's `src/host/src/packages/manifest.rs` (the player's tests compare the limits).
  * Paths in the manifest are checked against the plugin directory.
  */
-import { existsSync, lstatSync, readFileSync, realpathSync } from "node:fs";
+import { closeSync, existsSync, fstatSync, openSync, readFileSync, realpathSync, } from "node:fs";
 import { join, sep } from "node:path";
 import { API_VERSION } from "./protocol.js";
 export const MANIFEST_LIMITS = Object.freeze({
@@ -140,19 +140,39 @@ export function manifestProblems(manifest, directory) {
         if (!extensions.some((x) => value.toLowerCase().endsWith(x)))
             return void problem(`${field} must be a ${extensions.join(" or ")} file`);
         const path = join(directory, value);
-        if (!existsSync(path))
-            return void problem(`${field} file ${value} is missing`);
         let real;
         try {
             real = realpathSync(path);
         }
         catch {
-            return void problem(`${field} file ${value} is unreadable`);
+            return void problem(existsSync(path)
+                ? `${field} file ${value} is unreadable`
+                : `${field} file ${value} is missing`);
         }
         const root = realpathSync(directory);
-        if (!real.startsWith(root + sep) || lstatSync(real).isDirectory())
-            return void problem(`${field} must name a file inside the package`);
-        const bytes = readFileSync(real);
+        const outside = () => void problem(`${field} must name a file inside the package`);
+        if (!real.startsWith(root + sep))
+            return outside();
+        // Opened once: the file checked (not a directory) is the file read,
+        // whatever happens to the path meanwhile.
+        let handle;
+        try {
+            handle = openSync(real, "r");
+        }
+        catch (error) {
+            if (error.code === "EISDIR")
+                return outside();
+            throw error;
+        }
+        let bytes;
+        try {
+            if (fstatSync(handle).isDirectory())
+                return outside();
+            bytes = readFileSync(handle);
+        }
+        finally {
+            closeSync(handle);
+        }
         if (bytes.length > max)
             return void problem(`${field} file exceeds ${max / 1024} KB`);
         return bytes;

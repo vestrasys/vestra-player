@@ -21,7 +21,7 @@ test("activation does not wait for the keychain; the window shows that it is rea
   const host = new TestHost();
   const held = heldKeychain(host);
   const started = await Promise.race([
-    startPlugin(activate, { directory: new URL("..", import.meta.url), host, locale: "zh-Hans" }),
+    startPlugin(activate, { directory: new URL("..", import.meta.url), host, locale: "zh-Hans", builtin: true }),
     new Promise((_, reject) => setTimeout(() => reject(new Error("activation waited for the keychain")), 3000)),
   ]);
   assert.ok(host.commands.has("workshop.open"));
@@ -51,7 +51,7 @@ test("a denied keychain keeps the plugin running, says so, and a new save fixes 
 test("a slow keychain: the key arrives when the user answers; it is read once", async () => {
   const host = new TestHost();
   const held = heldKeychain(host);
-  const started = await startPlugin(activate, { directory: new URL("..", import.meta.url), host });
+  const started = await startPlugin(activate, { directory: new URL("..", import.meta.url), host, builtin: true });
   void host.command("workshop.open").run();
   void host.command("workshop.open").run(); // opening again shares the read
   await until(host, () => held.length === 1, "one read");
@@ -76,7 +76,7 @@ test("the first slice's key moves lazily, after a refusal too", async () => {
     if (refuse) throw new HostError("failed", "User canceled the operation.");
     return stored.get(name) ?? null;
   });
-  const started = await startPlugin(activate, { directory: new URL("..", import.meta.url), host, dataDirectory: data });
+  const started = await startPlugin(activate, { directory: new URL("..", import.meta.url), host, dataDirectory: data, builtin: true });
   await host.command("workshop.open").run();
   const props = host.window("ai").props;
   // The refusal shows and blocks sending (never keyless to a remote URL); it is retried.

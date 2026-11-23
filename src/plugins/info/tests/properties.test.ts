@@ -621,6 +621,7 @@ test("I05: a window that cannot open neither polls nor follows the player", asyn
   host.handle("ui.open", () => {
     throw new HostError("ui", "injected native open rejection");
   });
+  host.expectError("ui"); // the injected rejection this test is about; nothing in the plugin handles it, so it is logged
   await host.command("info.properties").run(); // the failure goes to the plugin's error handler
   await host.settle();
   assert.equal(host.windows.has("properties"), false);

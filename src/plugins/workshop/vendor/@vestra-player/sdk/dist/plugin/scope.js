@@ -189,8 +189,10 @@ export class ScopeImpl {
             }
         else if (this.#parent)
             this.#parent.report(coded);
-        else
+        else {
             console.error(`[${this.id}]`, coded);
+            this.runtime.logged?.(coded);
+        }
     }
     /** Invoke plugin code on its behalf: report failures, then refresh bindings. */
     run(handler, ...args) {

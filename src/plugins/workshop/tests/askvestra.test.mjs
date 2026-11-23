@@ -78,6 +78,7 @@ test("lead row: shown in the interface language", async (t) => {
 
 test("not built in (a development load): the row is refused, the rest of the plugin works", async (t) => {
   const host = new TestHost();
+  host.expectError("builtin-only"); // the refusal of the lead row this test is about
   const started = await startPlugin(activate, { directory: new URL("..", import.meta.url), host });
   t.after(() => started.stop());
   await host.settle();

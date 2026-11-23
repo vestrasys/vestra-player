@@ -397,6 +397,7 @@ export class Passes {
             }
             catch (error) {
                 console.error(`[${this.#connection.manifest.id}] binding failed:`, error);
+                this.#connection.logged?.(error);
             }
             finally {
                 this.#pass = undefined;

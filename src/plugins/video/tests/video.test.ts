@@ -905,16 +905,22 @@ test("Picture panel: an editor drag on an occupied display says 'Display unavail
   const host = new TestHost();
   host.setVideoViewOwner("probe.plugin");
   host.openElsewhere("/movie.mp4");
+  // Each display change the player refuses is a `conflict` the plugin leaves to its log (on screen: one
+  // notice per action, below): the one at activation, then one per move that changes the frame.
+  host.expectError("conflict");
   const { stop } = await start(host);
   await host.command("video.picture").run();
   await host.settle();
   const window = host.mounted();
   assert.deepEqual(host.osd, [], "silent at start");
   // One drag: moves (`done` false), then the release (`done` true): one notice.
+  host.expectError("conflict");
   window.emit("frame-edit", 1.1, 0, 0, false);
   await host.settle();
+  host.expectError("conflict");
   window.emit("frame-edit", 1.2, 0.1, 0, false);
   await host.settle();
+  host.expectError("conflict");
   window.emit("frame-edit", 1.3, 0.2, 0, false);
   await host.settle();
   window.emit("frame-edit", 1.3, 0.2, 0, true);
@@ -922,16 +928,20 @@ test("Picture panel: an editor drag on an occupied display says 'Display unavail
   assert.deepEqual(host.osd, ["Display unavailable: another plugin controls the display"]);
   assert.equal(host.videoView.owner, "probe.plugin");
   // The next drag is a new action: one more; a wheel notch (`done` at once) is one each.
+  host.expectError("conflict");
   window.emit("frame-edit", 1.4, 0.2, 0, false);
   await host.settle();
+  host.expectError("conflict");
   window.emit("frame-edit", 1.5, 0.2, 0, true);
   await host.settle();
+  host.expectError("conflict");
   window.emit("frame-edit", 1.6, 0.2, 0, true);
   await host.settle();
   assert.equal(host.osd.length, 3);
   // A drag that changes nothing at first still announces on its first real change.
   window.emit("frame-edit", 1.6, 0.2, 0, false);
   await host.settle();
+  host.expectError("conflict");
   window.emit("frame-edit", 1.7, 0.2, 0, false);
   await host.settle();
   window.emit("frame-edit", 1.7, 0.2, 0, true);
@@ -1517,6 +1527,8 @@ test("E11: another plugin owning the display layer: silent at start, a reason on
   const host = new TestHost();
   host.setVideoViewOwner("probe.plugin");
   host.openElsewhere("/movie.mp4");
+  // The refusals (`conflict`) the plugin leaves to its log: at activation (silent), then on use.
+  host.expectError("conflict");
   const { stop } = await start(host);
   await host.command("video.picture").run();
   await host.settle();
@@ -1524,6 +1536,7 @@ test("E11: another plugin owning the display layer: silent at start, a reason on
   assert.deepEqual(host.osd, []);
   assert.deepEqual([window.props.status, window.props.detail, window.props.conflict], ["view", "", true]);
   assert.equal(window.props.failed, true);
+  host.expectError("conflict");
   await host.command("video.aspect.0").run();
   await host.settle();
   assert.equal(host.osd.at(-1), "Display unavailable: another plugin controls the display");

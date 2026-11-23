@@ -45,9 +45,11 @@ const SETTLED = ["key-saved", "fetched", "fetched-replaced", "fetch-failed-custo
  * The plugin, its window opened. `compat`: a mock server URL to configure as
  * "Custom · OpenAI format" (its first listed model, mock-1) with KEY.
  * `locale`: the interface language (English when unset). `builtin`: run as the
- * player's built-in plugin (the palette's lead row, Ask Vestra).
+ * player's built-in plugin (the palette's lead row, Ask Vestra), as the player
+ * runs it; `false` is a development load, whose lead row the player refuses
+ * (`builtin-only`, a host error the test must expect).
  */
-export async function startAi({ data, compat, secrets = {}, deny = false, locale, builtin = false } = {}) {
+export async function startAi({ data, compat, secrets = {}, deny = false, locale, builtin = true } = {}) {
   const host = new TestHost();
   // `deny`: the user refuses the keychain's authorization dialog.
   if (deny)
