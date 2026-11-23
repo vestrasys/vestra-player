@@ -522,6 +522,7 @@ pub fn spawn(paths: &[PathBuf]) -> io::Result<u32> {
     for key in NOT_INHERITED {
         command.env_remove(key);
     }
+    crate::platform::unscoped_child_env(&mut command);
     command.arg("--guest");
     if SILENT.load(Ordering::Relaxed) {
         command.arg("--silent");

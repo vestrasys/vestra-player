@@ -19,7 +19,10 @@ fn no_amd() -> MotionProbe {
 /// GPU rendering, a 24 fps video on a 60 Hz display, nothing in the way.
 fn facts<'a>(probe: &'a MotionProbe, reason: &'a RenderReason, rendering: &'a Value) -> Facts<'a> {
     Facts {
+        engine: Engine::Amd,
         probe,
+        has_filter: true,
+        other: None,
         refused: None,
         gpu_now: true,
         render_reason: reason,
@@ -30,6 +33,7 @@ fn facts<'a>(probe: &'a MotionProbe, reason: &'a RenderReason, rendering: &'a Va
         source_fps: Some(24.),
         display_fps: 60.,
         any_rate: false,
+        any_size: false,
         video: Some((1920., 1080.)),
         doubling: false,
         broken: None,
@@ -220,10 +224,16 @@ fn modes_parse_and_the_strongest_applies() {
     assert_eq!(Mode::parse("triple"), None);
     let mut motion = Motion::with_probe(amd);
     assert_eq!(motion.wanted(), Mode::Off);
-    motion.owners.insert(1, Mode::Double);
-    motion.owners.insert(2, Mode::Display);
+    motion.owners.insert(1, (Engine::Amd, Mode::Double));
+    motion.owners.insert(2, (Engine::Amd, Mode::Display));
+    // The holder is settled at each update (`refresh_holder`).
+    motion.refresh_holder();
     assert_eq!(motion.wanted(), Mode::Display);
     motion.owners.remove(&2);
+    assert_eq!(motion.wanted(), Mode::Double);
+    // Another engine's request does not count while AMD's holds it.
+    motion.owners.insert(3, (Engine::Nvidia, Mode::Display));
+    motion.refresh_holder();
     assert_eq!(motion.wanted(), Mode::Double);
 }
 
@@ -232,7 +242,7 @@ fn the_worker_waits_only_while_motion_smoothing_is_asked_for() {
     let mut motion = Motion::with_probe(amd);
     let start = Instant::now();
     assert_eq!(motion.due_in(start), None);
-    motion.owners.insert(1, Mode::Double);
+    motion.owners.insert(1, (Engine::Amd, Mode::Double));
     assert_eq!(motion.due_in(start), Some(Duration::ZERO));
     motion.checked = Some(start);
     assert_eq!(
@@ -322,7 +332,7 @@ impl Effects for Recorded {
 
 /// The platform's filter is Windows only; the chain handling is the same
 /// for any filter, so these tests put in one every mpv build accepts.
-fn stand_in(large: bool, performance: bool) -> Option<String> {
+fn stand_in(_engine: Engine, large: bool, performance: bool) -> Option<String> {
     Some(format!(
         "lavfi=[scale=w=iw{}:h=ih{}]",
         if performance { "/2*2" } else { "" },
@@ -357,6 +367,7 @@ fn mpv_takes_the_platform_filter() {
     let mut motion = Motion::with_probe(amd);
     let mut effects = Recorded::default();
     let applied = Applied {
+        engine: Engine::Amd,
         mode: Mode::Double,
         large: false,
         performance: false,
@@ -496,7 +507,7 @@ fn a_disabled_filter_goes_for_this_video_and_comes_back_with_the_next() {
     );
     motion.poll(&mpv, &render, &events, &mut effects, 1);
     assert!(!labels(&mpv).iter().any(|l| l == LABEL));
-    let state = motion.state(&mpv, &render, 1, &Value::Null);
+    let state = motion.state(&mpv, &render, 1, Engine::Amd, &Value::Null);
     assert_eq!(state["double"]["code"], "failed", "{state}");
     assert!(
         state["double"]["message"]
@@ -533,8 +544,8 @@ fn falling_behind_steps_to_the_faster_search_then_off() {
     let render = software();
     let mut effects = Recorded::default();
     let mut motion = with_stand_in();
-    motion.probe = Some(amd());
-    motion.owners.insert(1, Mode::Double);
+    motion.probe[Engine::Amd] = Some(amd());
+    motion.owners.insert(1, (Engine::Amd, Mode::Double));
     motion.update(&mpv, &render, &mut effects, Instant::now());
     let first = mpv.get_property::<String>("vf").unwrap();
     // A verdict (as `watch` gives it after a window behind): the faster
@@ -549,7 +560,7 @@ fn falling_behind_steps_to_the_faster_search_then_off() {
     motion.overload = Some("the GPU could not keep up".into());
     motion.update(&mpv, &render, &mut effects, Instant::now());
     assert!(!labels(&mpv).iter().any(|l| l == LABEL));
-    let state = motion.state(&mpv, &render, 1, &Value::Null);
+    let state = motion.state(&mpv, &render, 1, Engine::Amd, &Value::Null);
     assert_eq!(state["double"]["code"], "overload");
     // The next video starts with the full search again.
     motion.new_video();
@@ -567,15 +578,15 @@ fn upscaling_and_a_stopped_plugin_take_the_filter_out() {
     let (events, _received) = mpsc::channel();
     let mut effects = Recorded::default();
     let mut motion = with_stand_in();
-    motion.probe = Some(amd());
-    motion.owners.insert(1, Mode::Double);
+    motion.probe[Engine::Amd] = Some(amd());
+    motion.owners.insert(1, (Engine::Amd, Mode::Double));
     motion.update(&mpv, &render, &mut effects, Instant::now());
     assert!(labels(&mpv).iter().any(|l| l == LABEL));
     // AI upscaling turned on: motion smoothing waits.
     motion.note_upscaling(true);
     motion.update(&mpv, &render, &mut effects, Instant::now());
     assert!(!labels(&mpv).iter().any(|l| l == LABEL));
-    let state = motion.state(&mpv, &render, 1, &Value::Null);
+    let state = motion.state(&mpv, &render, 1, Engine::Amd, &Value::Null);
     assert_eq!(state["double"]["code"], "upscaling");
     motion.note_upscaling(false);
     motion.update(&mpv, &render, &mut effects, Instant::now());
@@ -664,8 +675,8 @@ fn the_first_upscaling_request_takes_the_converter_out_before_its_answer() {
     };
     let start = |effects: &mut Recorded| {
         let mut motion = with_stand_in();
-        motion.probe = Some(amd());
-        motion.owners.insert(1, Mode::Double);
+        motion.probe[Engine::Amd] = Some(amd());
+        motion.owners.insert(1, (Engine::Amd, Mode::Double));
         motion.update(&mpv, &render, effects, Instant::now());
         assert!(in_chain(&mpv));
         assert_eq!(effects.held, [true]);
@@ -730,8 +741,8 @@ fn the_filter_waits_until_the_frames_are_in_memory() {
     let render = software();
     let mut effects = Recorded::default();
     let mut motion = with_stand_in();
-    motion.probe = Some(amd());
-    motion.owners.insert(1, Mode::Double);
+    motion.probe[Engine::Amd] = Some(amd());
+    motion.owners.insert(1, (Engine::Amd, Mode::Double));
     motion.update(&mpv, &render, &mut effects, Instant::now());
     assert_eq!(effects.held, [true], "copy-back asked for first");
     assert!(!labels(&mpv).iter().any(|l| l == LABEL), "not before");
@@ -761,8 +772,8 @@ fn the_filter_stays_out_while_a_new_source_opens() {
     let mut motion = with_stand_in();
     let gate = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
     motion.follow_gate(gate.clone());
-    motion.probe = Some(amd());
-    motion.owners.insert(1, Mode::Double);
+    motion.probe[Engine::Amd] = Some(amd());
+    motion.owners.insert(1, (Engine::Amd, Mode::Double));
     motion.update(&mpv, &render, &mut effects, Instant::now());
     assert!(labels(&mpv).iter().any(|l| l == LABEL));
     gate.store(false, std::sync::atomic::Ordering::Release);
@@ -874,7 +885,7 @@ fn warp_file_change_with_the_converter() {
     });
     let filter = format!(
         "@{LABEL}:{}",
-        crate::platform::motion_filter(false, false).unwrap()
+        crate::platform::motion_filter(crate::playback::motion::Engine::Amd, false, false).unwrap()
     );
     let drain = |mpv: &Mpv, what: &str| {
         while let Some(event) = mpv.poll_event() {
@@ -1008,39 +1019,223 @@ fn a_video_too_large_for_the_renderer_is_not_offered() {
 }
 
 #[test]
-fn the_reserved_engine_answers_without_a_converter() {
+fn nvidias_size_limit_is_4k30_for_every_renderer_and_mode() {
+    let (reason, rendering) = (RenderReason::Default, Value::Null);
+    let probe = amd();
+    let at = |w: f64, h: f64, fps: f64, gpu: bool| Facts {
+        engine: Engine::Nvidia,
+        gpu_now: gpu,
+        video: Some((w, h)),
+        source_fps: Some(fps),
+        any_rate: true,
+        ..facts(&probe, &reason, &rendering)
+    };
+    for (gpu, mode) in [
+        (false, Mode::Double),
+        (true, Mode::Double),
+        (true, Mode::Display),
+    ] {
+        assert_eq!(
+            check(&at(3840., 2160., 30., gpu), mode),
+            Ok(()),
+            "{gpu} {mode:?}"
+        );
+        let error = check(&at(4096., 2160., 30., gpu), mode).unwrap_err();
+        assert_eq!(error.code(), "size");
+        assert!(
+            error.message().contains("4K at 30 fps"),
+            "{}",
+            error.message()
+        );
+    }
+}
+
+#[test]
+fn engines_parse_and_an_engine_without_a_filter_says_so() {
+    for engine in Engine::ALL {
+        assert_eq!(Engine::from_name(engine.as_str()), Some(engine));
+    }
+    assert_eq!(Engine::from_name("intel"), None);
+    let (reason, rendering) = (RenderReason::Default, Value::Null);
+    let probe = amd();
+    let error = check(
+        &Facts {
+            engine: Engine::Nvidia,
+            has_filter: false,
+            ..facts(&probe, &reason, &rendering)
+        },
+        Mode::Double,
+    )
+    .unwrap_err();
+    assert_eq!(error.code(), "engine");
+    assert!(error.fixed());
+    assert!(error.message().contains("NVIDIA"), "{}", error.message());
+    // The other engine holding the converter: it waits, not refused.
+    let error = check(
+        &Facts {
+            engine: Engine::Nvidia,
+            other: Some(Engine::Amd),
+            ..facts(&probe, &reason, &rendering)
+        },
+        Mode::Double,
+    )
+    .unwrap_err();
+    assert_eq!(error.code(), "other-engine");
+    assert!(!error.fixed());
+    assert!(error.message().starts_with("AMD motion smoothing is on"));
+}
+
+#[test]
+fn one_converter_runs_at_a_time_and_the_first_engine_keeps_it() {
     let _one = one_mpv_at_a_time();
     let mpv = mpv();
+    play(&mpv, 30);
     let render = software();
     let (events, received) = mpsc::channel();
     let mut effects = Recorded::default();
     let mut motion = with_stand_in();
-    let state = command(1, "video.motion.state", json!({"engine":"nvidia"}));
-    assert!(motion.command(&mpv, &render, &state, &events, &mut effects));
+    let set = |owner: u64, engine: &str, mode: &str| {
+        command(
+            owner,
+            "video.motion.set",
+            json!({"engine":engine,"mode":mode}),
+        )
+    };
+    // NVIDIA first.
+    assert!(motion.command(
+        &mpv,
+        &render,
+        &set(1, "nvidia", "double"),
+        &events,
+        &mut effects
+    ));
     let state = reply(&received).unwrap();
-    assert_eq!(state["engine"], "nvidia");
-    assert_eq!(state["double"]["code"], "engine", "{state}");
-    assert_eq!(state["display"]["code"], "engine", "{state}");
+    assert_eq!(state["engine"], "nvidia", "{state}");
+    assert_eq!(state["active"], "double", "{state}");
+    assert_eq!(state["inChain"], true, "{state}");
+    assert_eq!(motion.applied.map(|a| a.engine), Some(Engine::Nvidia));
+    // AMD asked by another plugin: kept, waiting.
+    while received.try_recv().is_ok() {}
+    motion.command(
+        &mpv,
+        &render,
+        &set(2, "amd", "double"),
+        &events,
+        &mut effects,
+    );
+    let state = reply(&received).unwrap();
+    assert_eq!(state["engine"], "amd", "{state}");
+    assert_eq!(state["mode"], "double", "{state}");
+    assert_eq!(state["active"], "off", "{state}");
+    assert_eq!(state["inChain"], false, "{state}");
+    assert_eq!(state["double"]["code"], "other-engine", "{state}");
+    assert!(
+        state["double"]["message"]
+            .as_str()
+            .unwrap()
+            .starts_with("NVIDIA motion smoothing is on"),
+        "{state}"
+    );
+    // Each engine's change goes out with its engine.
+    let engines: Vec<String> = received
+        .try_iter()
+        .filter_map(|event| match event {
+            Event::Broadcast(name, state) if name == CHANGED => {
+                state["engine"].as_str().map(str::to_owned)
+            }
+            _ => None,
+        })
+        .collect();
+    assert!(
+        engines.iter().all(|e| e == "amd" || e == "nvidia"),
+        "{engines:?}"
+    );
+    // NVIDIA off: AMD's request takes the converter, in place.
+    motion.command(
+        &mpv,
+        &render,
+        &set(1, "nvidia", "off"),
+        &events,
+        &mut effects,
+    );
+    while received.try_recv().is_ok() {}
+    assert_eq!(motion.applied.map(|a| a.engine), Some(Engine::Amd));
+    assert_eq!(labels(&mpv).iter().filter(|l| *l == LABEL).count(), 1);
+    // Copy-back went on once and stayed on through the hand-over.
+    assert_eq!(effects.held, [true]);
+    // Off for an engine the plugin did not ask leaves its request.
+    motion.command(
+        &mpv,
+        &render,
+        &set(2, "nvidia", "off"),
+        &events,
+        &mut effects,
+    );
+    assert_eq!(motion.owners.get(&2), Some(&(Engine::Amd, Mode::Double)));
+    // An unknown engine is invalid.
+    let other = command(1, "video.motion.state", json!({"engine":"intel"}));
+    while received.try_recv().is_ok() {}
+    motion.command(&mpv, &render, &other, &events, &mut effects);
+    assert_eq!(reply(&received).unwrap_err().code, "invalid");
+}
+
+#[test]
+fn nvidias_converter_without_a_vulkan_device_is_run_long_at_once() {
+    assert!(device_failure(
+        Engine::Nvidia,
+        "could not create hwdevice=vulkan (NVIDIA): Generic error in an external library",
+        1
+    ));
+    assert!(device_failure(
+        Engine::Nvidia,
+        "Vulkan device does not support the VK_NV_optical_flow extension",
+        1
+    ));
+    assert!(!device_failure(
+        Engine::Nvidia,
+        "failed to configure the filter graph",
+        3
+    ));
+    let _one = one_mpv_at_a_time();
+    let mpv = mpv();
+    play(&mpv, 30);
+    let render = software();
+    let (events, received) = mpsc::channel();
+    let mut effects = Recorded::default();
+    let mut motion = with_stand_in();
+    motion.probe[Engine::Nvidia] = Some(amd());
+    motion.owners.insert(1, (Engine::Nvidia, Mode::Double));
+    motion.update(&mpv, &render, &mut effects, Instant::now());
+    assert!(labels(&mpv).iter().any(|l| l == LABEL));
+    motion.log(
+        "lavfi",
+        "fatal",
+        "could not create hwdevice=vulkan (NVIDIA): Generic error in an external library",
+    );
+    motion.log(
+        "vf",
+        "error",
+        "Disabling filter vestra-motion because it has failed.",
+    );
+    motion.update(&mpv, &render, &mut effects, Instant::now());
+    assert!(!labels(&mpv).iter().any(|l| l == LABEL));
+    assert!(motion.broken[Engine::Nvidia].is_some());
+    assert_eq!(
+        motion.broken[Engine::Amd],
+        None,
+        "AMD's engine is untouched"
+    );
+    assert_eq!(effects.held, [true, false], "copy-back ends with it");
+    // The next request is refused for the run, with the reason.
     let on = command(
-        1,
+        2,
         "video.motion.set",
         json!({"engine":"nvidia","mode":"double"}),
     );
     motion.command(&mpv, &render, &on, &events, &mut effects);
-    assert_eq!(reply(&received).unwrap_err().code, "unsupported");
-    let off = command(
-        1,
-        "video.motion.set",
-        json!({"engine":"nvidia","mode":"off"}),
-    );
-    motion.command(&mpv, &render, &off, &events, &mut effects);
-    assert_eq!(reply(&received).unwrap()["mode"], "off");
-    let other = command(1, "video.motion.state", json!({"engine":"intel"}));
-    motion.command(&mpv, &render, &other, &events, &mut effects);
-    assert_eq!(reply(&received).unwrap_err().code, "invalid");
-    // Nothing of AMD's was touched.
-    assert!(motion.owners.is_empty());
-    assert!(effects.held.is_empty());
+    let error = reply(&received).unwrap_err();
+    assert_eq!(error.code, "unsupported");
+    assert!(error.message.contains("Vulkan"), "{}", error.message);
 }
 
 /// Frame Doubling, an unmeasured format and a converter that failed the
@@ -1079,7 +1274,7 @@ fn doubling_format_and_a_repeated_failure_have_their_reasons() {
     assert_eq!((error.code(), error.fixed()), ("runtime", true));
     // The fixed set is FIXED_CODES (the SDK's TestHost and docs agree).
     assert!(!Reason::Starting.fixed());
-    assert!(Reason::Engine.fixed());
+    assert!(Reason::Engine(Engine::Nvidia).fixed());
 }
 
 #[test]
@@ -1090,8 +1285,8 @@ fn the_same_failure_on_two_videos_ends_tries_for_the_run() {
     let render = software();
     let mut effects = Recorded::default();
     let mut motion = with_stand_in();
-    motion.probe = Some(amd());
-    motion.owners.insert(1, Mode::Double);
+    motion.probe[Engine::Amd] = Some(amd());
+    motion.owners.insert(1, (Engine::Amd, Mode::Double));
     for video in 0..2 {
         motion.new_video();
         motion.input = Some(30.);
@@ -1112,7 +1307,7 @@ fn the_same_failure_on_two_videos_ends_tries_for_the_run() {
         !labels(&mpv).iter().any(|l| l == LABEL),
         "not tried a third time"
     );
-    let state = motion.state(&mpv, &render, 1, &Value::Null);
+    let state = motion.state(&mpv, &render, 1, Engine::Amd, &Value::Null);
     assert_eq!(state["double"]["code"], "runtime", "{state}");
 }
 
@@ -1128,13 +1323,14 @@ fn resampling_and_copy_back_end_on_every_path_out() {
     let gate = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
     let open = |on: bool| gate.store(on, std::sync::atomic::Ordering::Release);
     let display = || Applied {
+        engine: Engine::Amd,
         mode: Mode::Display,
         large: false,
         performance: false,
     };
     let start = |motion: &mut Motion, effects: &mut Recorded| {
-        motion.probe = Some(amd());
-        motion.owners.insert(1, Mode::Double);
+        motion.probe[Engine::Amd] = Some(amd());
+        motion.owners.insert(1, (Engine::Amd, Mode::Double));
         motion.update(&mpv, &render, effects, Instant::now());
         // As if Match Display ran (software rendering here cannot).
         motion.applied = Some(display());
@@ -1163,7 +1359,7 @@ fn resampling_and_copy_back_end_on_every_path_out() {
     start(&mut motion, &mut effects);
     mpv.command(&["vf", "remove", &format!("@{LABEL}")])
         .unwrap();
-    motion.filter = |_, _| Some("lavfi=[no_such_filter_here]".into());
+    motion.filter = |_, _, _| Some("lavfi=[no_such_filter_here]".into());
     motion.keep_last(&mpv, &mut effects, display());
     assert_eq!(motion.resampling, None);
     assert_eq!(effects.held.last(), Some(&false));
@@ -1231,16 +1427,29 @@ fn the_depth_is_the_same_decoded_natively_or_with_copy_back() {
 
 #[test]
 fn only_a_repeated_amf_start_failure_is_run_long() {
-    assert!(amf_init_failure("AMFFRC->Init() failed with error 4"));
-    assert!(!amf_init_failure("failed to configure the filter graph"));
+    assert!(device_failure(
+        Engine::Amd,
+        "AMFFRC->Init() failed with error 4",
+        2
+    ));
+    assert!(!device_failure(
+        Engine::Amd,
+        "AMFFRC->Init() failed with error 4",
+        1
+    ));
+    assert!(!device_failure(
+        Engine::Amd,
+        "failed to configure the filter graph",
+        2
+    ));
     let _one = one_mpv_at_a_time();
     let mpv = mpv();
     play(&mpv, 30);
     let render = software();
     let mut effects = Recorded::default();
     let mut motion = with_stand_in();
-    motion.probe = Some(amd());
-    motion.owners.insert(1, Mode::Double);
+    motion.probe[Engine::Amd] = Some(amd());
+    motion.owners.insert(1, (Engine::Amd, Mode::Double));
     for _ in 0..2 {
         motion.new_video();
         motion.input = Some(30.);
@@ -1253,7 +1462,11 @@ fn only_a_repeated_amf_start_failure_is_run_long() {
         );
         motion.update(&mpv, &render, &mut effects, Instant::now());
     }
-    assert_eq!(motion.broken, None, "another failure stays per video");
+    assert_eq!(
+        motion.broken[Engine::Amd],
+        None,
+        "another failure stays per video"
+    );
     motion.new_video();
     motion.input = Some(30.);
     motion.update(&mpv, &render, &mut effects, Instant::now());
@@ -1327,11 +1540,11 @@ fn the_rate_rule_judges_the_converters_real_input() {
     let mut motion = with_stand_in();
     motion.input = None;
     motion.any_rate = true;
-    motion.probe = Some(amd());
-    motion.owners.insert(1, Mode::Double);
+    motion.probe[Engine::Amd] = Some(amd());
+    motion.owners.insert(1, (Engine::Amd, Mode::Double));
     motion.update(&mpv, &render, &mut effects, Instant::now());
     assert!(!labels(&mpv).iter().any(|l| l == LABEL), "not offered");
-    let state = motion.state(&mpv, &render, 1, &Value::Null);
+    let state = motion.state(&mpv, &render, 1, Engine::Amd, &Value::Null);
     assert_eq!(state["double"]["code"], "rate", "{state}");
     assert!(
         (state["sourceFps"].as_f64().unwrap() - 60.).abs() < 2.,
@@ -1350,9 +1563,9 @@ fn the_input_rate_is_measured_out_of_the_chain_and_kept_in_it() {
     let render = software();
     let mut effects = Recorded::default();
     let mut motion = with_stand_in();
-    motion.probe = Some(amd());
+    motion.probe[Engine::Amd] = Some(amd());
     motion.input = None;
-    motion.owners.insert(1, Mode::Double);
+    motion.owners.insert(1, (Engine::Amd, Mode::Double));
     assert_eq!(motion.input_fps(), None);
     motion.update(&mpv, &render, &mut effects, Instant::now());
     let input = motion.input_fps().unwrap();
@@ -1386,4 +1599,20 @@ fn the_input_rate_is_measured_out_of_the_chain_and_kept_in_it() {
         None,
         "measured again for the next video"
     );
+}
+
+#[test]
+fn overload_names_what_could_not_keep_up_by_renderer() {
+    // GPU rendering: the GPU (the converter and the drawing).
+    let gpu = overload_message(true, "51.2 of 60 fps");
+    assert!(gpu.starts_with("the GPU could not keep up"), "{gpu}");
+    assert!(gpu.ends_with("51.2 of 60 fps"), "{gpu}");
+    // Software rendering: the CPU copying and drawing the doubled frames
+    // (the GPU was 25–40 % busy, 2026-11-23), and what helps. Either engine.
+    let cpu = overload_message(false, "51.2 of 60 fps");
+    assert_eq!(
+        cpu,
+        "rendering on the CPU could not keep up with this video's doubled frames (51.2 of 60 fps); GPU Rendering (Picture ▸ Rendering) helps"
+    );
+    assert!(!cpu.contains("GPU could not"), "{cpu}");
 }

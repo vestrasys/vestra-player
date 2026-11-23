@@ -2,7 +2,7 @@ name: Set up libmpv
 description: >
   The pinned dependency archive from this repository's `deps-*` release
   (src/packaging/deps.json, built by deps.yml): macOS the Homebrew libmpv +
-  FFmpeg closure with @rpath install names, Windows shinchiro libmpv-2.dll
+  FFmpeg closure with @rpath install names, Windows libmpv-2.dll (our build, src/packaging/libmpv)
   with its MSVC import library mpv.lib and BtbN ffmpeg/ffprobe. Downloaded
   with the job token, checked against the SHA-256 in deps.json, cached.
   Sets MPV_LIBRARY_DIR (rsmpv-sys build.rs) and VESTRA_DEPS_DIR (the

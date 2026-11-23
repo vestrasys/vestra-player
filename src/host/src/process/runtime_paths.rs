@@ -168,6 +168,7 @@ impl RuntimePaths {
         let mut command = Command::new(&self.node);
         command.arg(NO_WEB_STORAGE);
         platform::hide_console(&mut command);
+        platform::unscoped_child_env(&mut command);
         if self.packaged {
             command.env_remove("NODE_OPTIONS").env_remove("NODE_PATH");
             for (key, path) in [
@@ -351,9 +352,19 @@ mod tests {
         // ffprobe is not there: plugins look it up themselves.
         assert!(!envs.contains_key(std::ffi::OsStr::new("VESTRA_FFPROBE")));
 
-        // A development build changes nothing in the environment.
+        // A development build changes nothing in the environment (but for
+        // motion smoothing's Vulkan scope, given back to every child once
+        // the scope is set: `platform::unscoped_child_env`, which another
+        // test in this process sets).
         paths.packaged = false;
-        assert_eq!(paths.node_command().get_envs().count(), 0);
+        assert_eq!(
+            paths
+                .node_command()
+                .get_envs()
+                .filter(|(name, _)| !name.to_string_lossy().starts_with("VK_LOADER_"))
+                .count(),
+            0
+        );
         // Both run without Web Storage, before the script and its arguments.
         for packaged in [true, false] {
             paths.packaged = packaged;

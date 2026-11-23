@@ -1,15 +1,25 @@
 //! Motion smoothing (`video.motion.state`, `video.motion.set`; capability
 //! `video.motion`, SDK 1.7.19; doc/architecture/README.md §4.4a), on the
 //! control worker: the video's frame rate doubled by a GPU vendor's frame-rate
-//! converter, real in-between frames rather than blends. Vendor-aware:
-//! `engine` `amd` runs here; `nvidia` is reserved ([`reserved`]). Built like video
-//! upscaling (`upscaling.rs`); the measurements are in the same section.
+//! converter, real in-between frames rather than blends. Per vendor
+//! ([`Engine`]): `amd` is AMD AMF's `frc_amf`, `nvidia` FFmpeg's
+//! `fruc_vulkan` (NVIDIA's optical flow hardware through Vulkan, RTX 30 and
+//! newer). One converter is in the chain at a time: the engine asked for
+//! first holds it while some plugin asks for it, and the other engine's
+//! requests wait (`other-engine`, with a message that names the engine). Built like video upscaling
+//! (`upscaling.rs`); the measurements are in the same section.
 //!
-//! - **Availability** ([`check`], [`Reason`]). The system's check
-//!   (`platform::motion_probe`: on Windows an AMD GPU and AMD's AMF runtime;
-//!   no device is created) runs once, when a plugin first asks. The filter
-//!   itself (mpv's libmpv must have FFmpeg's `frc_amf`) shows when it goes
-//!   in: refused by mpv, it is `filter` for the rest of the run. Then, each
+//! - **Availability** ([`check`], [`Reason`]). The system's check per
+//!   engine (`platform::motion_probe`: on Windows an AMD GPU and AMD's AMF
+//!   runtime, or an NVIDIA RTX 30+ GPU with a driver of 573.38 or newer; no
+//!   device is created and nothing of Vulkan is loaded) runs once, when a
+//!   plugin first asks for that engine. The filter itself (mpv's libmpv must
+//!   have FFmpeg's `frc_amf` or `fruc_vulkan`) shows when it goes in:
+//!   refused by mpv, it is `filter` for the rest of the run. NVIDIA's
+//!   converter gets a Vulkan device of its own, which the filter creates
+//!   when it goes into the chain and frees when it leaves (libmpv's
+//!   lavfi `hwdevice=`, src/packaging/libmpv): no Vulkan device otherwise,
+//!   and the renderers are untouched. Then, each
 //!   time: AI upscaling is off (the two filters cannot share the chain:
 //!   upscaling needs Direct3D 11 frames, the converter frames in memory;
 //!   measured, both orders fail to configure), the converter worked on this
@@ -33,10 +43,13 @@
 //!   [`WINDOW`] after a [`WARMUP`] (each pause, seek or new file starts
 //!   again), the filter's output rate (`estimated-vf-fps`) and mpv's dropped
 //!   frames (`frame-drop-count`, `decoder-frame-drop-count`) are compared to
-//!   the doubled rate. Behind once: the motion search on downscaled frames
-//!   (`mv_search_mode=performance`); behind again: the filter goes for this
-//!   video, with an `overload` reason. mpv disabling the filter (its log
-//!   line) takes it out with `failed` and the converter's own error.
+//!   the doubled rate. Behind once: the faster motion search (AMD:
+//!   `mv_search_mode=performance`; NVIDIA: `perf=fast`, which above 1440p
+//!   it already uses, so there it goes straight on); behind again:
+//!   the filter goes for this video, with an `overload` reason. mpv
+//!   disabling the filter (its log line) takes it out with `failed` and the
+//!   converter's own error; a converter that cannot start on this system
+//!   ([`device_failure`]) is `runtime` for the rest of the run.
 //! - **Who asked.** Each plugin's mode is its own; the strongest one asked
 //!   for applies (`display` over `double`). A stopped plugin's request goes.
 #![forbid(unsafe_code)]
@@ -59,13 +72,68 @@ const RERATE: f64 = 1.1;
 
 /// The filter's label in mpv's chain.
 pub const LABEL: &str = "vestra-motion";
-/// The engines (`MotionEngine` in the API): AMD AMF's converter, the one
-/// this module runs; NVIDIA's is reserved (its own plugin later, after a
-/// libmpv on an FFmpeg with its converter).
+/// The engines (`MotionEngine` in the API): AMD AMF's converter and
+/// NVIDIA's (FFmpeg's `fruc_vulkan`).
 pub const AMD: &str = "amd";
 pub const NVIDIA: &str = "nvidia";
-/// Why the reserved engine does not work (`engine`).
-const NO_NVIDIA: &str = "this player has no NVIDIA frame-rate converter; motion smoothing works with AMD's (engine amd)";
+
+/// A vendor's frame-rate converter: `MotionEngine` in the API.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Engine {
+    Amd,
+    Nvidia,
+}
+
+impl Engine {
+    pub const ALL: [Self; 2] = [Self::Amd, Self::Nvidia];
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Amd => AMD,
+            Self::Nvidia => NVIDIA,
+        }
+    }
+    pub fn from_name(text: &str) -> Option<Self> {
+        match text {
+            AMD => Some(Self::Amd),
+            NVIDIA => Some(Self::Nvidia),
+            _ => None,
+        }
+    }
+    /// The vendor, for the messages.
+    pub fn vendor(self) -> &'static str {
+        match self {
+            Self::Amd => "AMD",
+            Self::Nvidia => "NVIDIA",
+        }
+    }
+    /// The vendor's converter in FFmpeg, for the messages.
+    fn converter(self) -> &'static str {
+        match self {
+            Self::Amd => "frc_amf",
+            Self::Nvidia => "fruc_vulkan",
+        }
+    }
+    fn at(self) -> usize {
+        self as usize
+    }
+}
+
+/// One value per engine.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct PerEngine<T>([T; 2]);
+
+impl<T> std::ops::Index<Engine> for PerEngine<T> {
+    type Output = T;
+    fn index(&self, engine: Engine) -> &T {
+        &self.0[engine.at()]
+    }
+}
+
+impl<T> std::ops::IndexMut<Engine> for PerEngine<T> {
+    fn index_mut(&mut self, engine: Engine) -> &mut T {
+        &mut self.0[engine.at()]
+    }
+}
 /// The event with the shared state (`MotionState` without `mode`).
 pub const CHANGED: &str = "video.motion.changed";
 /// How often the worker looks at the rate and the output while motion
@@ -126,8 +194,9 @@ impl Mode {
 /// Why a mode does not work now: `MotionReason` in the API.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Reason {
-    /// The reserved engine (`engine`): no converter of it in this player.
-    Engine,
+    /// No converter of this engine in this player on this system
+    /// (`engine`).
+    Engine(Engine),
     /// The system's check failed: `platform`, `no-gpu`, `runtime`
     /// (`platform::MotionRefusal`).
     System { code: &'static str, message: String },
@@ -141,7 +210,8 @@ pub enum Reason {
     Upscaling,
     /// The converter stopped on this video (`failed`; not fixed).
     Failed(String),
-    /// The GPU did not keep up on this video (`overload`; not fixed).
+    /// The converter's output did not keep up on this video: the GPU, or the
+    /// CPU drawing it with software rendering (`overload`; not fixed).
     Overload(String),
     /// The video's rate does not fit (`rate`; not fixed).
     Rate(String),
@@ -151,6 +221,9 @@ pub enum Reason {
     /// A plugin's video filter already raises the frame rate (`doubling`:
     /// a `frameBlend` node, Frame Doubling; not fixed).
     Doubling,
+    /// The other engine's converter is in the chain for another plugin
+    /// (`other-engine`; not fixed: it waits until that one is off).
+    OtherEngine(Engine),
     /// The video's format was not measured (`format`: 10-bit or HDR; not
     /// fixed).
     Format(String),
@@ -171,7 +244,7 @@ pub const FIXED_CODES: &[&str] = &[
 impl Reason {
     pub fn code(&self) -> &'static str {
         match self {
-            Self::Engine => "engine",
+            Self::Engine(_) => "engine",
             Self::System { code, .. } => code,
             Self::Filter(_) => "filter",
             Self::Starting | Self::Rendering(_) => "rendering",
@@ -181,12 +254,20 @@ impl Reason {
             Self::Rate(_) => "rate",
             Self::Size(_) => "size",
             Self::Doubling => "doubling",
+            Self::OtherEngine(_) => "other-engine",
             Self::Format(_) => "format",
         }
     }
     pub fn message(&self) -> String {
         match self {
-            Self::Engine => NO_NVIDIA.into(),
+            Self::Engine(engine) => format!(
+                "this player has no {} frame-rate converter on this system",
+                engine.vendor()
+            ),
+            Self::OtherEngine(engine) => format!(
+                "{} motion smoothing is on (another plugin); one converter runs at a time, so this waits until it is off",
+                engine.vendor()
+            ),
             Self::Starting => "Match Display needs GPU rendering, which is starting".into(),
             Self::Upscaling => {
                 "AI upscaling is on; motion smoothing and AI upscaling cannot run together".into()
@@ -216,7 +297,14 @@ impl Reason {
 
 /// What [`check`] decides from.
 pub struct Facts<'a> {
+    /// The engine asked about.
+    pub engine: Engine,
     pub probe: &'a MotionProbe,
+    /// This player has the engine's filter on this system
+    /// (`platform::motion_filter`).
+    pub has_filter: bool,
+    /// The other engine holds the converter (another plugin asked first).
+    pub other: Option<Engine>,
     /// mpv refused the filter in this run (its error).
     pub refused: Option<&'a str>,
     /// GPU rendering draws now, and why it does or not (`Render::now`).
@@ -229,8 +317,9 @@ pub struct Facts<'a> {
     pub upscaling: bool,
     /// A plugin's video filter raises the frame rate (`frameBlend`).
     pub doubling: bool,
-    /// AMD's converter failed the same way on two videos in this run (its
-    /// error): `runtime` for the rest of the run.
+    /// The engine's converter cannot start on this system (AMD's failed the
+    /// same way on two videos in this run, NVIDIA's had no Vulkan device;
+    /// [`device_failure`]): `runtime` for the rest of the run.
     pub broken: Option<&'a str>,
     /// The video's format when it was not measured (10-bit, HDR), said.
     pub format: Option<String>,
@@ -246,6 +335,9 @@ pub struct Facts<'a> {
     /// `VESTRA_MOTION_RATE=any` (a test switch, for measurements): no
     /// display rule.
     pub any_rate: bool,
+    /// `VESTRA_MOTION_SIZE=any` (a test switch, for measurements): no size
+    /// rule.
+    pub any_size: bool,
     /// The video's storage size (`video-params/w`, `h`); `None` while
     /// unknown.
     pub video: Option<(f64, f64)>,
@@ -262,17 +354,27 @@ pub fn check(facts: &Facts<'_>, mode: Mode) -> Result<(), Reason> {
         code: refusal.code,
         message: refusal.message.clone(),
     })?;
+    if !facts.has_filter {
+        return Err(Reason::Engine(facts.engine));
+    }
     if let Some(error) = facts.broken {
         return Err(Reason::System {
             code: "runtime",
-            message: format!(
-                "AMD's frame-rate converter failed the same way on two videos ({error}); it is not tried again until the player restarts"
-            ),
+            message: match facts.engine {
+                Engine::Amd => format!(
+                    "AMD's frame-rate converter failed the same way on two videos ({error}); it is not tried again until the player restarts"
+                ),
+                Engine::Nvidia => format!(
+                    "NVIDIA's frame-rate converter cannot start on this system ({error}); it needs the NVIDIA driver's Vulkan support (573.38 or newer) on an RTX 30 or newer GPU, and is not tried again until the player restarts"
+                ),
+            },
         });
     }
     if let Some(error) = facts.refused {
         return Err(Reason::Filter(format!(
-            "this player's video library has no AMD frame-rate converter (frc_amf): {error}"
+            "this player's video library has no {} frame-rate converter ({}): {error}",
+            facts.engine.vendor(),
+            facts.engine.converter()
         )));
     }
     if mode == Mode::Display && !facts.gpu_now {
@@ -290,6 +392,9 @@ pub fn check(facts: &Facts<'_>, mode: Mode) -> Result<(), Reason> {
     }
     if facts.doubling {
         return Err(Reason::Doubling);
+    }
+    if let Some(other) = facts.other {
+        return Err(Reason::OtherEngine(other));
     }
     if let Some(error) = facts.failed {
         return Err(Reason::Failed(format!(
@@ -318,6 +423,18 @@ pub fn check(facts: &Facts<'_>, mode: Mode) -> Result<(), Reason> {
 pub const SOFTWARE_LIMIT: (f64, &str) = (1920. * 1080. * 60. * 1.01, "1080p at 30 fps");
 pub const GPU_DOUBLE_LIMIT: (f64, &str) = (3840. * 2160. * 48. * 1.01, "4K at 24 fps");
 pub const GPU_DISPLAY_LIMIT: (f64, &str) = (1920. * 1080. * 60. * 1.01, "1080p on a 60 Hz display");
+/// NVIDIA's converter: measured 2026-11-22 (RTX 4070 Laptop converting,
+/// `fruc_vulkan` `fast`/4 above 1440p; 60 Hz display;
+/// doc/architecture/README.md §4.4a). GPU rendering's Double and Match
+/// Display held 4K30 → 60 with no frame dropped; software rendering held
+/// 4K24 → 48 (1 dropped in 13 s) and was at the edge at 4K30 → 60 (8, 9
+/// and 24 dropped in 13 s; the last run fell back to the faster search).
+/// One limit for every renderer and mode all the same (user ruling, T8:
+/// stronger machines keep up, and the plugin tells the user when frames
+/// are dropped). Its frames reach the renderer from the discrete GPU's copy-back, not
+/// from an integrated GPU sharing the CPU's memory as AMD's on this laptop,
+/// which is where AMD's 4K cases fell behind.
+pub const NVIDIA_LIMIT: (f64, &str) = (3840. * 2160. * 60. * 1.01, "4K at 30 fps");
 
 /// The size rule: width × height × the frames a second the renderer then
 /// draws (the doubled rate; with Match Display the display's refresh rate,
@@ -327,6 +444,9 @@ pub const GPU_DISPLAY_LIMIT: (f64, &str) = (1920. * 1080. * 60. * 1.01, "1080p o
 /// show it cannot keep the display rate (the runtime fallback stays the
 /// safety net). Unknown size or rate: nothing to judge yet.
 fn size(facts: &Facts<'_>, mode: Mode) -> Result<(), Reason> {
+    if facts.any_size {
+        return Ok(());
+    }
     let (Some((width, height)), Some(fps)) = (facts.video, facts.source_fps) else {
         return Ok(());
     };
@@ -334,6 +454,10 @@ fn size(facts: &Facts<'_>, mode: Mode) -> Result<(), Reason> {
         (false, _) => (SOFTWARE_LIMIT.0, SOFTWARE_LIMIT.1, "software rendering"),
         (true, Mode::Display) => (GPU_DISPLAY_LIMIT.0, GPU_DISPLAY_LIMIT.1, "Match Display"),
         (true, _) => (GPU_DOUBLE_LIMIT.0, GPU_DOUBLE_LIMIT.1, "GPU rendering"),
+    };
+    let (limit, words) = match facts.engine {
+        Engine::Amd => (limit, words),
+        Engine::Nvidia => NVIDIA_LIMIT,
     };
     let drawn = if facts.gpu_now && mode == Mode::Display {
         facts.display_fps
@@ -409,10 +533,12 @@ fn number(value: f64) -> String {
 /// What the filter in mpv's chain is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Applied {
+    engine: Engine,
     mode: Mode,
-    /// `profile=super` (above 1440p).
+    /// Above 1440p (AMD: `profile=super`; NVIDIA: `perf=fast`).
     large: bool,
-    /// `mv_search_mode=performance` (the first fallback step).
+    /// The first fallback step (AMD: `mv_search_mode=performance`; NVIDIA:
+    /// `perf=fast`).
     performance: bool,
 }
 
@@ -442,15 +568,23 @@ struct Watch {
 /// The control worker's motion smoothing: who asked for what, the system's
 /// check, the filter in mpv's chain, the fallback.
 pub struct Motion {
-    owners: BTreeMap<u64, Mode>,
-    probe: Option<MotionProbe>,
-    run_probe: fn() -> MotionProbe,
+    /// Each plugin's engine and mode.
+    owners: BTreeMap<u64, (Engine, Mode)>,
+    /// The engine that holds the converter: the first asked for, while some
+    /// plugin asks for it ([`Motion::holder`]).
+    holder: Option<Engine>,
+    /// Each engine's system check, run when a plugin first asks for it.
+    probe: PerEngine<Option<MotionProbe>>,
+    run_probe: PerEngine<fn() -> MotionProbe>,
     /// The filter (`platform::motion_filter`; `None` where the platform has
     /// none). Tests put in a stand-in every mpv build accepts.
-    filter: fn(bool, bool) -> Option<String>,
+    filter: fn(Engine, bool, bool) -> Option<String>,
     applied: Option<Applied>,
-    /// mpv refused the filter: for the rest of the run.
-    refused: Option<String>,
+    /// mpv refused the engine's filter: for the rest of the run.
+    refused: PerEngine<Option<String>>,
+    /// The engine whose filter mpv refused last: its log line that follows
+    /// may say the converter cannot start here (`Motion::log`).
+    refusing: Option<Engine>,
     /// mpv disabled the filter on this video (its log), with the
     /// converter's last error.
     failed: Option<String>,
@@ -458,20 +592,25 @@ pub struct Motion {
     disabled: bool,
     /// The converter's (or the filter graph's) last error line.
     last_error: Option<String>,
-    /// The GPU did not keep up on this video.
+    /// The output did not keep up on this video ([`overload_message`]).
     overload: Option<String>,
     /// This video's fallback step: the motion search on downscaled frames.
     performance: bool,
     /// The source the per-video state belongs to.
     generation: Option<u64>,
+    /// The engine the per-video state (`failed`, `overload`,
+    /// `performance`) belongs to: the last that held the converter.
+    video_engine: Option<Engine>,
     watch: Watch,
     checked: Option<Instant>,
     /// Some plugin has AI upscaling on (`Upscaling::asked`).
     upscaling: bool,
-    /// The last `video.motion.changed` sent.
-    published: Option<Value>,
+    /// The last `video.motion.changed` sent, per engine.
+    published: PerEngine<Option<Value>>,
     /// `VESTRA_MOTION_RATE=any` (see [`Facts::any_rate`]).
     any_rate: bool,
+    /// `VESTRA_MOTION_SIZE=any` (see [`Facts::any_size`]).
+    any_size: bool,
     /// Frames in memory are held for the filter (`Effects::frames_in_memory`).
     holding: bool,
     /// Waiting for the copy-back decoder (said once in the log).
@@ -487,10 +626,11 @@ pub struct Motion {
     /// and mpv's own deinterlacer, so 25i deinterlaced by field reads 50),
     /// kept while it is in (then mpv's estimate is the doubled rate).
     input: Option<f64>,
-    /// The converter's failures in this run, by error, and the one that
-    /// happened twice (`runtime` for the rest of the run).
-    failures: BTreeMap<String, u32>,
-    broken: Option<String>,
+    /// The converters' failures in this run, by engine and error, and the
+    /// one that means the engine cannot start here (`runtime` for the rest
+    /// of the run; [`device_failure`]).
+    failures: BTreeMap<(Engine, String), u32>,
+    broken: PerEngine<Option<String>>,
     /// The renderer's publish gate (`follow_gate`; none: always open).
     gate: Option<Arc<AtomicBool>>,
     /// The gate as the last look saw it: a change is looked at at once.
@@ -499,38 +639,51 @@ pub struct Motion {
 
 impl Default for Motion {
     fn default() -> Self {
-        Self::with_probe(platform::motion_probe)
+        Self::with_probes(
+            || platform::motion_probe(Engine::Amd),
+            || platform::motion_probe(Engine::Nvidia),
+        )
     }
 }
 
 impl Motion {
-    /// With another system check (tests).
+    /// With another system check, the same for both engines (tests).
+    #[cfg(test)]
     pub fn with_probe(run_probe: fn() -> MotionProbe) -> Self {
+        Self::with_probes(run_probe, run_probe)
+    }
+
+    /// With other system checks (AMD's, NVIDIA's).
+    pub fn with_probes(amd: fn() -> MotionProbe, nvidia: fn() -> MotionProbe) -> Self {
         Self {
             owners: BTreeMap::new(),
-            probe: None,
-            run_probe,
+            holder: None,
+            probe: PerEngine::default(),
+            run_probe: PerEngine([amd, nvidia]),
             filter: platform::motion_filter,
             applied: None,
-            refused: None,
+            refused: PerEngine::default(),
+            refusing: None,
             failed: None,
             disabled: false,
             last_error: None,
             overload: None,
             performance: false,
             generation: None,
+            video_engine: None,
             watch: Watch::default(),
             checked: None,
             upscaling: false,
-            published: None,
+            published: PerEngine::default(),
             any_rate: std::env::var("VESTRA_MOTION_RATE").is_ok_and(|v| v.trim() == "any"),
+            any_size: std::env::var("VESTRA_MOTION_SIZE").is_ok_and(|v| v.trim() == "any"),
             holding: false,
             waiting: false,
             resampling: None,
             input: None,
             doubling: false,
             failures: BTreeMap::new(),
-            broken: None,
+            broken: PerEngine::default(),
             gate: None,
             gate_seen: true,
         }
@@ -609,36 +762,25 @@ impl Motion {
                 self.publish(mpv, render, events);
                 false
             }
-            "video.motion.state" | "video.motion.set" if command.params["engine"] != AMD => {
-                // The reserved engine (`nvidia`): no converter yet; another
-                // name is invalid.
-                let result = match command.params["engine"].as_str() {
-                    Some(NVIDIA) => reserved(
-                        &command.method,
-                        &command.params["mode"],
-                        source_fps(mpv),
-                        render.refresh(),
-                    ),
-                    _ => Err(RpcError::invalid(r#"engine must be "amd" or "nvidia""#)),
-                };
+            "video.motion.state" | "video.motion.set"
+                if command.params["engine"]
+                    .as_str()
+                    .and_then(Engine::from_name)
+                    .is_none() =>
+            {
+                let result = Err(RpcError::invalid(r#"engine must be "amd" or "nvidia""#));
                 let _ = events.send(Event::Reply(command.reply.clone(), result));
                 true
             }
             "video.motion.state" => {
-                let state = self.state(mpv, render, owner, rendering);
+                let engine = engine_of(&command.params);
+                let state = self.state(mpv, render, owner, engine, rendering);
                 let _ = events.send(Event::Reply(command.reply.clone(), Ok(state)));
                 self.publish(mpv, render, events);
                 true
             }
             "video.motion.set" => {
-                let result = self.set(
-                    mpv,
-                    render,
-                    owner,
-                    &command.params["mode"],
-                    rendering,
-                    effects,
-                );
+                let result = self.set(mpv, render, command, effects);
                 let _ = events.send(Event::Reply(command.reply.clone(), result));
                 self.publish(mpv, render, events);
                 true
@@ -654,20 +796,24 @@ impl Motion {
         &mut self,
         mpv: &Mpv,
         render: &Render,
-        owner: u64,
-        mode: &Value,
-        rendering: &Value,
+        command: &Command,
         effects: &mut impl Effects,
     ) -> Result<Value, RpcError> {
-        let Some(mode) = mode.as_str().and_then(Mode::parse) else {
+        let (owner, rendering) = (command.reply.owner, &command.params["rendering"]);
+        let engine = engine_of(&command.params);
+        let Some(mode) = command.params["mode"].as_str().and_then(Mode::parse) else {
             return Err(RpcError::invalid(
                 "mode must be \"off\", \"double\" or \"display\"",
             ));
         };
         if mode == Mode::Off {
-            self.owners.remove(&owner);
+            // Only this engine's request: a plugin asking the other engine
+            // for off leaves its own.
+            if self.owners.get(&owner).is_some_and(|(e, _)| *e == engine) {
+                self.owners.remove(&owner);
+            }
         } else {
-            if let Err(reason) = self.availability(mpv, render, rendering, mode)
+            if let Err(reason) = self.availability(mpv, render, rendering, engine, mode)
                 && reason.fixed()
             {
                 return Err(RpcError::new(
@@ -675,10 +821,10 @@ impl Motion {
                     format!("motion smoothing cannot work here: {}", reason.message()),
                 ));
             }
-            self.owners.insert(owner, mode);
+            self.owners.insert(owner, (engine, mode));
         }
         self.update(mpv, render, effects, Instant::now());
-        Ok(self.state(mpv, render, owner, rendering))
+        Ok(self.state(mpv, render, owner, engine, rendering))
     }
 
     /// Every worker iteration: a new source starts this video's state
@@ -716,6 +862,17 @@ impl Motion {
         self.checked = None;
     }
 
+    /// Another engine holds the converter: this video's failure and
+    /// fallback step were the other one's.
+    fn new_engine(&mut self) {
+        self.failed = None;
+        self.overload = None;
+        self.performance = false;
+        self.disabled = false;
+        self.last_error = None;
+        self.watch = Watch::default();
+    }
+
     /// How long the control worker may wait before [`Motion::poll`] has
     /// work: `None` while nobody asked and no filter is in the chain.
     pub fn due_in(&self, now: Instant) -> Option<Duration> {
@@ -740,6 +897,25 @@ impl Motion {
     /// before it (`AMFFRC->Init() failed with error 4`). Cheap for every
     /// other line.
     pub fn log(&mut self, prefix: &str, level: &str, text: &str) {
+        // NVIDIA's converter creates its Vulkan device when the filter is
+        // created, so a device that cannot be had makes mpv refuse the
+        // `vf add`; its reason comes after, in this line: `runtime`
+        // rather than `filter` (this player has the converter).
+        if let Some(engine) = self.refusing
+            && matches!(level, "error" | "fatal")
+            && device_failure(engine, text, 1)
+        {
+            let line = text.trim().to_owned();
+            diag!(
+                "motion: the {} converter cannot start here: {line}",
+                engine.as_str()
+            );
+            self.refusing = None;
+            self.refused[engine] = None;
+            self.broken[engine] = Some(line);
+            self.checked = None;
+            return;
+        }
         if self.applied.is_none() {
             return;
         }
@@ -749,6 +925,7 @@ impl Motion {
             self.checked = None;
         } else if matches!(level, "error" | "fatal" | "warn")
             && (prefix.starts_with("ffmpeg") || prefix == "lavfi")
+            && !ffmpeg_noise(text)
         {
             // The converter's own line comes before the graph's summary:
             // keep both (the last three).
@@ -779,23 +956,64 @@ impl Motion {
         }
     }
 
-    /// The strongest mode some plugin asked for.
-    fn wanted(&self) -> Mode {
-        self.owners.values().copied().max().unwrap_or(Mode::Off)
+    /// The engine that holds the converter: the one it was held by, while
+    /// some plugin asks for it; else the engine of the first request (by
+    /// plugin). A change of engine starts the per-video state afresh (the
+    /// failure, the fallback step: they were the other converter's).
+    fn refresh_holder(&mut self) {
+        let asked = |engine: Engine| {
+            self.owners
+                .values()
+                .any(|(e, mode)| *e == engine && *mode != Mode::Off)
+        };
+        if self.holder.is_some_and(asked) {
+            return;
+        }
+        let next = self
+            .owners
+            .values()
+            .find(|(_, mode)| *mode != Mode::Off)
+            .map(|(engine, _)| *engine);
+        if next.is_some() && next != self.video_engine {
+            if self.video_engine.is_some() {
+                diag!(
+                    "motion: the {} engine now holds the converter",
+                    next.map_or("", Engine::as_str)
+                );
+                self.new_engine();
+            }
+            self.video_engine = next;
+        }
+        self.holder = next;
     }
 
-    /// [`check`] with what the worker sees now; the system's check runs
-    /// the first time.
+    /// The strongest mode some plugin asked of the engine that holds the
+    /// converter.
+    fn wanted(&self) -> Mode {
+        let Some(holder) = self.holder else {
+            return Mode::Off;
+        };
+        self.owners
+            .values()
+            .filter(|(engine, _)| *engine == holder)
+            .map(|(_, mode)| *mode)
+            .max()
+            .unwrap_or(Mode::Off)
+    }
+
+    /// [`check`] with what the worker sees now; the engine's system check
+    /// runs the first time.
     fn availability(
         &mut self,
         mpv: &Mpv,
         render: &Render,
         rendering: &Value,
+        engine: Engine,
         mode: Mode,
     ) -> Result<(), Reason> {
-        let run = self.run_probe;
-        self.probe.get_or_insert_with(run);
-        self.check_now(mpv, render, rendering, mode)
+        let run = self.run_probe[engine];
+        self.probe[engine].get_or_insert_with(run);
+        self.check_now(mpv, render, rendering, engine, mode)
     }
 
     /// [`check`] without starting the system's check (`platform` until it
@@ -805,55 +1023,69 @@ impl Motion {
         mpv: &Mpv,
         render: &Render,
         rendering: &Value,
+        engine: Engine,
         mode: Mode,
     ) -> Result<(), Reason> {
-        let Some(probe) = &self.probe else {
+        let Some(probe) = &self.probe[engine] else {
             return Ok(());
         };
         let (gpu_now, render_reason) = render.now();
+        // This video's failure and fallback are the converter's that ran on
+        // it.
+        let this_video = self.video_engine.is_none_or(|e| e == engine);
         check(
             &Facts {
+                engine,
                 probe,
-                refused: self.refused.as_deref(),
+                has_filter: (self.filter)(engine, false, false).is_some(),
+                other: self.holder.filter(|holder| *holder != engine),
+                refused: self.refused[engine].as_deref(),
                 gpu_now: gpu_now && render.gpu().is_some(),
                 render_reason: &render_reason,
                 rendering,
                 upscaling: self.upscaling,
                 doubling: self.doubling,
-                broken: self.broken.as_deref(),
+                broken: self.broken[engine].as_deref(),
                 format: unmeasured_format(mpv),
-                failed: self.failed.as_deref(),
-                overload: self.overload.as_deref(),
+                failed: self.failed.as_deref().filter(|_| this_video),
+                overload: self.overload.as_deref().filter(|_| this_video),
                 source_fps: self.rate_in(mpv),
                 display_fps: render.refresh(),
                 any_rate: self.any_rate,
+                any_size: self.any_size,
                 video: video_size(mpv),
             },
             mode,
         )
     }
 
-    /// The `MotionState` for `owner`.
-    fn state(&mut self, mpv: &Mpv, render: &Render, owner: u64, rendering: &Value) -> Value {
-        let run = self.run_probe;
-        self.probe.get_or_insert_with(run);
-        let mut state = self.shared_state(mpv, render, rendering);
-        state["engine"] = AMD.into();
+    /// The `MotionState` of `engine` for `owner`.
+    fn state(
+        &mut self,
+        mpv: &Mpv,
+        render: &Render,
+        owner: u64,
+        engine: Engine,
+        rendering: &Value,
+    ) -> Value {
+        let run = self.run_probe[engine];
+        self.probe[engine].get_or_insert_with(run);
+        let mut state = self.shared_state(mpv, render, engine, rendering);
         state["mode"] = self
             .owners
             .get(&owner)
-            .copied()
-            .unwrap_or(Mode::Off)
+            .filter(|(e, _)| *e == engine)
+            .map_or(Mode::Off, |(_, mode)| *mode)
             .as_str()
             .into();
         state
     }
 
-    /// The `MotionState` without `mode` (each plugin's own): what
-    /// `video.motion.changed` carries.
-    fn shared_state(&self, mpv: &Mpv, render: &Render, rendering: &Value) -> Value {
+    /// The `MotionState` of `engine` without `mode` (each plugin's own):
+    /// what `video.motion.changed` carries.
+    fn shared_state(&self, mpv: &Mpv, render: &Render, engine: Engine, rendering: &Value) -> Value {
         let reason = |mode| {
-            self.check_now(mpv, render, rendering, mode)
+            self.check_now(mpv, render, rendering, engine, mode)
                 .err()
                 .map(|reason| reason.json())
         };
@@ -861,37 +1093,41 @@ impl Motion {
             let scale = 10f64.powi(places);
             (value * scale).round() / scale
         };
-        let in_chain = labels(mpv).iter().any(|label| label == LABEL);
+        // What is in the chain is this engine's only while it holds it.
+        let applied = self.applied.filter(|applied| applied.engine == engine);
+        let in_chain = applied.is_some() && labels(mpv).iter().any(|label| label == LABEL);
         json!({
-            "engine": AMD,
-            "active": self.applied.map_or("off", |applied| applied.mode.as_str()),
+            "engine": engine.as_str(),
+            "active": applied.map_or("off", |applied| applied.mode.as_str()),
             "double": reason(Mode::Double),
             "display": reason(Mode::Display),
-            "searchMode": self.applied.map(|applied| if applied.performance { "performance" } else { "native" }),
+            "searchMode": applied.map(|applied| if applied.performance { "performance" } else { "native" }),
             "sourceFps": self.input.or_else(|| source_fps(mpv)).map(|fps| round(fps, 3)),
-            "outputFps": self
-                .applied
+            "outputFps": applied
                 .and_then(|_| mpv.get_property::<f64>("estimated-vf-fps").ok())
                 .filter(|fps| fps.is_finite() && *fps > 0.)
                 .map(|fps| round(fps, 1)),
             "displayFps": round(render.refresh(), 3),
-            "gpu": self.probe.as_ref().and_then(|probe| probe.as_ref().ok()).map(|gpu| gpu.name.clone()),
+            "gpu": self.probe[engine].as_ref().and_then(|probe| probe.as_ref().ok()).map(|gpu| gpu.name.clone()),
             "inChain": in_chain,
         })
     }
 
-    /// `video.motion.changed` when the shared state differs from the last
-    /// one sent. Nothing before the system's check ran.
+    /// `video.motion.changed` for each engine whose shared state differs
+    /// from the last one sent. Nothing before the engine's system check
+    /// ran.
     fn publish(&mut self, mpv: &Mpv, render: &Render, events: &mpsc::Sender<Event>) {
-        if self.probe.is_none() {
-            return;
+        for engine in Engine::ALL {
+            if self.probe[engine].is_none() {
+                continue;
+            }
+            let state = self.shared_state(mpv, render, engine, &Value::Null);
+            if self.published[engine].as_ref() == Some(&state) {
+                continue;
+            }
+            self.published[engine] = Some(state.clone());
+            let _ = events.send(Event::Broadcast(CHANGED.into(), state));
         }
-        let state = self.shared_state(mpv, render, &Value::Null);
-        if self.published.as_ref() == Some(&state) {
-            return;
-        }
-        self.published = Some(state.clone());
-        let _ = events.send(Event::Broadcast(CHANGED.into(), state));
     }
 
     /// The converter's input rate (`input`), read while it is out of the
@@ -941,6 +1177,7 @@ impl Motion {
     /// Bring mpv's chain to what is wanted now, and judge the output.
     fn update(&mut self, mpv: &Mpv, render: &Render, effects: &mut impl Effects, now: Instant) {
         self.checked = Some(now);
+        self.refresh_holder();
         let open = self.gate_open();
         self.gate_seen = open;
         if !open {
@@ -969,39 +1206,46 @@ impl Motion {
                 .take()
                 .unwrap_or_else(|| "mpv disabled the filter".into());
             diag!("motion: mpv disabled the filter: {error}");
-            // AMF failing to start the same way on two videos (an old AMD
-            // GPU): not tried again in this run, each try costing two
-            // decoder reopens. Other failures stay per video.
-            let count = self.failures.entry(error.clone()).or_insert(0);
-            *count += 1;
-            if *count >= 2 && amf_init_failure(&error) {
-                diag!("motion: the converter failed the same way twice; off for this run");
-                self.broken = Some(error.clone());
+            // A converter that cannot start on this system (AMF failing the
+            // same way on two videos, an old AMD GPU; NVIDIA's without a
+            // Vulkan device or its optical flow at once): not tried again in
+            // this run, each try costing two decoder reopens. Other
+            // failures stay per video.
+            if let Some(engine) = self.applied.map(|a| a.engine).or(self.holder) {
+                let count = self.failures.entry((engine, error.clone())).or_insert(0);
+                *count += 1;
+                if device_failure(engine, &error, *count) {
+                    diag!(
+                        "motion: the {} converter cannot start here; off for this run",
+                        engine.as_str()
+                    );
+                    self.broken[engine] = Some(error.clone());
+                }
             }
             self.failed = Some(error);
             self.remove(mpv, effects);
             return;
         }
         let wanted = self.wanted();
-        if wanted == Mode::Off {
+        let Some(engine) = self.holder.filter(|_| wanted != Mode::Off) else {
             self.remove(mpv, effects);
             return;
-        }
-        if let Err(reason) = self.availability(mpv, render, &Value::Null, wanted) {
+        };
+        if let Err(reason) = self.availability(mpv, render, &Value::Null, engine, wanted) {
             // Match Display that cannot work falls back to Double when that
             // can (software rendering after a GPU fallback).
             let double = wanted == Mode::Display
                 && reason.code() == "rendering"
                 && self
-                    .check_now(mpv, render, &Value::Null, Mode::Double)
+                    .check_now(mpv, render, &Value::Null, engine, Mode::Double)
                     .is_ok();
             if !double {
                 self.remove(mpv, effects);
                 return;
             }
-            return self.apply(mpv, render, effects, Mode::Double, now);
+            return self.apply(mpv, render, effects, engine, Mode::Double, now);
         }
-        self.apply(mpv, render, effects, wanted, now);
+        self.apply(mpv, render, effects, engine, wanted, now);
     }
 
     /// `mode` can work: the filter in the chain (unless the rate is still
@@ -1012,6 +1256,7 @@ impl Motion {
         mpv: &Mpv,
         render: &Render,
         effects: &mut impl Effects,
+        engine: Engine,
         mode: Mode,
         now: Instant,
     ) {
@@ -1025,13 +1270,17 @@ impl Motion {
             .ok()
             .map_or_else(|| self.applied.is_some_and(|a| a.large), |h| h > LARGE);
         let next = Applied {
+            engine,
             mode,
             large,
             performance: self.performance,
         };
-        let filter_differs = self
-            .applied
-            .is_none_or(|a| (a.large, a.performance) != (next.large, next.performance));
+        // Another engine's filter is replaced where it stands (`vf add`
+        // with the same label), its converter freed with it.
+        // A step that leaves the filter's text as it is (NVIDIA above 1440p
+        // has no faster setting) does not rebuild it.
+        let text = |a: Applied| (self.filter)(a.engine, a.large, a.performance);
+        let filter_differs = self.applied.is_none_or(|a| text(a) != text(next));
         if filter_differs {
             // Copy-back first, and the filter only once the decoder hands
             // over frames in memory: the switch reopens the decoder on mpv's
@@ -1068,9 +1317,8 @@ impl Motion {
                 diag!(
                     "motion: still behind with the faster motion search ({behind}); off for this video"
                 );
-                self.overload = Some(format!(
-                    "the GPU could not keep up with this video, even with the faster motion search: {behind}"
-                ));
+                let gpu_rendering = render.now().0 && render.gpu().is_some();
+                self.overload = Some(overload_message(gpu_rendering, &behind));
                 self.remove(mpv, effects);
             } else {
                 diag!("motion: behind ({behind}); the faster motion search");
@@ -1122,10 +1370,11 @@ impl Motion {
     /// replaces a label where it stands), else last, with frames in memory
     /// first. `false`: mpv refused it (for the rest of the run).
     fn add(&mut self, mpv: &Mpv, effects: &mut impl Effects, next: Applied) -> bool {
-        let Some(filter) = (self.filter)(next.large, next.performance) else {
+        let Some(filter) = (self.filter)(next.engine, next.large, next.performance) else {
             return false;
         };
         self.watch = Watch::default();
+        platform::prepare_motion(next.engine);
         match mpv.command(&["vf", "add", &format!("@{LABEL}:{filter}")]) {
             Ok(()) => {
                 diag!("motion: {filter} ({})", next.mode.as_str());
@@ -1135,7 +1384,8 @@ impl Motion {
             }
             Err(error) => {
                 diag!("motion: mpv refused {filter}: {error}");
-                self.refused = Some(error.to_string());
+                self.refused[next.engine] = Some(error.to_string());
+                self.refusing = Some(next.engine);
                 self.remove(mpv, effects);
                 false
             }
@@ -1184,7 +1434,7 @@ impl Motion {
             self.add(mpv, effects, applied);
             return;
         }
-        if let Some(filter) = (self.filter)(applied.large, applied.performance) {
+        if let Some(filter) = (self.filter)(applied.engine, applied.large, applied.performance) {
             self.move_last(mpv, &filter);
         }
     }
@@ -1211,48 +1461,21 @@ impl Motion {
     }
 }
 
-/// The reserved engine's answer: its state (every mode `engine`) to
-/// `state` and `set("off")`, `unsupported` to another mode, `invalid`
-/// to a mode that is none.
-fn reserved(
-    method: &str,
-    mode: &Value,
-    source_fps: Option<f64>,
-    display_fps: f64,
-) -> Result<Value, RpcError> {
-    if method == "video.motion.set" {
-        match mode.as_str().and_then(Mode::parse) {
-            None => {
-                return Err(RpcError::invalid(
-                    "mode must be \"off\", \"double\" or \"display\"",
-                ));
-            }
-            Some(Mode::Off) => {}
-            Some(_) => {
-                return Err(RpcError::new(
-                    "unsupported",
-                    format!(
-                        "motion smoothing cannot work here: {}",
-                        Reason::Engine.message()
-                    ),
-                ));
-            }
-        }
-    }
-    let reason = Reason::Engine.json();
-    Ok(json!({
-        "engine": NVIDIA,
-        "mode": "off",
-        "active": "off",
-        "double": reason,
-        "display": reason,
-        "searchMode": null,
-        "sourceFps": source_fps,
-        "outputFps": null,
-        "displayFps": display_fps,
-        "gpu": null,
-        "inChain": false,
-    }))
+/// FFmpeg's own complaint about a log call without a context, which
+/// FFmpeg 9.1's `fruc_vulkan` triggers with a verbose line at every start
+/// (its context's class is not set): not the converter's error, so it is
+/// neither logged nor kept as one.
+fn ffmpeg_noise(text: &str) -> bool {
+    text.contains("av_log callback called with bad parameters")
+        || text.contains("This is a bug in one of FFmpeg libraries used")
+}
+
+/// The engine a request names (checked before: `amd` or `nvidia`).
+fn engine_of(params: &Value) -> Engine {
+    params["engine"]
+        .as_str()
+        .and_then(Engine::from_name)
+        .unwrap_or(Engine::Amd)
 }
 
 /// The verdict on one window: the mean output rate below [`SLOW`] of the
@@ -1336,11 +1559,53 @@ pub fn bit_depth(format: &str) -> u32 {
         .unwrap_or(8)
 }
 
-/// Whether a converter failure is AMF failing to start
-/// (`AMFFRC->Init() failed with error N`): the one that repeats on a GPU the
-/// runtime does not serve, and so becomes `runtime` for the run.
-pub fn amf_init_failure(error: &str) -> bool {
-    error.contains("AMFFRC->Init() failed")
+/// The `overload` message: what could not keep up with the doubled frames.
+/// With software rendering that is the player's CPU copying and drawing
+/// them, not the converter (measured 2026-11-23, NVIDIA 4K30 → 60: 300–500
+/// frames dropped in 20 s with the GPU 25–40 % busy), so it names that and
+/// what helps; with GPU rendering it is the GPU. The same for either engine.
+pub fn overload_message(gpu_rendering: bool, behind: &str) -> String {
+    if gpu_rendering {
+        format!(
+            "the GPU could not keep up with this video, even with the faster motion search: {behind}"
+        )
+    } else {
+        format!(
+            "rendering on the CPU could not keep up with this video's doubled frames ({behind}); GPU Rendering (Picture ▸ Rendering) helps"
+        )
+    }
+}
+
+/// Whether a converter failure means the engine cannot start on this
+/// system, so it becomes `runtime` for the run: AMF failing to start
+/// (`AMFFRC->Init() failed with error N`), the one that repeats on a GPU the
+/// runtime does not serve, the second time; NVIDIA's converter without a
+/// Vulkan device (no Vulkan driver, lavfi's `could not create hwdevice`) or
+/// without the optical flow it needs (`fruc_vulkan`'s device checks), the
+/// first time: neither depends on the video.
+///
+/// Why one failure is enough for NVIDIA: the device is created by FFmpeg's
+/// `av_hwdevice_ctx_create` from the Vulkan loader, with the loader scoped
+/// to NVIDIA's driver (`platform::prepare_motion`) and on the adapter the
+/// system check chose. Nothing about the video goes into it, so a second try
+/// on the next video meets the same driver, loader and adapter, and fails
+/// the same way (a missing or broken Vulkan driver, a driver selection that
+/// leaves NVIDIA's out, a GPU without optical flow). After a driver is
+/// installed or updated, a restart of the player tries again.
+pub fn device_failure(engine: Engine, error: &str, count: u32) -> bool {
+    match engine {
+        Engine::Amd => count >= 2 && error.contains("AMFFRC->Init() failed"),
+        Engine::Nvidia => [
+            "could not create hwdevice",
+            "Vulkan device does not support",
+            "Vulkan device was created without",
+            "has no optical flow queues",
+            "Device has no compute queues",
+            "Optical flow R8 input format unavailable",
+        ]
+        .iter()
+        .any(|needle| error.contains(needle)),
+    }
 }
 
 /// The video's frame rate for `player.stats()`: `estimated-vf-fps` (after

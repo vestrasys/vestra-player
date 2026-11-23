@@ -1,0 +1,207 @@
+diff --git a/filters/f_lavfi.c b/filters/f_lavfi.c
+--- a/filters/f_lavfi.c
++++ b/filters/f_lavfi.c
+@@ -29,6 +29,7 @@
+ #include <libavutil/rational.h>
+ #include <libavutil/error.h>
+ #include <libavutil/opt.h>
++#include <libavutil/hwcontext.h>
+ #include <libavfilter/avfilter.h>
+ #include <libavfilter/buffersink.h>
+ #include <libavfilter/buffersrc.h>
+@@ -103,6 +104,14 @@
+ 
+     // Identify a specific hwdec_interop to use
+     char *hwdec_interop;
++
++    // A hardware device of this type (and device string) created for this
++    // filter alone, instead of one from the VO's interop (hwdevice=).
++    // Created when the graph is first configured, kept across graph
++    // rebuilds (seeks, format changes) and freed with the filter.
++    char *hwdevice;
++    char *hwdevice_name;
++    AVBufferRef *hwdevice_ref;
+ };
+ 
+ struct lavfi_pad {
+@@ -254,6 +263,52 @@
+ }
+ 
+ // Parse the user-provided filter graph, and populate the unlinked filter pads.
++// hwdevice=: create the filter's own device the first time a graph is
++// made; it is kept across graph rebuilds and freed in lavfi_destroy.
++static bool ensure_hwdevice(struct lavfi *c)
++{
++    if (c->hwdevice_ref)
++        return true;
++    enum AVHWDeviceType type = av_hwdevice_find_type_by_name(c->hwdevice);
++    int err = type == AV_HWDEVICE_TYPE_NONE ? AVERROR(EINVAL) :
++        av_hwdevice_ctx_create(&c->hwdevice_ref, type,
++            c->hwdevice_name && c->hwdevice_name[0] ? c->hwdevice_name : NULL,
++            NULL, 0);
++    if (err < 0) {
++        MP_FATAL(c, "could not create hwdevice=%s (%s): %s\n", c->hwdevice,
++                 c->hwdevice_name ? c->hwdevice_name : "", av_err2str(err));
++        return false;
++    }
++    MP_VERBOSE(c, "Created hwdevice=%s for filter graph: %s\n",
++               c->hwdevice, c->graph_string);
++    return true;
++}
++
++// avfilter_graph_parse2() with the filter's own device set on every filter
++// before it is initialized (hwupload needs it in its init).
++static int parse_with_hwdevice(struct lavfi *c, AVFilterInOut **in,
++                               AVFilterInOut **out)
++{
++    AVFilterGraphSegment *seg = NULL;
++    int ret = avfilter_graph_segment_parse(c->graph, c->graph_string, 0, &seg);
++    if (ret >= 0)
++        ret = avfilter_graph_segment_create_filters(seg, 0);
++    if (ret >= 0) {
++        for (int n = 0; n < c->graph->nb_filters; n++) {
++            AVFilterContext *filter = c->graph->filters[n];
++            if (!filter->hw_device_ctx)
++                filter->hw_device_ctx = av_buffer_ref(c->hwdevice_ref);
++        }
++        ret = avfilter_graph_segment_apply_opts(seg, 0);
++    }
++    if (ret >= 0)
++        ret = avfilter_graph_segment_init(seg, 0);
++    if (ret >= 0)
++        ret = avfilter_graph_segment_link(seg, 0, in, out);
++    avfilter_graph_segment_free(&seg);
++    return ret;
++}
++
+ static void precreate_graph(struct lavfi *c, bool first_init)
+ {
+     mp_assert(!c->graph);
+@@ -290,7 +345,11 @@
+                         filter->nb_outputs, first_init);
+     } else {
+         AVFilterInOut *in = NULL, *out = NULL;
+-        if (avfilter_graph_parse2(c->graph, c->graph_string, &in, &out) < 0) {
++        bool own_device = c->hwdevice && c->hwdevice[0];
++        if (own_device && !ensure_hwdevice(c))
++            goto error;
++        if ((own_device ? parse_with_hwdevice(c, &in, &out)
++                        : avfilter_graph_parse2(c->graph, c->graph_string, &in, &out)) < 0) {
+             MP_FATAL(c, "parsing the filter graph failed\n");
+             goto error;
+         }
+@@ -564,7 +623,9 @@
+ 
+     if (init_pads(c)) {
+         struct mp_stream_info *info = mp_filter_find_stream_info(c->f);
+-        if (info && info->hwdec_devs) {
++        if (c->hwdevice && c->hwdevice[0]) {
++            // The filter's own device, set in precreate_graph.
++        } else if (info && info->hwdec_devs) {
+             struct mp_hwdec_ctx *hwdec_ctx = NULL;
+             if (c->hwdec_interop) {
+                 int imgfmt =
+@@ -819,6 +880,7 @@
+ 
+     lavfi_reset(f);
+     av_frame_free(&c->tmp_frame);
++    av_buffer_unref(&c->hwdevice_ref);
+ }
+ 
+ static bool lavfi_command(struct mp_filter *f, struct mp_filter_command *cmd)
+@@ -914,10 +976,11 @@
+     return NULL;
+ }
+ 
+-struct mp_lavfi *mp_lavfi_create_graph(struct mp_filter *parent,
+-                                       enum mp_frame_type type, bool bidir,
+-                                       char *hwdec_interop,
+-                                       char **graph_opts, const char *graph)
++static struct mp_lavfi *create_graph(struct mp_filter *parent,
++                                     enum mp_frame_type type, bool bidir,
++                                     char *hwdec_interop, char **graph_opts,
++                                     const char *graph, const char *hwdevice,
++                                     const char *hwdevice_name)
+ {
+     if (!graph)
+         return NULL;
+@@ -931,10 +994,21 @@
+     c->graph_opts = mp_dup_str_array(c, graph_opts);
+     c->graph_string = talloc_strdup(c, graph);
+     c->hwdec_interop = talloc_strdup(c, hwdec_interop);
++    c->hwdevice = talloc_strdup(c, hwdevice);
++    c->hwdevice_name = talloc_strdup(c, hwdevice_name);
+ 
+     return do_init(c);
+ }
+ 
++struct mp_lavfi *mp_lavfi_create_graph(struct mp_filter *parent,
++                                       enum mp_frame_type type, bool bidir,
++                                       char *hwdec_interop,
++                                       char **graph_opts, const char *graph)
++{
++    return create_graph(parent, type, bidir, hwdec_interop, graph_opts, graph,
++                        NULL, NULL);
++}
++
+ struct mp_lavfi *mp_lavfi_create_filter(struct mp_filter *parent,
+                                         enum mp_frame_type type, bool bidir,
+                                         char *hwdec_interop,
+@@ -969,6 +1043,9 @@
+     bool fix_pts;
+ 
+     char *hwdec_interop;
++
++    char *hwdevice;
++    char *hwdevice_name;
+ };
+ 
+ static struct mp_filter *lavfi_create(struct mp_filter *parent, void *options)
+@@ -980,8 +1057,9 @@
+                                    opts->hwdec_interop, opts->avopts,
+                                    opts->filter_name, opts->filter_opts);
+     } else {
+-        l = mp_lavfi_create_graph(parent, opts->type, true, opts->hwdec_interop,
+-                                  opts->avopts, opts->graph);
++        l = create_graph(parent, opts->type, true, opts->hwdec_interop,
++                         opts->avopts, opts->graph, opts->hwdevice,
++                         opts->hwdevice_name);
+     }
+     if (l) {
+         struct lavfi *c = l->f->priv;
+@@ -1161,6 +1239,8 @@
+             {"hwdec_interop",
+              OPT_STRING_VALIDATE(hwdec_interop,
+                                  ra_hwdec_validate_drivers_only_opt)},
++            {"hwdevice", OPT_STRING(hwdevice)},
++            {"hwdevice_name", OPT_STRING(hwdevice_name)},
+             {0}
+         },
+         .priv_defaults = &(const OPT_BASE_STRUCT){
+@@ -1183,6 +1263,8 @@
+             {"hwdec_interop",
+              OPT_STRING_VALIDATE(hwdec_interop,
+                                  ra_hwdec_validate_drivers_only_opt)},
++            {"hwdevice", OPT_STRING(hwdevice)},
++            {"hwdevice_name", OPT_STRING(hwdevice_name)},
+             {0}
+         },
+         .priv_defaults = &(const OPT_BASE_STRUCT){
+@@ -1205,6 +1287,8 @@
+             {"hwdec_interop",
+              OPT_STRING_VALIDATE(hwdec_interop,
+                                  ra_hwdec_validate_drivers_only_opt)},
++            {"hwdevice", OPT_STRING(hwdevice)},
++            {"hwdevice_name", OPT_STRING(hwdevice_name)},
+             {0}
+         },
+         .priv_defaults = &(const OPT_BASE_STRUCT){
+@@ -1227,6 +1311,8 @@
+             {"hwdec_interop",
+              OPT_STRING_VALIDATE(hwdec_interop,
+                                  ra_hwdec_validate_drivers_only_opt)},
++            {"hwdevice", OPT_STRING(hwdevice)},
++            {"hwdevice_name", OPT_STRING(hwdevice_name)},
+ 
+             {0}
+         },

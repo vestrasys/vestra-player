@@ -2076,13 +2076,92 @@ pub const UPSCALER_HWDEC: &str = "d3d11va";
 /// AMD's PCI vendor id.
 const AMD: u32 = 0x1002;
 
-/// Where motion smoothing works (`playback/motion.rs`): an AMD adapter
+/// Where motion smoothing's engine works (`playback/motion.rs`): AMD's
+/// ([`amd_motion_probe`]) or NVIDIA's ([`nvidia_motion_probe`]). DXGI
+/// only: no device, no Vulkan.
+pub fn motion_probe(engine: crate::playback::motion::Engine) -> super::MotionProbe {
+    match engine {
+        crate::playback::motion::Engine::Amd => amd_motion_probe(),
+        crate::playback::motion::Engine::Nvidia => nvidia_motion_probe(),
+    }
+}
+
+/// The first PCI device id of NVIDIA's Ampere GPUs (GA102, `0x2200`); RTX
+/// 30, 40 and 50 are at or above it, Turing (RTX 20, GTX 16) below.
+/// FFmpeg's `fruc_vulkan` needs Ampere's optical flow (`VK_NV_optical_flow`
+/// with the features it asks for).
+const NVIDIA_AMPERE: u32 = 0x2200;
+
+/// The NVIDIA driver `fruc_vulkan` needs: `VK_KHR_maintenance9`, from
+/// 573.38 on Windows (`nvidia_driver_name` numbering).
+const NVIDIA_FRUC_DRIVER: u32 = 57338;
+
+/// An NVIDIA driver version as a number: `32.0.15.7338` → `57338` (573.38).
+fn nvidia_driver_release(version: [u16; 4]) -> u32 {
+    u32::from(version[2] % 10) * 10000 + u32::from(version[3])
+}
+
+/// Where NVIDIA's motion smoothing works: an NVIDIA adapter (vendor
+/// `0x10DE`, not software) of the RTX 30 series or newer
+/// ([`NVIDIA_AMPERE`]) with a driver of 573.38 or newer. Whether its Vulkan
+/// driver starts the converter shows when the filter starts: the filter
+/// creates its Vulkan device then, and a device that cannot be created or
+/// lacks optical flow makes the engine `runtime` for the run
+/// (`motion::device_failure`).
+fn nvidia_motion_probe() -> super::MotionProbe {
+    let adapters = vestra_win32::dxgi_adapters().map_err(|error| super::MotionRefusal {
+        code: "no-gpu",
+        message: format!("the graphics adapters cannot be listed ({error})"),
+    })?;
+    let nvidia: Vec<_> = adapters
+        .iter()
+        .filter(|adapter| adapter.vendor_id == NVIDIA && !adapter.software)
+        .collect();
+    let Some(rtx) = nvidia
+        .iter()
+        .find(|adapter| adapter.device_id >= NVIDIA_AMPERE)
+    else {
+        return Err(super::MotionRefusal {
+            code: "no-gpu",
+            message: match nvidia.first() {
+                Some(older) => format!(
+                    "{} is older than the RTX 30 series: NVIDIA motion smoothing uses the optical flow of RTX 30 and newer GPUs",
+                    older.name
+                ),
+                None => "no NVIDIA GPU: NVIDIA motion smoothing needs an NVIDIA GeForce RTX 30 series or newer GPU".into(),
+            },
+        });
+    };
+    if let Some(version) = rtx.driver_version
+        && nvidia_driver_release(version) < NVIDIA_FRUC_DRIVER
+    {
+        return Err(super::MotionRefusal {
+            code: "runtime",
+            message: format!(
+                "the NVIDIA driver {} on {} is too old for NVIDIA motion smoothing, which needs 573.38 or newer; update the driver",
+                nvidia_driver_name(version),
+                rtx.name
+            ),
+        });
+    }
+    *NVIDIA_ADAPTER.lock().unwrap_or_else(|e| e.into_inner()) = Some(rtx.name.clone());
+    Ok(super::MotionGpu {
+        name: rtx.name.clone(),
+    })
+}
+
+/// The adapter [`nvidia_motion_probe`] chose, by its name: the converter's
+/// Vulkan device is created on the device of that name
+/// ([`fruc_vulkan_filter`]).
+static NVIDIA_ADAPTER: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
+/// Where AMD's motion smoothing works: an AMD adapter
 /// (vendor `0x1002`, not software) and AMD's AMF runtime (`amfrt64.dll` in
 /// System32, installed with the AMD driver), which FFmpeg's `frc_amf` loads.
 /// No device is created, so no GPU is woken; whether the runtime starts on
 /// this GPU shows when the filter starts (`playback/motion.rs` follows mpv's
 /// log).
-pub fn motion_probe() -> super::MotionProbe {
+fn amd_motion_probe() -> super::MotionProbe {
     let adapters = vestra_win32::dxgi_adapters().map_err(|error| super::MotionRefusal {
         code: "no-gpu",
         message: format!("the graphics adapters cannot be listed ({error})"),
@@ -2132,8 +2211,169 @@ pub fn motion_probe() -> super::MotionProbe {
 /// hybrid laptop), and `frc_amf` then accepts only Direct3D 11 input and
 /// the graph fails to configure ("dst: d3d11"; measured 2026-11-12). With
 /// no device it takes frames in memory and opens AMF on the AMD GPU itself.
-pub fn motion_filter(large: bool, performance: bool) -> Option<String> {
-    Some(frc_amf_filter(large, performance))
+pub fn motion_filter(
+    engine: crate::playback::motion::Engine,
+    large: bool,
+    performance: bool,
+) -> Option<String> {
+    Some(match engine {
+        crate::playback::motion::Engine::Amd => frc_amf_filter(large, performance),
+        crate::playback::motion::Engine::Nvidia => fruc_vulkan_filter(large, performance),
+    })
+}
+
+/// Before NVIDIA's converter first creates its Vulkan device: the Vulkan
+/// loader of this process sees only NVIDIA's driver and no implicit layer
+/// (`VK_LOADER_DRIVERS_SELECT`, `VK_LOADER_LAYERS_DISABLE=~implicit~`;
+/// loader 1.3.234 / 1.3.262 and later, the one shipped with the player is
+/// 1.4.363, the driver's 1.4.357). Without it the loader opens every
+/// installed driver (AMD's amdvlk64 on a hybrid laptop) and every implicit
+/// layer other software registered (OBS's capture hook, Steam's overlay)
+/// inside the player, which only the converter uses Vulkan for. Measured
+/// 2026-11-22: with it, those DLLs are no longer loaded and the converter
+/// runs as before (doc/architecture/README.md §4.4a). Always, and never
+/// widened (user ruling, T8): there is no switch to turn it off, and a value
+/// already in the environment is only narrowed ([`scoped_value`]).
+///
+/// The variables have to be in the process environment when the loader
+/// reads them, inside mpv, whenever the filter is created (a `vf add`, and
+/// again when mpv builds a new filter chain for the next file), so they stay
+/// set; the programs the player starts get the values from before
+/// ([`unscoped_child_env`]).
+pub fn prepare_motion(engine: crate::playback::motion::Engine) {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    if engine != crate::playback::motion::Engine::Nvidia {
+        return;
+    }
+    ONCE.call_once(scope_vulkan);
+}
+
+/// Narrow this process's Vulkan loader to [`VULKAN_SCOPE`], keeping what
+/// the environment had before for the programs the player starts.
+fn scope_vulkan() {
+    let mut before = VULKAN_BEFORE.lock().unwrap_or_else(|e| e.into_inner());
+    for (name, value) in VULKAN_SCOPE {
+        let old = std::env::var_os(name);
+        let new = scoped_value(name, value, old.as_deref());
+        before.push((name, old.clone()));
+        if old.as_deref() == Some(std::ffi::OsStr::new(&new)) {
+            diag!("motion: {name}={new} (already set; kept)");
+            continue;
+        }
+        match vestra_win32::set_process_env(name, &new) {
+            Ok(()) => diag!("motion: {name}={new} for the converter's Vulkan device"),
+            Err(error) => diag!("motion: {error}"),
+        }
+    }
+}
+
+/// The value of one scoping variable over what the environment has
+/// (`old`): only ever narrower.
+///
+/// - `VK_LOADER_DRIVERS_SELECT`: a selection already there is kept (it is
+///   at least as narrow as the user meant it); if it leaves NVIDIA's driver
+///   out, the converter's device cannot be created and the engine reports
+///   `runtime` (`motion::device_failure`).
+/// - `VK_LOADER_LAYERS_DISABLE`: `~implicit~` is added to the list, so what
+///   it already disables (`~all~`, named layers) stays disabled.
+fn scoped_value(name: &str, value: &str, old: Option<&std::ffi::OsStr>) -> String {
+    let old = old
+        .map(|old| old.to_string_lossy().trim().to_owned())
+        .filter(|old| !old.is_empty());
+    match (name, old) {
+        (_, None) => value.to_owned(),
+        ("VK_LOADER_DRIVERS_SELECT", Some(old)) => old,
+        (_, Some(old)) => {
+            let has = |item: &str| old.split(',').any(|o| o.trim().eq_ignore_ascii_case(item));
+            if has(value) || has("~all~") {
+                old
+            } else {
+                format!("{old},{value}")
+            }
+        }
+    }
+}
+
+/// The scoping variables as they were before [`scope_vulkan`] (empty until
+/// it ran).
+static VULKAN_BEFORE: std::sync::Mutex<Vec<(&str, Option<std::ffi::OsString>)>> =
+    std::sync::Mutex::new(Vec::new());
+
+/// A program the player starts (FFmpeg, Node, a guest or restarted player)
+/// gets the scoping variables as the player's environment had them before
+/// [`scope_vulkan`], so the scope stays inside this process. (What Windows
+/// opens through the shell, `open_path` / `open_url`, is started by
+/// `ShellExecuteW` with this process's environment; see
+/// `doc/architecture/README.md` §4.4a.)
+pub fn unscoped_child_env(command: &mut std::process::Command) {
+    for (name, old) in VULKAN_BEFORE
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .iter()
+    {
+        match old {
+            Some(old) => command.env(name, old),
+            None => command.env_remove(name),
+        };
+    }
+}
+
+/// NVIDIA's Vulkan driver manifest (`nv-vk64.json` in the driver store,
+/// the adapter's `VulkanDriverName`), as a loader filter.
+const NVIDIA_VULKAN_DRIVER: &str = "*nv-vk64*";
+
+/// What the Vulkan loader of this process is limited to
+/// (`prepare_motion`): NVIDIA's driver only, no implicit layer.
+const VULKAN_SCOPE: [(&str, &str); 2] = [
+    ("VK_LOADER_DRIVERS_SELECT", NVIDIA_VULKAN_DRIVER),
+    ("VK_LOADER_LAYERS_DISABLE", "~implicit~"),
+];
+
+/// NVIDIA's converter: FFmpeg's `fruc_vulkan` (NVIDIA's optical flow
+/// hardware through `VK_NV_optical_flow`, then FFmpeg's compute shaders)
+/// doubles the frame rate (`fps=source_fps*2`) from frames in memory
+/// uploaded to a Vulkan device (`hwupload`) and copied back
+/// (`hwdownload`) for either renderer, as AMD's.
+///
+/// `hwdevice=vulkan:hwdevice_name=<adapter>`: the device is the filter's
+/// own (libmpv's lavfi patch, src/packaging/libmpv), created when the filter
+/// goes into the chain and freed with the filter, on the Vulkan device whose
+/// name has the name of the adapter `nvidia_motion_probe` chose (FFmpeg's
+/// device string: a name is matched as a substring of `deviceName`, which
+/// for NVIDIA's driver is the adapter's DXGI description). Two adapters of
+/// the same model get the first. mpv's `%n%` quoting keeps the name's
+/// spaces and any comma or colon out of the option syntax. mpv's renderer and its Direct3D 11 device are not
+/// involved; without the option the graph would get no Vulkan device from
+/// Vestra's renderers.
+///
+/// Settings (T8 measurements, RTX 4070 Laptop, doc/architecture/README.md
+/// §4.4a): `perf=slow:grid=4` by default (the quality of grid 1 within
+/// 0.1 dB, 2.5–3.5× faster); above 1440p `perf=fast:grid=4` (slow grid 4
+/// leaves 1.21× headroom at 4K30 → 60). The fallback step (`performance`):
+/// `perf=fast`; above 1440p it is already the fastest setting the device
+/// offers (grid 8 is refused on the RTX 4070 Laptop, "supported mask 0x7":
+/// grids 1, 2 and 4; measured 2026-11-22), so the fallback goes on to
+/// `overload`.
+fn fruc_vulkan_filter(large: bool, performance: bool) -> String {
+    // The filter is only added after the probe chose an adapter (the
+    // engine is `no-gpu` otherwise); "NVIDIA" is never used in practice.
+    let adapter = NVIDIA_ADAPTER
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone()
+        .unwrap_or_else(|| "NVIDIA".to_owned());
+    fruc_vulkan_filter_on(&adapter, large, performance)
+}
+
+fn fruc_vulkan_filter_on(adapter: &str, large: bool, performance: bool) -> String {
+    let (perf, grid) = match (large, performance) {
+        (false, false) => ("slow", 4),
+        (false, true) | (true, _) => ("fast", 4),
+    };
+    format!(
+        "lavfi=graph=[format=nv12,hwupload,fruc_vulkan=fps=source_fps*2:perf={perf}:grid={grid},hwdownload,format=nv12]:hwdevice=vulkan:hwdevice_name=%{}%{adapter}",
+        adapter.len()
+    )
 }
 
 fn frc_amf_filter(large: bool, performance: bool) -> String {
@@ -2222,6 +2462,7 @@ pub fn background_tool_command(program: impl AsRef<std::ffi::OsStr>) -> std::pro
         CREATE_NO_WINDOW
     };
     command.creation_flags(console | BELOW_NORMAL_PRIORITY_CLASS);
+    unscoped_child_env(&mut command);
     command
 }
 
@@ -2318,6 +2559,84 @@ mod tests {
         assert_eq!(
             d3d11vpp_filter(2., true),
             "d3d11vpp=scale=2.00:scaling-mode=standard"
+        );
+    }
+
+    #[test]
+    fn the_vulkan_loader_sees_only_nvidias_driver_and_no_implicit_layer() {
+        assert_eq!(
+            VULKAN_SCOPE,
+            [
+                ("VK_LOADER_DRIVERS_SELECT", "*nv-vk64*"),
+                ("VK_LOADER_LAYERS_DISABLE", "~implicit~")
+            ]
+        );
+        let scoped = |name, old: Option<&str>| {
+            let value = VULKAN_SCOPE.iter().find(|(n, _)| *n == name).unwrap().1;
+            scoped_value(name, value, old.map(std::ffi::OsStr::new))
+        };
+        let (drivers, layers) = ("VK_LOADER_DRIVERS_SELECT", "VK_LOADER_LAYERS_DISABLE");
+        // Nothing set: the scope.
+        assert_eq!(scoped(drivers, None), "*nv-vk64*");
+        assert_eq!(scoped(layers, None), "~implicit~");
+        assert_eq!(scoped(layers, Some("  ")), "~implicit~");
+        // Only ever narrower: a driver selection already there is kept (a
+        // converter it leaves without NVIDIA's driver reports `runtime`).
+        assert_eq!(scoped(drivers, Some("*amdvlk*")), "*amdvlk*");
+        assert_eq!(scoped(drivers, Some("*nv-vk64*")), "*nv-vk64*");
+        // Layers: added to the list; `~all~` and `~implicit~` already cover it.
+        assert_eq!(scoped(layers, Some("~all~")), "~all~");
+        assert_eq!(scoped(layers, Some("~implicit~")), "~implicit~");
+        assert_eq!(
+            scoped(layers, Some("VK_LAYER_foo")),
+            "VK_LAYER_foo,~implicit~"
+        );
+        assert_eq!(
+            scoped(layers, Some("VK_LAYER_foo, ~ALL~")),
+            "VK_LAYER_foo, ~ALL~"
+        );
+
+        // The process: narrowed; the programs it starts get the values from
+        // before (the variables only scope Vulkan, which no other test in
+        // this process uses).
+        vestra_win32::set_process_env(drivers, "*everything*").unwrap();
+        vestra_win32::set_process_env(layers, "VK_LAYER_foo").unwrap();
+        scope_vulkan();
+        assert_eq!(std::env::var(drivers).unwrap(), "*everything*");
+        assert_eq!(std::env::var(layers).unwrap(), "VK_LAYER_foo,~implicit~");
+        let mut child = std::process::Command::new("cmd");
+        unscoped_child_env(&mut child);
+        let envs: Vec<_> = child.get_envs().collect();
+        assert!(envs.contains(&(
+            std::ffi::OsStr::new(drivers),
+            Some(std::ffi::OsStr::new("*everything*"))
+        )));
+        assert!(envs.contains(&(
+            std::ffi::OsStr::new(layers),
+            Some(std::ffi::OsStr::new("VK_LAYER_foo"))
+        )));
+    }
+
+    #[test]
+    fn nvidias_motion_filter_brings_its_own_vulkan_device_on_the_chosen_adapter() {
+        assert_eq!(
+            fruc_vulkan_filter_on("NVIDIA GeForce RTX 4070 Laptop GPU", false, false),
+            "lavfi=graph=[format=nv12,hwupload,fruc_vulkan=fps=source_fps*2:perf=slow:grid=4,hwdownload,format=nv12]:hwdevice=vulkan:hwdevice_name=%34%NVIDIA GeForce RTX 4070 Laptop GPU"
+        );
+        // mpv's %n% counts bytes.
+        assert!(fruc_vulkan_filter_on("Ä, b:c", false, false).ends_with("hwdevice_name=%7%Ä, b:c"));
+        assert!(fruc_vulkan_filter_on("x", false, true).contains("perf=fast:grid=4"));
+        assert!(fruc_vulkan_filter_on("x", true, false).contains("perf=fast:grid=4"));
+        assert!(fruc_vulkan_filter_on("x", true, true).contains("perf=fast:grid=4"));
+    }
+
+    #[test]
+    fn nvidia_motion_smoothing_needs_driver_573_38() {
+        assert_eq!(nvidia_driver_release([32, 0, 15, 7338]), 57338);
+        assert!(nvidia_driver_release([32, 0, 15, 7337]) < NVIDIA_FRUC_DRIVER);
+        assert!(
+            nvidia_driver_release([32, 0, 16, 1062]) >= NVIDIA_FRUC_DRIVER,
+            "610.62"
         );
     }
 

@@ -4,14 +4,18 @@
  * verified and laid out the way setup-libmpv and bundle-windows.mjs use them:
  *
  *   <out>/
- *     libmpv-2.dll, include/mpv/*.h   shinchiro mpv-dev (MinGW, FFmpeg and the
- *                                     other libraries linked statically)
+ *     libmpv-2.dll, include/mpv/*.h   our mpv-dev build (src/packaging/libmpv:
+ *                                     MSYS2 UCRT64, FFmpeg 9.1 and the other
+ *                                     libraries linked statically; a release
+ *                                     asset pinned in deps.json)
  *     mpv.lib                         MSVC import library (deps.yml adds it)
- *     ffmpeg/ffmpeg.exe, ffprobe.exe, *.dll   BtbN win64 gpl-shared
+ *     ffmpeg/ffmpeg.exe, ffprobe.exe, *.dll   BtbN win64 gpl-shared, carried
+ *                                     over from the pinned deps release
  *     licenses/mpv/…, licenses/ffmpeg/…
  *     components.json
  *
- * The .7z is unpacked with 7z when present, else with tar (bsdtar reads 7z).
+ * The archive (.zip; shinchiro's were .7z) is unpacked with 7z when present,
+ * else with tar (bsdtar reads both).
  *
  *   node packaging/collect-windows-deps.mjs --out <dir> [--cache <dir>]
  */
@@ -43,19 +47,48 @@ if (!options.out)
   fail("usage: collect-windows-deps.mjs --out <dir> [--cache <dir>]");
 const out = resolve(options.out);
 const cache = resolve(options.cache ?? join(tmpdir(), "vestra-deps-cache"));
-const { upstream } = await readJson(join(packaging, "deps.json"));
+const pins = await readJson(join(packaging, "deps.json"));
+const { upstream } = pins;
 
+/**
+ * A release asset of a GitHub repository: through `gh` (its login, or
+ * GH_TOKEN in CI), because this repository's releases are private and a
+ * plain download of them is a 404; other URLs plainly.
+ */
 async function fetchPinned(pin) {
   const path = join(cache, basename(new URL(pin.url).pathname));
-  if (!exists(path) || (await sha256File(path)) !== pin.sha256)
-    await download(pin.url, path);
+  if (!exists(path) || (await sha256File(path)) !== pin.sha256) {
+    const url = new URL(pin.url);
+    const [owner, repo, kind, verb, tag, file] = url.pathname
+      .split("/")
+      .slice(1);
+    if (
+      url.host === "github.com" &&
+      `${owner}/${repo}` === "vestrasys/vestra-player" &&
+      kind === "releases" &&
+      verb === "download"
+    ) {
+      await mkdir(cache, { recursive: true });
+      run("gh", [
+        "release",
+        "download",
+        tag,
+        "--repo",
+        `${owner}/${repo}`,
+        "--pattern",
+        decodeURIComponent(file),
+        "--dir",
+        cache,
+        "--clobber",
+      ]);
+    } else await download(pin.url, path);
+  }
   await verifySha256(path, pin.sha256);
   return path;
 }
 
 await clean(out);
 const mpv = upstream["windows-mpv"];
-const ffmpeg = upstream["windows-ffmpeg"];
 
 // mpv-dev: libmpv-2.dll and the headers.
 const mpvArchive = await fetchPinned(mpv);
@@ -67,6 +100,9 @@ if (has7z)
     stdio: ["ignore", "ignore", "inherit"],
   });
 else run("tar", ["-xf", mpvArchive, "-C", unpacked]);
+// The DLL itself is pinned too: the one that was tested (README "Shipping it").
+if (mpv.libmpv_sha256)
+  await verifySha256(join(unpacked, "libmpv-2.dll"), mpv.libmpv_sha256);
 await copy(join(unpacked, "libmpv-2.dll"), join(out, "libmpv-2.dll"));
 await copy(join(unpacked, "include/mpv"), join(out, "include/mpv"));
 for (const file of ["Copyright", "LICENSE.GPL", "LICENSE.LGPL"])
@@ -92,27 +128,36 @@ for (const [from, to] of [
   await writeFile(join(out, to), vulkanFiles.get(from));
 }
 
-// FFmpeg: the command-line tools and their shared libraries.
-const ffArchive = await fetchPinned(ffmpeg);
-const { entries } = await zipDirectory(ffArchive);
-const top = entries[0].name.split("/")[0];
-const wanted = entries
+// FFmpeg: the command-line tools and their shared libraries, the same bytes
+// as in the deps release that deps.json pins now. BtbN deletes its
+// autobuilds after a few weeks, so upstream["windows-ffmpeg"] records where
+// they came from but can no longer be downloaded; the pinned release's zip
+// (its sha256 is in deps.json) carries them on from release to release. A
+// new FFmpeg CLI needs a new BtbN pin and a change here.
+const previous = pins.assets["windows-x64"];
+const previousZip = await fetchPinned({
+  url: `https://github.com/vestrasys/vestra-player/releases/download/${pins.release}/${previous.file}`,
+  sha256: previous.sha256,
+});
+const wanted = (await zipDirectory(previousZip)).entries
   .map((entry) => entry.name)
   .filter(
     (name) =>
-      /^[^/]+\/bin\/(ffmpeg\.exe|ffprobe\.exe|[^/]+\.dll)$/.test(name) ||
-      name === `${top}/LICENSE.txt`,
+      /^ffmpeg\/[^/]+\.(exe|dll)$/.test(name) ||
+      name === "licenses/ffmpeg/LICENSE.txt",
   );
-if (!wanted.some((name) => name.endsWith("/ffprobe.exe")))
-  fail(`${ffArchive} has no ffprobe.exe`);
-await mkdir(join(out, "ffmpeg"), { recursive: true });
-await mkdir(join(out, "licenses/ffmpeg"), { recursive: true });
+for (const name of ["ffmpeg/ffprobe.exe", "licenses/ffmpeg/LICENSE.txt"])
+  if (!wanted.includes(name)) fail(`${previousZip} has no ${name}`);
 for (const name of wanted) {
-  const target = name.endsWith("LICENSE.txt")
-    ? join(out, "licenses/ffmpeg/LICENSE.txt")
-    : join(out, "ffmpeg", basename(name));
-  await writeFile(target, await zipRead(ffArchive, name));
+  const bytes = await zipRead(previousZip, name);
+  if (!bytes) fail(`${previousZip}: cannot read ${name}`);
+  await mkdir(dirname(join(out, name)), { recursive: true });
+  await writeFile(join(out, name), bytes);
 }
+const ffmpegComponent = JSON.parse(
+  (await zipRead(previousZip, "components.json")).toString("utf8"),
+).components.find((component) => component.name === "ffmpeg");
+if (!ffmpegComponent) fail(`${previousZip}: components.json has no ffmpeg`);
 
 /** Regular files of a (ustar/pax) tar archive: path → bytes. */
 function untar(bytes) {
@@ -171,8 +216,16 @@ const manifest = {
         build: mpv.build,
         archive: mpv.url,
         archive_sha256: mpv.sha256,
+        // The DLL's source archive, when one is pinned (build-windows.sh
+        // sources; optional until the source is published).
+        ...(mpv.sources
+          ? {
+              complete_source: mpv.sources,
+              complete_source_sha256: mpv.sources_sha256,
+            }
+          : {}),
       },
-      note: "libmpv-2.dll from shinchiro/mpv-winbuild-cmake. FFmpeg (--enable-gpl --enable-version3) and the libraries in that build's packages/ (libass, freetype, fribidi, harfbuzz, libplacebo, shaderc, spirv-cross, vulkan, luajit, mujs, uchardet, lcms2, libjpeg, zimg, libbluray, libdvdnav, libarchive, rubberband, x264, x265, dav1d, …) are linked in statically; the combination is distributed under GPL-3.0-or-later.",
+      note: `libmpv-2.dll built by src/packaging/libmpv/build-windows.sh in MSYS2 UCRT64: FFmpeg ${mpv.ffmpeg ?? "9.1"} (--enable-gpl --enable-version3) and mpv with mpv-lavfi-hwdevice.patch, with the MSYS2 libraries pinned in msys2-packages.lock (libass, freetype, fribidi, harfbuzz, libplacebo, shaderc, spirv-cross, luajit, mujs, uchardet, lcms2, libjpeg, zimg, libbluray, libdvdnav, libarchive, rubberband, OpenSSL, x264, x265, dav1d, libaribcaption, …) linked in statically; the combination is distributed under GPL-3.0-or-later. The patch and the scripts are in this repository.`,
       files: ["libmpv-2.dll"],
       license_files: [
         "licenses/mpv/Copyright",
@@ -180,24 +233,8 @@ const manifest = {
         "licenses/mpv/LICENSE.LGPL",
       ],
     },
-    {
-      name: "ffmpeg",
-      version: ffmpeg.version,
-      license: "GPL-3.0-or-later",
-      homepage: "https://ffmpeg.org",
-      source: {
-        url: `https://github.com/FFmpeg/FFmpeg/tree/${ffmpeg.version}`,
-        build: ffmpeg.build,
-        archive: ffmpeg.url,
-        archive_sha256: ffmpeg.sha256,
-      },
-      note: "BtbN FFmpeg-Builds win64 gpl-shared: ffmpeg.exe, ffprobe.exe and the av*/sw* DLLs.",
-      files: wanted
-        .filter((name) => !name.endsWith("LICENSE.txt"))
-        .map((name) => `ffmpeg/${basename(name)}`)
-        .sort(),
-      license_files: ["licenses/ffmpeg/LICENSE.txt"],
-    },
+    // Unchanged from the previous release, like its files.
+    ffmpegComponent,
   ],
 };
 await writeFile(

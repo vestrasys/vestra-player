@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.48
+
+- The vendored SDK is 1.11.1 as published on npm (`npm run vendor:sdk`), the version the player now uses. 1.11.1 adds NVIDIA motion smoothing (`plugin.video.motion("nvidia")`, the `other-engine` reason code, `TestHost.nvidiaMotion`); the documentation tree and `llms.txt` follow. The Workshop uses none of it. Who must change: nobody.
+
 ## 2.2.47
 
 - Vestra Player AI writes plugins that can be stopped while idle (SDK 1.11, events and triggers): the instructions point to the SDK guides on events and triggers and on command state, and drop `subscribe()` and `onChange()`. A generated plugin declares its event listeners and triggers first in `activate`, then reads the state once (`await plugin.player.read()`; a handler that needs the newest state calls `refresh()`), expresses command states with `when`, and opens a state stream only while something shows the state, never in `activate`. Its tests check that nothing keeps it running while idle (`host.keepsRunning`), as the scaffold's first test now does. Its `minPlayerVersion` is the running player's version (`plugin.app.version`), at least 0.11.0, the first player with these events (was 0.9.0).
