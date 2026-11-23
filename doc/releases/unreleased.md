@@ -4,6 +4,6 @@ User-facing notes of versions built since the last release that had no release o
 
 ## For plugin authors
 
-- **SDK 1.11.2** (see its changelog). Security fixes and additions; nobody must change anything except a plugin test that relies on a host error the plugin does not handle.
+- **SDK 1.11.3** (see its changelog). Security fixes, additions, and controls that read the state first when a plugin keeps no copy current; nobody must change anything except a plugin test that relies on a host error the plugin does not handle.
   - `TestHost.strictErrors` (default `true`): a host error the plugin leaves to its log (no `try`/`catch`, no `plugin.onError`, also a shader or render failure the SDK reports beside a status) fails the test. A test that means it calls `host.expectError(code)` first; `TestHost.loggedErrors` lists them all.
-- The Plugin Workshop is 2.2.49 and vendors SDK 1.11.2.
+- The Plugin Workshop is 2.2.50 and vendors SDK 1.11.3.
