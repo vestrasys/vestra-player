@@ -383,8 +383,10 @@ test("the built-in-only requests are TestHost's (api/commands_run.rs, palette_le
     return t.skip("the installed SDK is older than 1.11.0 (code builtin-only)");
   // TestHost: the same requests fail `builtin-only` for a plugin that is
   // not built-in, whatever else it does.
-  const { plugin, stop } = await startPlugin(() => {});
+  const { plugin, host: fake, stop } = await startPlugin(() => {});
   try {
+    // The lead row reports its refusal to the log as well as on `ready`.
+    fake.expectError("builtin-only");
     await assert.rejects(
       plugin.palette.lead({ title: "Ask", icon: "ai" }).ready,
       { code: "builtin-only" },
@@ -1747,6 +1749,7 @@ advisory(
         directory,
         dataDirectory: data,
         locale: "en",
+        builtin: true, // as the player runs them
       });
       for (const [id, command] of fake.commands)
         rows.push({

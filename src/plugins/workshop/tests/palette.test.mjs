@@ -11,7 +11,7 @@ const EXPECTED = { en: "Plugins", "zh-Hans": "插件", ja: "プラグイン", ko
 test("palette: every command has a category in every language: the player's word for plugins, or Vestra", async () => {
   for (const [locale, category] of Object.entries(EXPECTED)) {
     const host = new TestHost();
-    const { stop } = await startPlugin(activate, { directory: new URL("..", import.meta.url), host, locale });
+    const { stop } = await startPlugin(activate, { directory: new URL("..", import.meta.url), host, locale, builtin: true });
     try {
       assert.deepEqual([...host.commands.keys()], ["workshop.open", "askvestra.stop", "askvestra.working"]);
       for (const [id, { declaration, display }] of host.commands) {

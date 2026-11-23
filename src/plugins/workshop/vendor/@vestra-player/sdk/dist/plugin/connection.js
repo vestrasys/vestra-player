@@ -129,6 +129,13 @@ export class Connection {
      * a listener), the log before.
      */
     reportMirror = (error) => console.error(`[${this.manifest.id}]`, error);
+    /**
+     * Told of every error that reaches the plugin's log because nothing in
+     * the plugin handled it (no `onError` listener). `TestHost` sets it to
+     * fail a test on a host error the test did not expect; the player's
+     * runner leaves it unset. The error is logged either way.
+     */
+    logged = undefined;
     /** The framework's ears ({@link StateSignals}); silent until `Runtime` sets them. */
     signals = SILENT;
     /**

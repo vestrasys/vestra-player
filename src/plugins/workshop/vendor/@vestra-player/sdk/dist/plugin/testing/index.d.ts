@@ -2744,6 +2744,17 @@ export declare class TestHost implements Transport {
      * `sourceId`, then the given phase. Calls the plugin made against the old
      * state now fail with `stale`.
      *
+     * The source stamp advances exactly as in the player: a new generation
+     * and a new intent, also when `source` is the path already open (the
+     * user opened the same file again). Call it after `startPlugin` to test
+     * what the user does while the plugin runs: a file opened after
+     * activation, another file, the same one again. A control the plugin
+     * then makes with the state it read before (`player.setRate`,
+     * `seek`, `step`, …) is refused with `stale`, as in the player. The
+     * user's own pause, seek or speed change is a core action
+     * (`coreAction("play-pause").run()`): a new intent, which makes an older
+     * state stale too. `setSource` changes the facts only.
+     *
      * @param source - The path or URL.
      * @param phase - The phase to end in (default `"ready"`).
      *
@@ -3207,10 +3218,81 @@ export declare class TestHost implements Transport {
      * assert.equal(importWindow.props["status-text"], expected);
      * ```
      *
-     * @throws Never.
+     * @throws `Error` (rejects) The plugin logged a host error the test did
+     *   not expect ({@link TestHost.strictErrors}, SDK 1.11.2); the message
+     *   names it and says how to expect it ({@link TestHost.expectError}).
      * @since 1.0.0
      */
     settle(ms?: number): Promise<void>;
+    /**
+     * Whether a host error the plugin logged fails the test (default `true`).
+     * A host error is a refusal or failure with a code (`stale`, `invalid`,
+     * `disabled`, …) that nothing in the plugin handled: no `try`/`catch`
+     * around the call and no `plugin.onError` listener, so the player would
+     * only write it to its log. The next {@link TestHost.settle} (so also
+     * `command(…).run()`) rejects with it, or else `stop()`; the message
+     * names the error and how to expect it. A test that means it calls
+     * {@link TestHost.expectError} first. Set `false` to only log host
+     * errors, as before SDK 1.11.2. {@link TestHost.loggedErrors} lists them
+     * either way.
+     *
+     * @example Expect a refusal the plugin does not handle
+     * The user opens another file, then runs a command that controls the
+     * old one with a state the plugin read before: the player refuses it with
+     * `stale`, and the plugin leaves the refusal to its log. The test says so
+     * before it runs the command; without `expectError` the run rejects.
+     * ```ts
+     * declare const host: TestHost;
+     * // ---cut---
+     * host.openElsewhere("/media/other.mp4");
+     * host.expectError("stale");
+     * await host.command("rate-2").run();
+     * ```
+     *
+     * @since 1.11.2
+     */
+    strictErrors: boolean;
+    /**
+     * Expect the plugin to log one host error with `code` (each call
+     * expects one more). An expected error does not fail the test; one that
+     * never comes fails `stop()` (under {@link TestHost.strictErrors}).
+     *
+     * @param code - The error's code, e.g. `"stale"`.
+     *
+     * @example A control after the user changed the source
+     * The plugin read the state once and sets the speed with its old copy;
+     * after the user opened another file the player refuses the control.
+     * ```ts
+     * import assert from "node:assert/strict";
+     * declare const host: TestHost;
+     * // ---cut---
+     * host.openElsewhere("/media/other.mp4");
+     * host.expectError("stale");
+     * await host.command("rate-2").run();
+     * assert.equal(host.loggedErrors.at(-1)?.code, "stale");
+     * ```
+     *
+     * @since 1.11.2
+     */
+    expectError(code: string): void;
+    /**
+     * Every host error the plugin logged (expected or not), oldest first:
+     * errors with a code that nothing in the plugin handled.
+     *
+     * @example Check that nothing was refused
+     * The test asserts that the plugin left no refusal to its log. The list
+     * keeps every host error the plugin did not handle, also those the test
+     * expected with `expectError`, so it is empty only when none came.
+     * ```ts
+     * import assert from "node:assert/strict";
+     * declare const host: TestHost;
+     * // ---cut---
+     * assert.deepEqual(host.loggedErrors.map((error) => error.code), []);
+     * ```
+     *
+     * @since 1.11.2
+     */
+    get loggedErrors(): readonly HostError[];
     /**
      * Close the fake stream servers and delete the host's temporary
      * directories. `stop()` from {@link startPlugin} calls it. It never
