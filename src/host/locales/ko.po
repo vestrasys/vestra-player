@@ -719,12 +719,6 @@ msgstr "이 명령을 실행할까요?"
 msgid "Run these {n} commands?"
 msgstr "이 명령 {n}개를 실행할까요?"
 
-#. The approval sheet: why a step asks, for a command of a plugin that is not built in.
-#: src/api/commands_run.rs
-#, x-machine
-msgid "Not built in"
-msgstr "기본 제공 아님"
-
 #. The approval sheet: why the player's Close asks.
 #: src/api/commands_run.rs
 #, x-machine
@@ -736,12 +730,6 @@ msgstr "동영상을 닫습니다"
 #, x-machine
 msgid "Quits the player"
 msgstr "플레이어를 종료합니다"
-
-#. The approval sheet's note under the steps, when a step's plugin is not built in.
-#: src/host/review_sheet.rs
-#, x-machine
-msgid "The player cannot tell what commands of plugins that are not built in will do."
-msgstr "플레이어는 기본 제공이 아닌 플러그인의 명령이 무엇을 할지 알 수 없습니다."
 
 #. The approval sheet's button that runs the plan.
 #: src/host/review_sheet.rs

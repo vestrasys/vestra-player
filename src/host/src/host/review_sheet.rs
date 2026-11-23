@@ -70,8 +70,6 @@ pub(crate) struct Step {
     pub(crate) reason: String,
     /// It asks first (drawn in `text`, the others in `text-list`).
     pub(crate) asks: bool,
-    /// Its plugin is built in.
-    pub(crate) builtin: bool,
 }
 
 /// What a sheet asks about.
@@ -212,9 +210,8 @@ pub(crate) fn offer_after(
 
 /// The `ReviewSheet` value (ui/review-sheet.slint) of a plan, less its
 /// image: `title` and `icon` of the request box, the request, the steps in
-/// [`SLOTS`] rows, the note when a step's plugin is not built in, the
-/// "Don't ask again" text (empty: no checkbox), and the buttons' texts and
-/// keys.
+/// [`SLOTS`] rows, the "Don't ask again" text (empty: no checkbox), and
+/// the buttons' texts and keys.
 pub(crate) fn sheet(
     title: &str,
     icon: &str,
@@ -231,11 +228,6 @@ pub(crate) fn sheet(
             None => empty_row(),
         })
         .collect();
-    let note = if steps.iter().any(|step| !step.builtin) {
-        i18n::tr("The player cannot tell what commands of plugins that are not built in will do.")
-    } else {
-        String::new()
-    };
     json!({
         "request": true,
         "icon": icon,
@@ -246,7 +238,6 @@ pub(crate) fn sheet(
         "detail": "",
         "count": steps.len().min(SLOTS),
         "steps": rows,
-        "note": note,
         "remember": remember,
         "run": i18n::tr("Run"),
         "cancel": i18n::tr("Don't Run"),
@@ -262,7 +253,7 @@ fn empty_row() -> Value {
 /// The `ReviewSheet` value of a confirmation, less its image: the request
 /// box's (title, icon, request) when there is one, the caller's message,
 /// detail, checkbox and buttons (as `confirm::parse` checked them), and
-/// the buttons' keys. No question, no steps, no note.
+/// the buttons' keys. No question, no steps.
 pub(crate) fn confirm_sheet(
     request: Option<(&str, &str, &str)>,
     options: &confirm::Options,
@@ -279,7 +270,6 @@ pub(crate) fn confirm_sheet(
         "detail": options.detail.as_deref().unwrap_or_default(),
         "count": 0,
         "steps": (0..SLOTS).map(|_| empty_row()).collect::<Vec<_>>(),
-        "note": "",
         "remember": options.checkbox.as_deref().unwrap_or_default(),
         "run": options.confirm,
         "cancel": options.cancel,
@@ -664,13 +654,12 @@ impl Host {
 mod tests {
     use super::*;
 
-    fn step(label: &str, plugin: &str, reason: &str, asks: bool, builtin: bool) -> Step {
+    fn step(label: &str, plugin: &str, reason: &str, asks: bool) -> Step {
         Step {
             label: label.into(),
             plugin: plugin.into(),
             reason: reason.into(),
             asks,
-            builtin,
         }
     }
 
@@ -689,20 +678,14 @@ mod tests {
         assert_eq!(question(3), "Run these 3 commands?");
     }
 
-    /// Every slot is there (hidden ones empty); the note only with a step
-    /// of a plugin that is not built in.
+    /// Every slot is there (hidden ones empty); no row of a plugin that is
+    /// not built in gives a reason.
     #[test]
     fn the_sheet_lists_every_step_in_fixed_slots() {
         let steps = [
-            step("Reset: Picture", "Video", "", true, true),
-            step("Vestra Player: Mute", "Vestra Player", "", false, true),
-            step(
-                "Export: Export Last 30 Seconds",
-                "Clip Export",
-                "Not built in",
-                true,
-                false,
-            ),
+            step("Reset: Picture", "Video", "", true),
+            step("Vestra Player: Mute", "Vestra Player", "", false),
+            step("Export: Export Last 30 Seconds", "Clip Export", "", true),
         ];
         let value = sheet(
             "Ask Vestra",
@@ -721,12 +704,8 @@ mod tests {
         assert_eq!(rows[0]["number"], "1");
         assert_eq!(rows[0]["reason"], "");
         assert_eq!(rows[1]["asks"], false);
-        assert_eq!(rows[2]["reason"], "Not built in");
+        assert_eq!(rows[2]["reason"], "");
         assert!(rows[3..].iter().all(|row| row["shown"] == false));
-        assert_eq!(
-            value["note"],
-            "The player cannot tell what commands of plugins that are not built in will do."
-        );
         assert_eq!(
             (&value["run"], &value["cancel"]),
             (&json!("Run"), &json!("Don't Run"))
@@ -737,7 +716,6 @@ mod tests {
         );
         let one = sheet("Ask Vestra", "ai", "", &steps[..1], "", ["Enter", "Esc"]);
         assert_eq!(one["question"], "Run this command?");
-        assert_eq!(one["note"], "");
         let export = sheet(
             "Ask Vestra",
             "ai",
@@ -868,8 +846,8 @@ mod tests {
             (&json!("Clear"), &json!("Cancel"))
         );
         assert_eq!(
-            (&plain["question"], &plain["note"], &plain["count"]),
-            (&json!(""), &json!(""), &json!(0))
+            (&plain["question"], &plain["count"]),
+            (&json!(""), &json!(0))
         );
         let rows = plain["steps"].as_array().unwrap();
         assert_eq!(rows.len(), SLOTS);

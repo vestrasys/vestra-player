@@ -588,11 +588,6 @@ msgstr ""
 msgid "Run these {n} commands?"
 msgstr ""
 
-#. The approval sheet: why a step asks, for a command of a plugin that is not built in.
-#: src/api/commands_run.rs
-msgid "Not built in"
-msgstr ""
-
 #. The approval sheet: why the player's Close asks.
 #: src/api/commands_run.rs
 msgid "Closes the video"
@@ -601,11 +596,6 @@ msgstr ""
 #. The approval sheet: why the player's Quit asks.
 #: src/api/commands_run.rs
 msgid "Quits the player"
-msgstr ""
-
-#. The approval sheet's note under the steps, when a step's plugin is not built in.
-#: src/host/review_sheet.rs
-msgid "The player cannot tell what commands of plugins that are not built in will do."
 msgstr ""
 
 #. The approval sheet's button that runs the plan.

@@ -3,10 +3,9 @@
 // once, where the palette was (top centre), on the palette's plate and at
 // its width: the request in the field's box (read-only), the question,
 // every step of the plan (number, palette label, plugin, a reason when it
-// is a fact), a note when a step's plugin is not built in, [Run Enter]
-// [Don't Run Esc] at the right of the footer (as UrlInputRow: confirm
-// first) and, when the host offers it, "Don't ask again for <plugin>" at
-// its left (step 4, H4).
+// is a fact), [Run Enter] [Don't Run Esc] at the right of the footer (as
+// UrlInputRow: confirm first) and, when the host offers it, "Don't ask
+// again for <plugin>" at its left (step 4, H4).
 //
 // The same sheet asks a plugin's `dialogs.confirm` raised for the main
 // window (step 5, H5; §4.4): the request box only when the caller holds the
@@ -37,8 +36,8 @@ export struct ReviewStep {
     // `Category: Title` as the palette shows it.
     label: string,
     plugin: string,
-    // Why it asks, when that is a fact ("Not built in", "Closes the
-    // video"); empty otherwise.
+    // Why it asks, when that is a fact ("Closes the video",
+    // "Quits the player"); empty otherwise.
     reason: string,
     // It asks first: drawn in `text`, the others in `text-list`.
     asks: bool,
@@ -62,8 +61,6 @@ export struct ReviewSheet {
     // Steps shown (the rest of `steps` are hidden).
     count: int,
     steps: [ReviewStep],
-    // Shown when a step's plugin is not built in; empty otherwise.
-    note: string,
     // The footer's checkbox: "Don't ask again for <plugin>" (H4) on a plan,
     // the caller's checkbox on a confirmation; empty: no checkbox.
     remember: string,
@@ -93,7 +90,7 @@ export component ReviewSheetView inherits Rectangle {
     out property <bool> has-keys: keys.has-focus;
     // The body scrolls (it is taller than the room the window leaves): a
     // confirmation's detail (or its message and detail together), a plan's
-    // steps and note.
+    // steps.
     out property <bool> detail-scrolls: root.scroll-shown < root.scroll-full;
     // A confirmation's message scrolls with its detail (the window cannot
     // keep it above them).
@@ -119,7 +116,7 @@ export component ReviewSheetView inherits Rectangle {
     }
 
     // 6px, the 32px request box, 6px (or 6px without the box); the 28px
-    // question, the rows and the note, or a confirmation's message (28px,
+    // question and the rows, or a confirmation's message (28px,
     // taller when it wraps) and its detail; the footer (separator and
     // buttons) as the palette's: 44px, taller only when the checkbox's text
     // wraps (two long plugin names). The panel ends 16px above the window's
@@ -129,7 +126,7 @@ export component ReviewSheetView inherits Rectangle {
     // 2000 characters), keeping at least 48px of it; when the window cannot
     // keep the message and 48px of detail (the smallest window, a long
     // message), the message scrolls with the detail. A plan keeps its
-    // question above and scrolls its steps and note. While the body
+    // question above and scrolls its steps. While the body
     // scrolls its text is narrower by the scroll bar's 14px track, which
     // then never covers it (the track widens on hover); the decision is made
     // on the texts at their full width (`*-measure`), so it does not depend
@@ -147,9 +144,8 @@ export component ReviewSheetView inherits Rectangle {
     private property <length> detail-height: root.sheet.detail == "" ? 0px : detail-measure.preferred-height + 8px;
     private property <bool> pinned: root.message-height + min(root.detail-height, 48px) <= root.room;
     private property <length> detail-shown: max(min(root.detail-height, 48px), min(root.detail-height, root.room - root.message-height));
-    // A plan's steps and note, measured at the full width.
-    private property <length> note-height: root.sheet.note == "" ? 0px : note-measure.preferred-height + 8px;
-    private property <length> steps-height: root.sheet.count * 28px + root.note-height;
+    // A plan's steps.
+    private property <length> steps-height: root.sheet.count * 28px;
     // The scrolled part: its whole height and what is shown of it.
     private property <length> scroll-full: !root.confirmation ? root.steps-height
         : root.pinned ? root.detail-height : root.message-height + root.detail-height;
@@ -264,7 +260,7 @@ export component ReviewSheetView inherits Rectangle {
             overflow: elide;
         }
         // A confirmation: the message as the question (wrapping), the
-        // detail below it as the note but in `text-list` (§4.4). Above the
+        // detail below it in `text-list` (§4.4). Above the
         // scrolled detail while the window keeps it there (`pinned`); also
         // the message's measure at the full width.
         message := Text {
@@ -280,19 +276,12 @@ export component ReviewSheetView inherits Rectangle {
             vertical-alignment: center;
             wrap: word-wrap;
         }
-        // The detail's and the note's heights at the full width (never
-        // drawn): whether the body scrolls is decided on them.
+        // The detail's height at the full width (never drawn): whether
+        // the body scrolls is decided on it.
         detail-measure := Text {
             visible: false;
             width: root.full;
             text: root.sheet.detail;
-            font-size: Theme.font-body;
-            wrap: word-wrap;
-        }
-        note-measure := Text {
-            visible: false;
-            width: root.full;
-            text: root.sheet.note;
             font-size: Theme.font-body;
             wrap: word-wrap;
         }
@@ -307,7 +296,7 @@ export component ReviewSheetView inherits Rectangle {
             width: parent.width - 8px;
             height: max(0px, root.confirmation && root.sheet.detail != "" ? root.scroll-shown - 8px : root.scroll-shown);
             content-width: self.width;
-            content-height: !root.confirmation ? root.sheet.count * 28px + (root.sheet.note == "" ? 0px : note.height + 8px)
+            content-height: !root.confirmation ? root.sheet.count * 28px
                 : inner-message.height + (root.sheet.detail == "" ? 0px : detail.height);
             // The message, when the window cannot keep it above the detail.
             inner-message := Text {
@@ -390,17 +379,6 @@ export component ReviewSheetView inherits Rectangle {
                         overflow: elide;
                     }
                 }
-            }
-            note := Text {
-                visible: !root.confirmation && root.sheet.note != "";
-                x: 8px;
-                y: root.sheet.count * 28px + 2px;
-                width: root.text-width;
-                height: self.preferred-height;
-                text: root.sheet.note;
-                font-size: Theme.font-body;
-                color: Theme.text-dim;
-                wrap: word-wrap;
             }
         }
         // Footer: the palette's separator, the buttons at its right, the
