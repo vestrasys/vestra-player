@@ -424,14 +424,14 @@ export class AbLoop {
     else if (this.b !== null) this.#osd("A-B end: {}", [precise(this.b)]);
   }
 
+  /** Called when A or B changed (the commands give their conditions again). */
+  changed: () => void = () => {};
+
   /**
    * B22: while only A is set, an `A` marker on the seek bar (this plugin's
    * layer); with B too the loop span is the player's to draw. Written for the
    * source it belongs to (`ifCurrent`), and only when it changed.
    */
-  /** Called when A or B changed (the commands give their conditions again). */
-  changed: () => void = () => {};
-
   #publish() {
     this.changed();
     const state = this.#state;

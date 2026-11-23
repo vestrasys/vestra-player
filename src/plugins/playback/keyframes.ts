@@ -79,8 +79,10 @@ export class Keyframes {
     const s = this.#scope.player.state;
     const known = this.#st.video;
     const video = known !== null && known.sourceId === s.sourceId && known.video;
-    const playable = s.kind === "media" && (s.phase === "ready" || s.phase === "ended");
-    return { enabled: video ? c.keyframeable : c.never, reason: video || !playable ? UNSUPPORTED : NO_VIDEO };
+    // As `state()`: an unsupported source (with no position, too) ranks before "no video".
+    const playable = s.kind === "media" && (s.phase === "ready" || s.phase === "ended") && s.can.seek && s.position !== null;
+    if (!playable) return { enabled: c.never, reason: UNSUPPORTED };
+    return video ? { enabled: c.keyframeable, reason: UNSUPPORTED } : { enabled: c.never, reason: NO_VIDEO };
   }
 
   async run(direction: "backward" | "forward") {
@@ -88,6 +90,7 @@ export class Keyframes {
     const { player } = this.#scope;
     const before = player.state;
     this.#st.busy = true;
+    this.changed();
     try {
       await player.step("keyframe", direction, { ifCurrent: before });
     } catch (error) {
@@ -96,6 +99,7 @@ export class Keyframes {
       throw sourceFailure(error);
     } finally {
       this.#st.busy = false;
+      this.changed();
     }
     const after = player.state.position ?? 0;
     const p = this.#playback;

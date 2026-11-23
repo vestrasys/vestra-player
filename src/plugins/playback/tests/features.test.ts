@@ -659,6 +659,49 @@ test("B08 Ctrl+Shift+←/→ step one keyframe with the time on the OSD; the end
   await stop();
 });
 
+test("B08 an unsupported source ranks before \"no video\", as before the conditions", async () => {
+  const host = withMedia();
+  host.stats = { ...host.stats, video: null } as never;
+  const { stop } = await start(host);
+  await host.settle();
+  host.setSource({ capabilities: { ...host.source.capabilities, seek: false } });
+  await host.settle();
+  await eventually(() => state(host, "keyframe-forward").reason, "当前来源不支持此操作");
+  await stop();
+});
+
+test("B06/B08 without a position the seek steps and keyframe steps show their reason instead of swallowing the key", async () => {
+  const host = withMedia();
+  host.stats = { ...host.stats, video: VIDEO } as never;
+  const { stop } = await start(host);
+  await host.settle();
+  host.setSource({ position: null });
+  await host.settle();
+  await eventually(() => [state(host, "forward-2").enabled, state(host, "keyframe-forward").enabled], [false, false]);
+  assert.equal(await host.press("Ctrl+ArrowRight"), "reason");
+  assert.equal(await host.press("Ctrl+Shift+ArrowRight"), "reason");
+  assert.equal(host.sent("player.step").length, 0);
+  await stop();
+});
+
+test("B08 a keyframe step started from the panel disables the keyframe commands while it runs, as before the conditions", async () => {
+  const host = withMedia();
+  host.stats = { ...host.stats, video: VIDEO } as never;
+  let release = () => {};
+  host.handle("player.step", () => new Promise<void>((resolve) => (release = resolve)));
+  const { stop } = await start(host);
+  await host.settle();
+  await eventually(() => state(host, "keyframe-forward").enabled, true);
+  host.mounted("adjust").emit("keyframeStep", 1);
+  await until(() => host.command("keyframe-forward").state.busy);
+  assert.equal(host.command("keyframe-forward").state.enabled, false);
+  assert.equal(await host.press("Ctrl+Shift+ArrowRight"), "passed");
+  release();
+  await host.settle();
+  await eventually(() => state(host, "keyframe-forward").enabled, true);
+  await stop();
+});
+
 test("B08 repeats while a step is in flight are dropped; a refusal is shown, a stale one is not", async () => {
   const host = new TestHost();
   host.stats = { ...host.stats, video: VIDEO } as never;

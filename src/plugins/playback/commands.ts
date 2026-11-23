@@ -78,7 +78,7 @@ export function conditions(when: When) {
     never: when.ready.and(when.ready.not()),
     /** `Playback.canStep` (tiers 2–4); a missing position is checked again at the run. */
     seekable,
-    /** `Playback.canSeek`: and a known length. */
+    /** `Playback.canSeek`: and a known length above 0 (`duration > 0`; the bounds are `min ≤ x`). */
     jumpable: seekable.and(when.duration({ min: 0.001 })),
     /** `Playback.can("rate")`. */
     rateable: when.can("rate").and(when.phase("ready")),
@@ -86,7 +86,7 @@ export function conditions(when: When) {
     restartable: when.phase("ready").and(when.can("seek")).or(when.phase("ended").and(when.can("restart"))),
     /** Keyframe steps: a seekable file, ready or ended. */
     keyframeable: seekable.and(when.stream.not()),
-    /** The rate is `value` (the bounds are `min ≤ rate < max`). */
+    /** The rate is `value` (the bounds are `min ≤ rate < max`: a range 0.001 wide holds exactly the rates the player sets, which have at most two decimals). */
     rate(value: number) {
       let made = rates.get(value);
       if (!made) rates.set(value, (made = when.rate({ min: value, max: value + 0.001 })));
@@ -129,7 +129,8 @@ function seekEntries(p: Playback, steps: SeekSteps, { text }: I18n, seekBy: (del
       bindings: [binding],
       action: () => seekBy(delta),
       state: () => ready(p.canStep()),
-      gate: () => ({ enabled: c.seekable, reason: UNSUPPORTED }),
+      // `canStep`: a seekable source with a position; without one the key shows the reason.
+      gate: () => ({ enabled: p.state.position === null ? c.never : c.seekable, reason: UNSUPPORTED }),
     });
     return [seek(`backward-${tier}`, "backward", -seconds, back), seek(`forward-${tier}`, "forward", seconds, forward)];
   });
@@ -323,9 +324,13 @@ function entries(p: Playback, f: Features, c: Conditions): Entry[] {
 /** The gated commands of one scope and the state they were last given. */
 type Gated = { command: Command; gate: () => Gate; last: Gate }[];
 
-/** `gate` with this plugin's `busy`: busy implies disabled with no reason (`ready`), as before, so a key passes on. */
-const withBusy = (gate: () => Gate, busy: (() => boolean) | undefined, never: Condition) =>
-  busy ? () => (busy() ? { ...gate(), enabled: never, reason: null } : gate()) : gate;
+/**
+ * `gate` with this plugin's `busy`: busy implies disabled (`ready`), as before. Its reason is
+ * `state()`'s, as `ready` gave it: none while the source could do it (so a key passes on), the
+ * underlying reason while it could not.
+ */
+const withBusy = (gate: () => Gate, busy: (() => boolean) | undefined, never: Condition, state: () => State) =>
+  busy ? () => (busy() ? { ...gate(), enabled: never, reason: state().reason } : gate()) : gate;
 
 /** Give each gated command its conditions again where they changed. */
 function regateAll(gated: Gated) {
@@ -344,7 +349,7 @@ function regateAll(gated: Gated) {
  */
 function register(scope: Scope, { text }: I18n, table: Entry[], gated: Gated, never: Condition) {
   for (const { id, path, title, category, home, order, group, radio, bindings, repeat, state, gate: own, busy, action } of table) {
-    const gate = own && withBusy(own, busy, never);
+    const gate = own && withBusy(own, busy, never, state);
     const first = gate?.();
     const command = scope.commands.add({
       id,

@@ -54,6 +54,13 @@ export default async function activate(plugin: Plugin) {
   const flip = () => (flipped ? flipped() : void (missed = true));
   plugin.trigger().firesOn(plugin.when.ready).enter(flip).leave(flip);
   plugin.trigger().firesOn(plugin.when.open).leave(flip);
+  // Resident for the whole run (0.11.0, as in 0.10.x): the Audio tab of the adjust column must
+  // compile when the column first shows and never later, when a file opens (user ruling
+  // 2026-11-11; tests/startup_compiles.rs). A plugin in standby has no panel to compile, so this
+  // one must not park: it follows the player with a stream from its activation, the reason the
+  // player names for keeping it running. Opened before the first await, so the first run's
+  // classification sees it.
+  plugin.player.stream(() => undefined);
   await plugin.player.read(); // was "playback.read"
   const { player } = plugin;
   const { text } = plugin.i18n;
@@ -133,24 +140,28 @@ export default async function activate(plugin: Plugin) {
   const gated: [Command, Gate][] = [];
   const gate = (command: Command, kind: Gate) => void gated.push([command, kind]);
   let gateKey = "";
+  /** `ready()` as of the last change (`conditions()`), for the reasons, which must not read the state. */
+  let readyNow = false;
   function conditions() {
     // Nothing gated yet: the commands (and what their reasons read) come further down.
     if (!gated.length) return;
+    readyNow = ready();
     const tracked = player.state.audioTracks;
     const { phase, kind } = player.state;
-    const key = JSON.stringify([tracked?.map((t) => t.id) ?? null, mono(), gated.length, phase, kind]);
+    const selected = tracked?.filter((t) => t.selected).map((t) => t.id) ?? null;
+    const key = JSON.stringify([tracked?.map((t) => t.id) ?? null, selected, mono(), gated.length, phase, kind]);
     if (key === gateKey) return;
     gateKey = key;
-    const ready = readyWhen();
+    const readyCond = readyWhen();
     for (const [command, kind] of gated)
       command.set({
         enabled:
           kind === "edit"
-            ? ready
+            ? readyCond
             : kind === "channels"
               ? mono()
                 ? never
-                : ready
+                : readyCond
               : kind === "cycle"
                 ? tracks().length > 0
                   ? when.open
@@ -707,9 +718,9 @@ export default async function activate(plugin: Plugin) {
     run: loadExternal,
   });
   gate(load, "load");
-  // A reason shows only while the condition is false: a fixed text is enough.
+  // A reason shows while the condition is false, or while the command is busy: none then, as before.
   const reason = "No audio track selected";
-  const editing = { enabled: never, busy, reason };
+  const editing = { enabled: never, busy, reason: () => (busy() ? null : reason) };
   // Repeating keys must not be swallowed while a change is applying (the filter keeps the last value).
   const repeating = { enabled: never, reason, repeat: true };
   /** Adds a command whose enabled state follows `kind` (`conditions()`). */
@@ -742,7 +753,8 @@ export default async function activate(plugin: Plugin) {
       radio: true,
       enabled: never,
       busy,
-      reason: () => (mono() ? "The current track is mono" : reason),
+      // As before: none while busy; no selected track first, then a mono track.
+      reason: () => (busy() ? null : !readyNow ? reason : mono() ? "The current track is mono" : null),
       checked: () => settings.channels === id,
       run: () => setChannels(id),
     });

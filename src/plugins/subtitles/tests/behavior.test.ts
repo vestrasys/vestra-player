@@ -377,6 +377,25 @@ test("settings, per-field defaults, reset style, hide and refresh act on the cur
   await stop();
 });
 
+test("Show Subtitles and Off follow a track beyond the menu's eight, as before the conditions", async () => {
+  const host = sourceHost();
+  for (let id = 2; id <= 8; id++)
+    host.subtitles.tracks.push({ target: { kind: "embedded", id }, title: `T${id}`, language: "en", styleSupported: true, styleReason: null });
+  host.subtitles.selection.target = null;
+  const { stop } = await startPlugin(activate, { directory, host, locale: "zh-Hans" });
+  await host.settle();
+  assert.equal(host.command("show").state.checked, false);
+  // A ninth track (not in the menu, which lists eight) becomes the primary one.
+  host.subtitles.tracks.push({ target: { kind: "embedded", id: 9 }, title: "T9", language: "en", styleSupported: true, styleReason: null });
+  host.subtitles.selection.target = { kind: "embedded", id: 9 };
+  host.setSource({});
+  await host.settle();
+  await pause();
+  assert.equal(host.command("show").state.checked, true);
+  assert.equal(host.command("track-off").state.checked, false);
+  await stop();
+});
+
 test("Alt+H hides and brings back the last shown track, with OSD and the check mark", async () => {
   const host = sourceHost();
   host.subtitles.tracks.push({ target: { kind: "embedded", id: 2 }, title: "中文", language: "zh", styleSupported: true, styleReason: null });

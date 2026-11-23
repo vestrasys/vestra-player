@@ -173,6 +173,8 @@ export default async function activate(plugin: Plugin) {
   const loaded = new Map<string, Loaded>();
   let status: Status = NONE;
   let busy = false;
+  /** `busy` changed: the commands whose condition depends on it are given it again (set below). */
+  let busyChanged = () => {};
   let epoch = 0; // bumped by cancel and media switches; stale actions stop at the next guard
   let aborter = new AbortController(); // aborted together with each epoch bump (stops an upload)
   let chain = Promise.resolve();
@@ -210,6 +212,7 @@ export default async function activate(plugin: Plugin) {
     chain = chain.then(async () => {
       if (epoch === ticket) {
         busy = true;
+        busyChanged();
         if (!quiet) status = text;
         plugin.update();
         try {
@@ -221,6 +224,7 @@ export default async function activate(plugin: Plugin) {
           if (quiet ? !cancelled : error.code) console.error(`[subtitles] ${error.message ?? String(e)}`);
         } finally {
           busy = false;
+          busyChanged();
           if (!subtitles.state) await subtitles.refresh().catch(() => {});
           plugin.update(); // also runs from the style timer, outside any SDK handler
         }
@@ -985,12 +989,17 @@ export default async function activate(plugin: Plugin) {
   // the secondary track, the cues) is read by the update pass as before.
   const { when } = plugin;
   const never = when.ready.and(when.ready.not());
-  plugin.commands.add({
+  /** Holds whatever the player's state: Cycle depends only on there being tracks, as before. */
+  const always = when.ready.or(when.ready.not());
+  // A ready media file; disabled while an operation runs, with BUSY as its reason (as before).
+  const mediaReady = when.phase("ready").and(when.open);
+  const loadSecondary = plugin.commands.add({
     id: "load-secondary", path: ["@open", "Add Secondary Subtitle…"], order: 114, group: "open", category: CATEGORY.subtitles,
-    enabled: when.phase("ready").and(when.open), busy: () => busy,
+    enabled: busy ? never : mediaReady, busy: () => busy,
     reason: () => (busy ? BUSY : NO_MEDIA),
     run: () => busy || announce(message("chooseSecondaryFile"), loadAs("secondary")),
   });
+  busyChanged = () => loadSecondary.set({ enabled: busy ? never : mediaReady });
   // Menu redesign (step 6): the Subtitles panel replaces Subtitles ▸ and Reset ▸ Subtitle *. The menu
   // keeps Open ▸ Open Subtitle… / Add Secondary Subtitle…, Tools ▸ Subtitle Track ▸ and
   // Subtitles…; every other command is in the command palette ("Category: Title") with its key,
@@ -1030,6 +1039,7 @@ export default async function activate(plugin: Plugin) {
   let trackMenu = plugin.scope();
   let secondMenu = plugin.scope();
   let trackKey = "";
+  let shownKey = "";
   let rebuilding = Promise.resolve();
   /**
    * The track items' titles and menu keys (the English rendering; menus merge by it).
@@ -1066,14 +1076,19 @@ export default async function activate(plugin: Plugin) {
     });
   }
   function syncTrackMenu(s: SubtitlesState) {
+    // Show Subtitles, Off and Cycle follow every track, not only the ones the menu lists.
+    const ids = JSON.stringify(s.tracks.map((t) => t.id));
+    if (ids !== shownKey) {
+      shownKey = ids;
+      const shown = anyShown(s);
+      showCommand.set({ checked: shown });
+      offCommand.set({ checked: shown.not() });
+      cycleCommand.set({ enabled: s.tracks.length ? always : never });
+    }
     const titles = menuTitles(s.tracks);
     const key = JSON.stringify(s.tracks.slice(0, MENU_TRACKS).map((t, i) => [t.id, titles[i]!.key, t.text]));
     if (key === trackKey) return;
     trackKey = key;
-    const shown = anyShown(s);
-    showCommand.set({ checked: shown });
-    offCommand.set({ checked: shown.not() });
-    cycleCommand.set({ enabled: s.tracks.length ? when.open : never });
     const tracks = s.tracks.slice(0, MENU_TRACKS);
     // Without any text track the Secondary Subtitle menu is only Off.
     const seconds = s.tracks.some((t) => t.text) ? tracks : [];
@@ -1107,7 +1122,7 @@ export default async function activate(plugin: Plugin) {
   const cycleCommand = plugin.commands.add({
     id: "track-cycle", title: "Cycle", bindings: ["Alt+L"],
     category: CATEGORY.track, home: "tune",
-    enabled: subtitles.state?.tracks.length ? when.open : never,
+    enabled: subtitles.state?.tracks.length ? always : never,
     reason: "No subtitle tracks", // shown only while disabled
     run: cycle,
   });

@@ -722,6 +722,34 @@ test("G04: Alt+A cycles in list order and wraps; one track says so", async () =>
   await stop();
 });
 
+test("a command at work shows no reason, as before the conditions: an edit, and a channel mode", async () => {
+  const { host, window, stop } = await open();
+  await host.settle();
+  const gate = hold(host);
+  window.emit("delay-changed", 100);
+  await flush();
+  assert.equal(host.command("audio.equalizer").state.busy, true);
+  assert.equal(host.command("audio.equalizer").state.reason, null, "busy, no reason");
+  assert.equal(host.command("audio.channels.left").state.busy, true);
+  assert.equal(host.command("audio.channels.left").state.reason, null, "busy, no reason");
+  await gate.release();
+  await stop();
+});
+
+test("a channel mode without a selected track gives that reason before a mono track's, as before the conditions", async () => {
+  const host = new TestHost();
+  host.stats = { ...host.stats, audio: { codec: "pcm", sampleRate: 48000, channels: 1, decoder: "pcm", format: "s16", channelLayout: "mono", bitrate: null } };
+  const { stop } = await open(host);
+  await host.settle(20);
+  assert.equal(host.command("audio.channels.left").state.reason, "The current track is mono");
+  // The track is no longer selected: not ready comes first.
+  host.setSource({ audioTracks: [track(1, false)] });
+  await host.settle(20);
+  assert.equal(host.command("audio.channels.left").state.enabled, false);
+  assert.equal(host.command("audio.channels.left").state.reason, "No audio track selected");
+  await stop();
+});
+
 test("G05: channel modes route a stereo mix, are global, and wait on a mono track", async () => {
   const host = new TestHost();
   host.stats = { ...host.stats, audio: { codec: "aac", sampleRate: 48000, channels: 6, decoder: "aac", format: "floatp", channelLayout: "5.1", bitrate: null } };
@@ -1017,19 +1045,21 @@ test("G16: a device plugged in later shows up when the player reports it; withou
   await stop();
 });
 
-test("idle with nothing applied it keeps nothing running; in standby a device change wakes it and its device menu follows", async () => {
+test("stays resident and says why: a stream from its activation, so its Audio tab compiles when the adjust column first shows (ruling 2026-11-11)", async () => {
   const host = new TestHost();
   host.audioDevices = [SPEAKERS];
   const { stop } = await startPlugin(activate, { directory, host });
   await host.settle();
-  // An empty audio chain and a panel that is not on screen: the player may put it in standby.
-  assert.deepEqual(host.keepsRunning, []);
-  await host.park();
-  assert.equal(host.parked, true);
+  // With nothing applied and the panel not on screen, the stream keeps it running (a binding's
+  // read of the same state is listed beside it, never as a reason of its own).
+  assert.ok(
+    host.keepsRunning.some((line) => /^listens to source\.state: .*a stream opened at /.test(line)),
+    host.keepsRunning.join("\n"),
+  );
+  // A device change still reaches it (it is running) and its device menu follows.
   host.audioDevices = [SPEAKERS, PHONES];
   host.emit("audio.devices.changed", { devices: host.audioDevices, requested: null, active: null });
   await host.settle();
-  assert.equal(host.parked, false, "audio.devices.changed is a wake event");
   assert.deepEqual(deviceItems(host).map((item) => item[0]), ["System Default", "MacBook Air 扬声器", "USB 耳机"]);
   await stop();
 });
