@@ -148,6 +148,93 @@ Command states such as enabled or checked use the same conditions, so menus foll
   - A crash stops only that plugin, which starts again after a delay that doubles each time. Five crashes within ten minutes turn it off until it is reloaded, and the player shows a notice saying why.
   - The shared runner answers a heartbeat. If it stops answering, it is restarted with the built-ins it runs. If that keeps happening, the built-ins move to their own processes until the player quits.
 
+## Two examples, end to end
+
+The SDK turns each call into `vestra/1` lines on the plugin's stdin/stdout: requests, answers and events. The blocks below follow the diagram in the bird's-eye view, with plugins on the right and the core on the left. `←` is a line the plugin sends to the core, and `→` is a line the core sends back. A plugin learns the player's state by a single read, a discrete event (`source.ready`), a trigger or a stream. Following the lines of two examples shows how the core works.
+
+### A trigger
+
+A trigger hands the core a condition as data:
+
+```ts
+import type { Plugin } from "@vestra-player/sdk";
+
+export default function activate(plugin: Plugin) {
+  const { when, window } = plugin;
+  plugin.trigger()
+    .firesOn(when.playing.and(when.fullscreen))
+    .enter(() => window.setAlwaysOnTop(true))
+    .leave(() => window.setAlwaysOnTop(false));
+}
+```
+
+```text
+← {"id":2,"method":"triggers.set","params":{"trigger":0,"when":{"all":[{"all":[{"phase":["ready"]},{"paused":false}]},{"fullscreen":true}]}}}
+→ {"id":2,"result":{"seq":1}}
+← {"id":3,"method":"triggers.declare","params":{"names":[],"unnamed":1}}
+→ {"id":3,"result":null}
+  … the user plays in fullscreen …
+→ {"data":{"edge":"enter","seq":1,"state":{…},"trigger":0},"event":"triggers.fired"}
+← {"id":6,"method":"window.setAlwaysOnTop","params":{"onTop":true}}
+→ {"id":6,"result":null}
+```
+
+- **`← triggers.set`.**
+  - The plugin's reader thread parses the line and puts it on the core's one event queue, beside the playback worker's reports and the UI thread's.
+  - The core sleeps on that queue until an event arrives or its periodic steps are due (every 16 ms).
+  - A turn handles the UI thread's reports first, then the other events in order: at least 128, then as many as fit in 4 ms. The rest wait a turn, which keeps the periodic steps on time.
+  - The core stores the condition and answers through the plugin's writer thread.
+- **`→ triggers.fired`.**
+  - The playback worker reports "playing".
+  - The UI thread reports "fullscreen" and ends its 16 ms tick with `FactsSettled`, on which the core broadcasts `window.state`. In that turn the core re-evaluates the stored condition.
+  - If the condition turned true while the plugin is in standby, the supervisor starts the plugin, the event waits until the plugin is ready, and the SDK calls `enter`.
+- **`← window.setAlwaysOnTop`.**
+  - The core never touches a window. It records the setting, answers at once, and pushes a numbered command onto one queue for the UI thread. A last-value-wins snapshot replaces a waiting one of its kind.
+  - It wakes Slint's event loop with `invoke_from_event_loop`, with at most one wake pending. The wake applies everything waiting, in order, and reports `Applied(n)`.
+
+### A stream
+
+A stream follows every state change while a window shows it:
+
+```ts
+// inside activate(plugin); StateStream is an SDK type
+const label = plugin.windows.create("ui/position.slint");
+let feed: StateStream | undefined;
+label.onClose(() => feed?.stop()); // window closed: stop the stream
+plugin.commands.add({
+  id: "position",
+  path: ["Tools", "Position"],
+  run: async () => {
+    await label.show(); // the user opens the window
+    feed?.stop();
+    feed = plugin.player.stream((state) =>
+      label.set({ text: `${Math.round(state.position ?? 0)} s` }),
+    );
+  },
+});
+```
+
+```text
+← {"id":10,"method":"events.subscribe","params":{"event":"source.state","why":["a stream opened at main.js:12"]}}
+← {"id":11,"method":"source.state","params":{}}
+→ {"id":10,"result":null}
+→ {"id":11,"result":{…}}
+→ {"data":{…,"paused":false,"phase":"ready","position":6.8,…},"event":"source.state"}    about 10 a second while playing
+← {"id":12,"method":"ui.set","params":{"id":"position","property":"text","seq":1,"value":"7 s"}}
+  … the user closes the window …
+← {"id":43,"method":"events.unsubscribe","params":{"event":"source.state"}}
+```
+
+- **`← events.subscribe`, `← source.state`.**
+  - The core records the subscription and passes the read to the playback worker, whose result comes back on the same queue.
+  - An open stream keeps the supervisor from putting the plugin in standby.
+- **`→ source.state`.**
+  - The core forwards each playback-worker report in the turn it arrives.
+  - Another plugin's flood cannot slow this. Besides the turn budget, a reader thread answers `limit` itself once its plugin has 320 requests or 4 MiB unanswered, and a plugin that leaves 1024 messages unread is stopped.
+- **`← ui.set`.**
+  - Unlike `setAlwaysOnTop`, the answer depends on the UI thread. The command takes the same queue and wake, the UI thread writes the property and reports the result, and only then does the core answer.
+  - A stalled UI thread delays just these answers; the stream keeps flowing.
+
 ## The store
 
 The Plugin Store is a built-in plugin:
