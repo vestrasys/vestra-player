@@ -39,6 +39,12 @@ impl Host {
                     debug_menu_pointer(slint_window, &menu_cursor, event);
                 }
                 // Before Slint lays out and draws at the new size.
+                // A full-screen window moved to a display of the same size
+                // and scale gets only `Moved`: its rectangle and composition
+                // guard follow it there too.
+                if matches!(event, winit::event::WindowEvent::Moved(_)) {
+                    platform::fullscreen_resized(slint_window);
+                }
                 if matches!(event, winit::event::WindowEvent::Resized(_)) {
                     platform::fullscreen_resized(slint_window);
                     // The render size follows once Slint has the new layout.

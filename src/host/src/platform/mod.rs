@@ -1003,7 +1003,7 @@ pub use no_vblank::*;
 #[cfg(not(target_os = "windows"))]
 pub const VIDEO_TEXTURE: bool = false;
 
-/// After a resize of a window: nothing to adjust for full screen here; the
+/// After a resize or move of a window: nothing to adjust for full screen here; the
 /// Windows version (a full-screen window must not match its display exactly)
 /// is in `windows.rs`.
 #[cfg(not(target_os = "windows"))]

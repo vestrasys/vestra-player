@@ -1364,12 +1364,14 @@ fn fullscreen_match(value: Option<&str>) -> (Option<i32>, Option<String>) {
     }
 }
 
-/// After a resize of `window`: a borderless full-screen window that covers
-/// its display exactly is made one pixel taller (or shorter, see
+/// After a resize or move of `window`: a borderless full-screen window that
+/// covers its display exactly is made one pixel taller (or shorter, see
 /// `fullscreen_extra`). winit keeps a full-screen window on its display but
-/// does not reset its size while it stays on the same display.
+/// does not reset its size while it stays on the same display; moved to a
+/// display of the same size and scale it gets only a move.
 /// A full-screen window that is not minimized also gets its composition
-/// guard (`keep_composed`); any other window loses it.
+/// guard, on its current display (`keep_composed`); any other window loses
+/// it.
 pub fn fullscreen_resized(window: &slint::Window) {
     use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
     window.with_winit_window(|window| {
@@ -1447,13 +1449,12 @@ fn keep_composed(hwnd: isize, fullscreen: bool) {
     COMPOSE_GUARDS.with_borrow_mut(|guards| {
         guards.retain(|(_, guard)| guard.alive());
         let at = guards.iter().position(|(owner, _)| *owner == hwnd);
-        match (fullscreen, at) {
-            (false, Some(at)) => drop(guards.swap_remove(at)),
-            (false, None) => {}
-            (true, Some(at)) => {
+        match (guard_step(fullscreen, at.is_some()), at) {
+            (GuardStep::Close, Some(at)) => drop(guards.swap_remove(at)),
+            (GuardStep::Place, Some(at)) => {
                 guards[at].1.place();
             }
-            (true, None) => {
+            (GuardStep::Open, _) => {
                 let Some(alpha) = compose_alpha() else {
                     return;
                 };
@@ -1469,8 +1470,33 @@ fn keep_composed(hwnd: isize, fullscreen: bool) {
                     ),
                 }
             }
+            _ => {}
         }
     });
+}
+
+/// What `keep_composed` does with a window's composition guard.
+#[derive(Debug, PartialEq, Eq)]
+enum GuardStep {
+    /// Create one (on entering full screen, or restored from minimized).
+    Open,
+    /// Move the existing one to the window's current display (after a
+    /// resize or move in full screen; nothing when it is there already).
+    Place,
+    /// Destroy it (left full screen, or minimized).
+    Close,
+    Nothing,
+}
+
+/// `keep_composed`'s choice for a window that is full screen and not
+/// minimized (`fullscreen`) and has a guard or not (`guarded`).
+fn guard_step(fullscreen: bool, guarded: bool) -> GuardStep {
+    match (fullscreen, guarded) {
+        (true, false) => GuardStep::Open,
+        (true, true) => GuardStep::Place,
+        (false, true) => GuardStep::Close,
+        (false, false) => GuardStep::Nothing,
+    }
 }
 
 // ------------------------------------------------------------ redraw pacing
@@ -2964,6 +2990,18 @@ mod tests {
         let (alpha, line) = fullscreen_compose(Some("off"));
         assert_eq!(alpha, Some(1));
         assert!(line.unwrap().contains("not 0-255"));
+    }
+
+    /// Every resize or move in full screen places the existing guard on
+    /// the window's current display (a move to a display of the same size
+    /// and scale is only a move); one is opened only when there is none,
+    /// and closed only when the window left full screen or was minimized.
+    #[test]
+    fn the_compose_guard_follows_the_window_and_full_screen() {
+        assert_eq!(guard_step(true, false), GuardStep::Open);
+        assert_eq!(guard_step(true, true), GuardStep::Place);
+        assert_eq!(guard_step(false, true), GuardStep::Close);
+        assert_eq!(guard_step(false, false), GuardStep::Nothing);
     }
 
     /// A failed reopen of
