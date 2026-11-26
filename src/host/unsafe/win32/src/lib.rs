@@ -15,7 +15,8 @@
 //! `set_normal_placement`: the main window restored across launches),
 //! waiting for a display's vertical blank
 //! (`VBlank`, the redraw clock) and keeping a full-screen window from
-//! matching its display exactly (`unmatch_display`), whether an open
+//! matching its display exactly (`unmatch_display`) and out of independent
+//! flip (`ComposeGuard`: a one-pixel window that keeps DWM composing), whether an open
 //! file is on a network file system (`file_is_remote`), the free space of
 //! the volume holding a path (`disk_space`), waiting for a
 //! process to end (`wait_for_process_exit`), whether a process runs and
@@ -1096,6 +1097,153 @@ fn unmatched(
     .into_iter()
     .find(|(strip, _)| !another_display(*strip))
     .map_or(Some(shorter), |(_, taller)| Some(taller))
+}
+
+/// A one-pixel, almost transparent window over the top-left pixel of the
+/// display of a full-screen window (its owner), so that the Desktop Window
+/// Manager keeps composing that display instead of promoting the owner's
+/// flip-model swapchain to independent flip (or an overlay plane): with any
+/// other visible window over a swapchain, DWM has to compose. On the test
+/// laptop's AMD-driven panel that promotion froze the visible mouse pointer
+/// for seconds. Layered, click-through (`WS_EX_TRANSPARENT`), never
+/// activated (`WS_EX_NOACTIVATE`), a tool window (no taskbar button, not in
+/// Alt+Tab), owned (always above its owner, gone with it). Black at
+/// `alpha`/255. Created and dropped on the owner's thread (the type is not
+/// `Send`: it holds an `HWND`).
+pub struct ComposeGuard {
+    hwnd: HWND,
+    owner: HWND,
+}
+
+impl ComposeGuard {
+    /// The guard over the display of window `owner`, shown at once; `None`
+    /// when the window could not be created.
+    pub fn open(owner: isize, alpha: u8) -> Option<Self> {
+        use windows_sys::Win32::Graphics::Gdi::{BLACK_BRUSH, GetStockObject, HBRUSH};
+        use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            CreateWindowExW, DefWindowProcW, LWA_ALPHA, RegisterClassW, SetLayeredWindowAttributes,
+            WNDCLASSW, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TRANSPARENT,
+            WS_POPUP,
+        };
+        static CLASS: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        let class = windows_sys::w!("VestraComposeGuard");
+        // SAFETY: GetModuleHandleW(null) answers this executable's module
+        // without a reference count to release.
+        let instance = unsafe { GetModuleHandleW(std::ptr::null()) };
+        let registered = *CLASS.get_or_init(|| {
+            let description = WNDCLASSW {
+                style: 0,
+                lpfnWndProc: Some(DefWindowProcW),
+                cbClsExtra: 0,
+                cbWndExtra: 0,
+                hInstance: instance,
+                hIcon: std::ptr::null_mut(),
+                hCursor: std::ptr::null_mut(),
+                // SAFETY: a stock object, never deleted.
+                hbrBackground: unsafe { GetStockObject(BLACK_BRUSH) } as HBRUSH,
+                lpszMenuName: std::ptr::null(),
+                lpszClassName: class,
+            };
+            // SAFETY: `description` is a valid WNDCLASSW read for the call;
+            // its class name is a static string and its window procedure the
+            // system's default one. Registered once per process.
+            unsafe { RegisterClassW(&description) != 0 }
+        });
+        if !registered {
+            return None;
+        }
+        // SAFETY: a class registered above with a static name; no title,
+        // menu or creation data; the owner is a plain handle (an invalid one
+        // makes the call fail). The window is owned by the returned value
+        // and destroyed on this thread in `drop`.
+        let hwnd = unsafe {
+            CreateWindowExW(
+                WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
+                class,
+                std::ptr::null(),
+                WS_POPUP,
+                0,
+                0,
+                1,
+                1,
+                owner as HWND,
+                std::ptr::null_mut(),
+                instance,
+                std::ptr::null(),
+            )
+        };
+        if hwnd.is_null() {
+            return None;
+        }
+        let guard = Self {
+            hwnd,
+            owner: owner as HWND,
+        };
+        // SAFETY: our own live window; plain values.
+        if unsafe { SetLayeredWindowAttributes(hwnd, 0, alpha, LWA_ALPHA) } == 0 {
+            return None;
+        }
+        guard.place().then_some(guard)
+    }
+
+    /// Move the guard to the top-left pixel of its owner's display (after
+    /// the owner moved to another display) and show it, without activating
+    /// it or changing the owner's z-order.
+    pub fn place(&self) -> bool {
+        use windows_sys::Win32::UI::WindowsAndMessaging::SWP_SHOWWINDOW;
+        // SAFETY: MonitorFromWindow takes the HWND by value; it does not
+        // touch memory through it.
+        let monitor = unsafe { MonitorFromWindow(self.owner, MONITOR_DEFAULTTONEAREST) };
+        let empty = RECT {
+            left: 0,
+            top: 0,
+            right: 0,
+            bottom: 0,
+        };
+        let mut info = MONITORINFO {
+            cbSize: size_of::<MONITORINFO>() as u32,
+            rcMonitor: empty,
+            rcWork: empty,
+            dwFlags: 0,
+        };
+        // SAFETY: `info` is a writable MONITORINFO whose cbSize says so.
+        if unsafe { GetMonitorInfoW(monitor, &mut info) } == 0 {
+            return false;
+        }
+        // SAFETY: our own live window and plain integers; no activation, and
+        // no z-order change (an owned window stays above its owner).
+        unsafe {
+            SetWindowPos(
+                self.hwnd,
+                std::ptr::null_mut(),
+                info.rcMonitor.left,
+                info.rcMonitor.top,
+                1,
+                1,
+                SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE | SWP_SHOWWINDOW,
+            ) != 0
+        }
+    }
+
+    /// The guard's window still exists (Windows destroys an owned window
+    /// with its owner).
+    pub fn alive(&self) -> bool {
+        use windows_sys::Win32::UI::WindowsAndMessaging::{GW_OWNER, GetWindow, IsWindow};
+        // SAFETY: both take the HWND by value; a stale handle answers false
+        // (or another owner, when the handle was reused).
+        unsafe { IsWindow(self.hwnd) != 0 && GetWindow(self.hwnd, GW_OWNER) == self.owner }
+    }
+}
+
+impl Drop for ComposeGuard {
+    fn drop(&mut self) {
+        use windows_sys::Win32::UI::WindowsAndMessaging::DestroyWindow;
+        if self.alive() {
+            // SAFETY: our own window, created on this thread, destroyed once.
+            unsafe { DestroyWindow(self.hwnd) };
+        }
+    }
 }
 
 /// The vertical blanks of one display, the clock that paces the host's
