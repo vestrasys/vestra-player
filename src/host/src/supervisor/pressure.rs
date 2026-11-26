@@ -1,4 +1,4 @@
-//! Memory pressure and standby candidate order (supervisor.md §8: by
+//! Memory pressure and standby candidate order (by
 //! importance, then least recently used). Busy, built-in and resident
 //! units are never candidates.
 #![forbid(unsafe_code)]

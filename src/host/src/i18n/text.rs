@@ -1,4 +1,4 @@
-//! Text values (doc/architecture/i18n.md §7): what a plugin hands the
+//! Text values: what a plugin hands the
 //! player instead of a sentence it may not compose. `{"$vestraText":
 //! source, "args": [...]}` is English source text with its arguments;
 //! `{"$vestraList": [...], "style": "list"}` joins items the interface

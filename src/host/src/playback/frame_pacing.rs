@@ -145,7 +145,7 @@ impl Gate {
     /// display that follows the presents (an independent flip, variable
     /// refresh) a present of its own for a UI change shows between two
     /// video frames and moves them off their blanks
-    /// (doc/architecture/README.md §4.2).
+    ///.
     fn folds(&self, now: Instant, since: Instant) -> bool {
         let within = |at: Option<Instant>, span: Duration| {
             at.is_some_and(|at| now.saturating_duration_since(at) < span)

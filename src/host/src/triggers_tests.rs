@@ -1,4 +1,4 @@
-//! The trigger rules T1–T15 (events-and-triggers.md §4.1) on the registry;
+//! The trigger rules T1–T15 on the registry;
 //! T2 and T11 with playback in motion are also in `triggers_sim.rs`, T8 and
 //! T9 are the SDK's (its tests).
 use super::*;

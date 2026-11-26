@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 // Windows: the release build is a GUI program (no console window when
-// started from Explorer); debug builds keep their console for the logs. Where
-// the logs go: doc/architecture/packaging-proposal.md §10.
+// started from Explorer); debug builds keep their console for the logs. Release
+// logs: stderr, plus the rolling `<app data>/logs/host.log`.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 // `diag!`, used everywhere below (declared first for its textual scope).
 #[macro_use]
@@ -296,7 +296,7 @@ fn player() -> Result<()> {
         guest,
         guest_dir,
     } = launch::parse(&args, &std::env::current_dir()?)?;
-    // A guest window (doc/architecture/guest-windows.md): its own temporary
+    // A guest window: its own temporary
     // profile from here on (`platform::app_data_dir`), deleted when this
     // function returns (`_guest`). A main player sweeps what guests that
     // crashed left behind.
@@ -399,7 +399,7 @@ fn player() -> Result<()> {
         }
         bail!("{text}");
     }
-    // The renderer pair and why (doc/architecture/README.md §4.3): GPU
+    // The renderer pair and why: GPU
     // rendering (SDK site, Concepts: render options) needs the windows the
     // platform pairs with it (macOS: femtovg on OpenGL; Windows: femtovg on
     // wgpu/Direct3D 12, and only when the user turned it on); headless,
@@ -588,7 +588,7 @@ fn player() -> Result<()> {
         "components":{"mpv":backend.versions["mpv"],
             "libav":if ffmpeg.is_string() { json!({"ffmpeg":ffmpeg}) } else { json!({}) },
             "slint":env!("VESTRA_SLINT_VERSION")}});
-    // A guest window (doc/architecture/guest-windows.md §4); absent in a
+    // A guest window; absent in a
     // main player.
     if guest {
         app_info["temporary"] = json!(true);
@@ -844,7 +844,7 @@ fn player() -> Result<()> {
     // The core's start-up calls (plan S3a brief, item 9) run on the core
     // before the interface's loop starts (`Host::starting`).
     host.starting(|core| core.triggers = triggers::Triggers::new(Some(core.triggers_dir())));
-    // The interface language of this run (doc/architecture/i18n.md §2):
+    // The interface language of this run:
     // `VESTRA_LANGUAGE` (development and tests), else the saved choice, else
     // the system's languages. Headless runs ignore the system: English
     // unless asked, so diagnostics read the same on every machine.
@@ -992,8 +992,8 @@ fn player() -> Result<()> {
                 evidence.sample(host.backend(), &observed_source, start)?;
             }
         }
-        // Every plugin process stops within one deadline (supervisor.md
-        // T31), each running plugin recorded first.
+        // Every plugin process stops within one deadline (T31),
+        // each running plugin recorded first.
         // What the last tick changed of the interface's facts first (plan
         // step S2f(1)). What the core issued before is applied first (its
         // replies go out before the plugins stop, as in place before S3a(3)).
@@ -1153,7 +1153,7 @@ fn player() -> Result<()> {
                 })
             });
         }));
-        // CPU mode's Direct3D 12 windows (doc/architecture/README.md §4.3): the crash
+        // CPU mode's Direct3D 12 windows: the crash
         // guard counts a crash only while they are made, draw their first
         // frames and take the first video picture (a start with a file, or
         // a source loading), not one unrelated to the GPU later in the first
@@ -1365,8 +1365,8 @@ fn player() -> Result<()> {
         // device and the renderer go, so a stalled frame cannot hold up the
         // teardown.
         platform::release_gpu_waits();
-        // Every plugin process stops within one deadline (supervisor.md
-        // §9: 1 s at quit, 300 ms after a device loss), each running
+        // Every plugin process stops within one deadline (1 s
+        // at quit, 300 ms after a device loss), each running
         // plugin recorded first.
         teardown_step("stopping the plugins");
         queue_peak_line(host.borrow().queue_peak);

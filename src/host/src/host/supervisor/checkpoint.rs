@@ -1,11 +1,11 @@
-//! Checkpoints (doc/architecture/supervisor.md §4; formerly `lazy.rs`'s
+//! Checkpoints (formerly `lazy.rs`'s
 //! recordings): what a unit in standby registered, so the next start
 //! replays it instead of starting the plugin. The core decides
 //! when one is written (`Action::Checkpoint`) and what it says (resident or
 //! not); the adapter writes and reads the file.
 //!
 //! A standby's recording is written on the `plugin-recorder` thread
-//! (`Writer`, supervisor.md): a write took up to 8 ms on the UI thread
+//! (`Writer`): a write took up to 8 ms on the UI thread
 //! in a 200-wake storm. The thread writes in order and answers each
 //! write with `Event::Recorded`; the standby (or the classification) it was
 //! written ahead for is decided then, as it was right after the write. Every

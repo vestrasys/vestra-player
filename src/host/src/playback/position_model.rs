@@ -1,4 +1,4 @@
-//! The position model (doc/architecture/events-and-triggers.md §4.4): the
+//! The position model: the
 //! playback thread's anchor `(p0, t0, rate, running)` and the deadline of
 //! the nearest position boundary a trigger's condition waits for.
 //!

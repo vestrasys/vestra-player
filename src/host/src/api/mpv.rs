@@ -1,5 +1,4 @@
-//! `mpv`: the mpv pass-through (SDK 1.8.0; doc/architecture/README.md
-//! §4.9). A plugin sends mpv commands and reads, sets and observes its
+//! `mpv`: the mpv pass-through (SDK 1.8.0). A plugin sends mpv commands and reads, sets and observes its
 //! properties; the channel is the player's contract, the names and what
 //! they do are mpv's. Each request's shape and the closed refusal rules are
 //! checked here (`playback/mpv_rules.rs`: what crosses another boundary,

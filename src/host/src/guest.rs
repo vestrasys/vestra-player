@@ -1,4 +1,4 @@
-//! Guest windows (doc/architecture/guest-windows.md, user ruling
+//! Guest windows (user ruling
 //! 2026-11-21): "Play in New Window" starts another `vestra-host` with
 //! `--guest`, a player with a temporary profile of its own under
 //! `<app cache>/guests/<uuid>`. Its profile directory replaces the
@@ -46,7 +46,7 @@ const UNLOCKED_KEPT: Duration = Duration::from_secs(60);
 const CREATE_WAIT: Duration = Duration::from_secs(5);
 /// How long a restarted guest waits for the one it replaces to let go.
 const ADOPT_WAIT: Duration = Duration::from_secs(20);
-/// The settings snapshot (doc/architecture/guest-windows.md §3): copied
+/// The settings snapshot: copied
 /// from the main profile when present. `ui-state.json` is copied apart
 /// (`ui_state_snapshot`).
 const SNAPSHOT: [&str; 3] = ["render.json", "render-state.json", "render-denylist.json"];
@@ -275,8 +275,7 @@ fn open_lock(directory: &Path) -> io::Result<File> {
 }
 
 /// Copy the settings snapshot from the main profile `main` (and its window
-/// state file `ui_state`) into `profile` (doc/architecture/guest-windows.md
-/// §3). A file that is missing or cannot be copied is left out: the guest
+/// state file `ui_state`) into `profile`. A file that is missing or cannot be copied is left out: the guest
 /// starts with that file's defaults.
 pub fn snapshot(main: Option<&Path>, ui_state: &Path, profile: &Path) {
     if let Some(main) = main {

@@ -169,7 +169,7 @@ impl Core {
                 self.bindings_list_sent = Value::Null;
             } else {
                 // Built and compared only when what it shows may have
-                // changed (supervisor.md): during a wake storm every
+                // changed: during a wake storm every
                 // woken plugin's commands move to its new owner, and the
                 // list took 3–6 ms to build each time.
                 let moved = key != self.bindings_seen || self.bindings_list_sent.is_null();
@@ -197,8 +197,7 @@ impl Core {
             self.push_command_keys();
         }
         if self.listened("packages.changed") {
-            // Built and compared only once a source moved (supervisor.md
-            // §10): a list of about 200 packages took 4–12 ms to build, every
+            // Built and compared only once a source moved: a list of about 200 packages took 4–12 ms to build, every
             // 200 ms, also when nothing happened.
             // One clock reading for both: a start deadline passing between
             // two would change the list but not the key.
@@ -694,7 +693,7 @@ mod tests {
         assert_eq!(sent.keys().collect::<Vec<_>>(), ["a.video"]);
     }
 
-    /// supervisor.md §10: `packages.changed` compares the list without
+    /// `packages.changed` compares the list without
     /// `process`: a park (`running` to `idle`) or a wake alone announces
     /// nothing; any other field does.
     #[test]

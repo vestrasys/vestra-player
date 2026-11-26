@@ -1,5 +1,5 @@
 //! The UI thread's part of the host log and of the plugin shaders' crash
-//! guard (doc/architecture/README.md §4.3):
+//! guard:
 //!
 //! - plugin shader lists (`video.shaders.set`, `video.render.set`'s
 //!   `shaders`) are followed by plugin and number of files, never paths; a

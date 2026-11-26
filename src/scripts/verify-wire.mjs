@@ -1,10 +1,9 @@
 #!/usr/bin/env node
 /**
- * Wire trace differential (core thread plan S1.1; doc/architecture/
- * core-thread.md §8): compares two runs' wire traces plugin by plugin and
- * prints the first difference of each plugin. A trace is what the host's
- * test switch `VESTRA_TEST_WIRE_TRACE=<file>` writes
- * (src/host/src/process/wire_trace.rs): one JSON line per protocol line
+ * Wire trace differential (core thread plan S1.1): compares two runs' wire
+ * traces plugin by plugin and prints the first difference of each plugin. A
+ * trace is what the host's test switch `VESTRA_TEST_WIRE_TRACE=<file>`
+ * writes (src/host/src/process/wire_trace.rs): one JSON line per protocol line
  * between the host and a plugin, `{plugin, seq, dir, owner, ms, line}`.
  *
  *   node src/scripts/verify-wire.mjs diff <A> <B> [--allow-reorders]
@@ -13,11 +12,11 @@
  *     (verify-runtime.mjs run --wire-trace: raw/<scenario>/<step>.wire.jsonl,
  *     compared step by step; their run.json gives the roots), or two
  *     directories of trace files (paired by relative path).
- *     --allow-reorders  rule R4 and the S3a row's three classes
- *                       (core-thread-plan.md §3): a plugin's lines read may
- *                       interleave its UI-independent and UI-bound streams
- *                       differently, each in order; of its lines written,
- *                       (1) core lines keep their order, (2) UI-bound
+ *     --allow-reorders  rule R4 and the S3a row's three classes: a
+ *                       plugin's lines read may interleave its
+ *                       UI-independent and UI-bound streams differently,
+ *                       each in order; of its lines written, (1) core
+ *                       lines keep their order, (2) UI-bound
  *                       replies and (3) lines an interface report caused
  *                       (`lineClass`) keep their order and their places
  *                       among each other and may move against the core
@@ -49,11 +48,10 @@
  * gate for S2 and, with --allow-reorders, S3a. V2's scenarios start 16
  * built-ins concurrently and differ run to run, so they are compared with
  * --noise against two base runs. `check` runs on any trace.
- *   node src/scripts/verify-wire.mjs streams [--doc <core-thread.md>]
- *        [--check <wire-streams.json>]
- *     The stream map from the design's method table (§5.1): printed, or
- *     checked against the data file the diff uses (wire-streams.json beside
- *     this script). Exit code 1 when they differ.
+ *
+ * The stream map (which methods are UI-bound, rule R4) is wire-streams.json
+ * beside this script, generated once from the core thread design's method
+ * table (plan S0.2) and kept by hand since.
  *
  * Normalised (each side alike) before the comparison:
  *
@@ -116,7 +114,6 @@ class UsageError extends Error {}
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const STREAMS_FILE = join(HERE, "wire-streams.json");
-const DESIGN = join(HERE, "..", "..", "doc", "architecture", "core-thread.md");
 
 /** The `plugin` of the shared runner's own lines (wire_trace.rs `RUNNER`). */
 export const RUNNER = "(shared runner)";
@@ -127,41 +124,6 @@ const EPOCH_MS = 1_000_000_000_000;
 const OWNER_KEY = /^(g|owner|pid|generation)$/;
 
 // ---------------------------------------------------------------- streams
-
-/**
- * The stream map from the design's method table (core-thread.md §5.1,
- * "The method table (plan S0.2)"): `{ uiBound, uiIndependent, rows }`, each
- * a sorted list of method names, or `prefix.*` entries for UI-independent
- * prefix routes. A prefix entry split by name (`media.sources.*`:
- * `locate`) gives the full name (`media.sources.locate`).
- */
-export function streamsFromDesign(markdown) {
-  const start = markdown.indexOf("#### The method table");
-  const end = markdown.indexOf("**Totals.**", start);
-  if (start < 0 || end < 0)
-    throw new UsageError("the design has no method table (§5.1)");
-  const uiBound = new Set();
-  const uiIndependent = new Set();
-  let rows = 0;
-  const row =
-    /^\| (\d+[a-z]?) \| `([^`]+)`(?:: `([^`]+)`)? \| [^|]* \| ([FCUR]) \| ([IB]) \|/;
-  for (const text of markdown.slice(start, end).split(/\r?\n/)) {
-    const found = row.exec(text);
-    if (!found) continue;
-    rows++;
-    const [, , entry, name, , stream] = found;
-    const method = name ? entry.replace(/\*$/, name) : entry;
-    (stream === "B" ? uiBound : uiIndependent).add(method);
-  }
-  return {
-    source:
-      "doc/architecture/core-thread.md §5.1, the method table (plan S0.2)",
-    generatedBy: "node src/scripts/verify-wire.mjs streams",
-    rows,
-    uiBound: [...uiBound].sort(),
-    uiIndependent: [...uiIndependent].sort(),
-  };
-}
 
 /** The stream of a request's method: `B` (UI-bound) or `I`; `known`. */
 export function streamOf(streams, method) {
@@ -1144,9 +1106,7 @@ function parse(argv) {
       const at = value.lastIndexOf("=");
       if (at <= 0) throw new UsageError("--root needs <path>=<token>");
       options.roots.push([value.slice(0, at), value.slice(at + 1)]);
-    } else if (
-      ["--report", "--doc", "--check", "--noise", "--out"].includes(name)
-    ) {
+    } else if (["--report", "--noise", "--out"].includes(name)) {
       if (i + 1 >= argv.length) throw new UsageError(`${name} needs a value`);
       options[name.slice(2)] = argv[++i];
     } else if (name.startsWith("--")) throw new UsageError(`unknown ${name}`);
@@ -1180,25 +1140,8 @@ export function main(argv) {
     report(text);
     return failed ? 1 : 0;
   }
-  if (command === "streams" && options._.length === 0) {
-    const streams = streamsFromDesign(
-      readFileSync(options.doc ?? DESIGN, "utf8"),
-    );
-    if (!options.check) {
-      console.log(JSON.stringify(streams, null, 2));
-      return 0;
-    }
-    const kept = JSON.parse(readFileSync(options.check, "utf8"));
-    const same = JSON.stringify(kept) === JSON.stringify(streams);
-    console.log(
-      same
-        ? `${options.check} matches the design's table`
-        : `${options.check} differs from the design's table: regenerate it with \`node src/scripts/verify-wire.mjs streams\``,
-    );
-    return same ? 0 : 1;
-  }
   throw new UsageError(
-    "usage: verify-wire.mjs diff <A> <B> [--allow-reorders | --noise <file>] [--report <file>] [--root <path>=<token>] | noise <base A> <base B> --out <file> | check <trace or directory> | streams [--doc <file>] [--check <file>] (see the header)",
+    "usage: verify-wire.mjs diff <A> <B> [--allow-reorders | --noise <file>] [--report <file>] [--root <path>=<token>] | noise <base A> <base B> --out <file> | check <trace or directory> (see the header)",
   );
 }
 

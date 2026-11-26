@@ -1,5 +1,5 @@
 //! Motion smoothing (`video.motion.state`, `video.motion.set`; capability
-//! `video.motion`, SDK 1.7.19; doc/architecture/README.md §4.4a), on the
+//! `video.motion`, SDK 1.7.19), on the
 //! control worker: the video's frame rate doubled by a GPU vendor's frame-rate
 //! converter, real in-between frames rather than blends. Per vendor
 //! ([`Engine`]): `amd` is AMD AMF's `frc_amf`, `nvidia` FFmpeg's
@@ -415,7 +415,7 @@ pub fn check(facts: &Facts<'_>, mode: Mode) -> Result<(), Reason> {
 
 /// The most pixels a second the converter's output may carry, by renderer
 /// and mode, and how it is said: measured 2026-11-12 (Radeon 780M converting,
-/// RTX 4070 Laptop rendering, 60 Hz; doc/architecture/README.md §4.4a). The
+/// RTX 4070 Laptop rendering, 60 Hz). The
 /// cost is the copy-back and drawing of the doubled frames, not the
 /// converter: software rendering held 1080p30 → 60 and fell behind at
 /// 4K24 → 48; GPU rendering held 4K24 → 48 (Double) and fell behind at
@@ -424,8 +424,8 @@ pub const SOFTWARE_LIMIT: (f64, &str) = (1920. * 1080. * 60. * 1.01, "1080p at 3
 pub const GPU_DOUBLE_LIMIT: (f64, &str) = (3840. * 2160. * 48. * 1.01, "4K at 24 fps");
 pub const GPU_DISPLAY_LIMIT: (f64, &str) = (1920. * 1080. * 60. * 1.01, "1080p on a 60 Hz display");
 /// NVIDIA's converter: measured 2026-11-22 (RTX 4070 Laptop converting,
-/// `fruc_vulkan` `fast`/4 above 1440p; 60 Hz display;
-/// doc/architecture/README.md §4.4a). GPU rendering's Double and Match
+/// `fruc_vulkan` `fast`/4 above 1440p; 60 Hz display).
+/// GPU rendering's Double and Match
 /// Display held 4K30 → 60 with no frame dropped; software rendering held
 /// 4K24 → 48 (1 dropped in 13 s) and was at the edge at 4K30 → 60 (8, 9
 /// and 24 dropped in 13 s; the last run fell back to the faster search).

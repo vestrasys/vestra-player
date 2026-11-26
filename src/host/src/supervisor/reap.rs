@@ -4,7 +4,7 @@
 //! data directory" rule is a runnability condition: a job never starts a unit
 //! while it is `Deactivating`, nor while the process of a stop that landed
 //! stuck is still tracked (`Unit::stopping` outside `Deactivating`): it waits
-//! `STOP_WAIT` from its own request for that process to go, then fails (supervisor.md §3).
+//! `STOP_WAIT` from its own request for that process to go, then fails.
 //! An uninstall's `RemoveData` waits for that process's reap (today's
 //! `data_removals`), landed or not.
 #![forbid(unsafe_code)]
@@ -23,7 +23,7 @@ pub const STUCK_RELOAD: &str = "the previous process did not stop within 20 s";
 impl<P: Clone> Supervisor<P> {
     /// V8 reported a heap allocation failure on `pid`'s stderr (it aborts
     /// next): its exit is `Oom` if it exits with the heap abort's code
-    /// (supervisor.md §7).
+    ///.
     pub fn process_out_of_memory(&mut self, pid: Pid) {
         let Some(&u) = self.by_pid.get(&pid) else {
             return;
@@ -36,7 +36,7 @@ impl<P: Clone> Supervisor<P> {
     /// `process_reaped`: the process is gone (`Event::Reaped`), with
     /// its exit code (`None` for a shared-runner member). A run that ended
     /// by itself gets its crash notice now: "ran out of memory" when it
-    /// exited with V8's heap abort after V8's heap line (supervisor.md §7).
+    /// exited with V8's heap abort after V8's heap line.
     pub fn process_reaped(&mut self, pid: Pid, status: Option<i32>) {
         let Some(&u) = self.by_pid.get(&pid) else {
             return;
@@ -120,7 +120,7 @@ impl<P: Clone> Supervisor<P> {
     }
 
     /// Emits an owed `RemoveData` once no process may write the data any more:
-    /// none tracked, or the tracked one reaped and cleaned up after (supervisor.md §3).
+    /// none tracked, or the tracked one reaped and cleaned up after.
     pub(super) fn flush_data_removal(&mut self, u: UnitId) {
         let Some(unit) = self.units.get_mut(&u) else {
             return;
@@ -176,7 +176,7 @@ impl<P: Clone> Supervisor<P> {
         } else {
             // The process of a stop that landed stuck went after all: a
             // start waiting for it goes on, an owed `RemoveData` goes first
-            // if it still is owed (supervisor.md §3).
+            // if it still is owed.
             unit.stopping = None;
             Timers::cancel(&mut unit.gens, TimerKind::StopWait);
             self.flush_data_removal(u);
@@ -186,7 +186,7 @@ impl<P: Clone> Supervisor<P> {
 
     /// A start that waited `STOP_WAIT` from its request for the process of
     /// a stop that landed stuck: failed with today's text, never kept in
-    /// standby (supervisor.md §3).
+    /// standby.
     pub(super) fn fail_stuck(&mut self, u: UnitId) {
         let wake = self.units.get(&u).is_some_and(|unit| {
             matches!(
@@ -238,7 +238,7 @@ impl<P: Clone> Supervisor<P> {
         let now = self.now;
         let kept = unit.stopping.is_some_and(|s| s.kept);
         // Stuck: the process is still tracked (reap / cleanup may come
-        // later), and every start waits for it (`step_start`, supervisor.md §3).
+        // later), and every start waits for it (`step_start`).
         unit.stopping = unit
             .stopping
             .filter(|_| stuck)
@@ -277,7 +277,7 @@ impl<P: Clone> Supervisor<P> {
                 // Removed even when stuck (today's uninstall removes the
                 // plugin at once); its data goes at the reap of the process
                 // still tracked (`flush_data_removal`, today's
-                // `data_removals`, supervisor.md §3).
+                // `data_removals`).
                 unit.state = UnitState::Inactive;
                 if unit.recorded {
                     actions.push(Action::DropCheckpoint { unit: u });
@@ -316,7 +316,7 @@ impl<P: Clone> Supervisor<P> {
             }
             // A start that waited its own `STOP_WAIT` fails now; one asked
             // later in the stop waits the rest of its 20 s (`step_start`;
-            // today each wait counts from its request, supervisor.md §3).
+            // today each wait counts from its request).
             Some((_, true, created)) if stuck && now >= created + stop_wait => {
                 self.fail_stuck(u);
             }
@@ -326,7 +326,7 @@ impl<P: Clone> Supervisor<P> {
     }
 }
 
-/// The waits for stopped processes (supervisor.md §3), driven as the adapter drives
+/// The waits for stopped processes, driven as the adapter drives
 /// them: every start and stop is a job. The Host's side is pinned
 /// end to end by tests/lifecycle_baseline.rs.
 #[cfg(test)]

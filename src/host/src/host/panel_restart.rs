@@ -1,6 +1,5 @@
 //! Panels kept while their plugin restarts after a crash (user ruling
-//! 2026-11-10, option A; doc/architecture/panel-slots.md "A crash and its
-//! restart"). When a plugin with mounted panels crashes and the supervisor
+//! 2026-11-10, option A). When a plugin with mounted panels crashes and the supervisor
 //! restarts it by itself (the built-ins', a Resident plugin's `OnFailure`
 //! rule, or the shared runner's restart), its panels stay drawn during the
 //! restart's delay instead of being removed, and the restarted run's

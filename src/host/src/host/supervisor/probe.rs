@@ -1,4 +1,4 @@
-//! Test switches (doc/architecture/supervisor.md; formerly
+//! Test switches (formerly
 //! `lazy/probe.rs` and `lazy.rs`'s `VESTRA_TEST_EXECUTE`), read in any
 //! build and not passed on to a player restarted after a device loss:
 //!

@@ -20,7 +20,6 @@
 //! working status then) and comes back when it closes. Stop sends the
 //! `palette.lead` event as Enter on the status row does; a click elsewhere
 //! opens the palette, or dismisses an end state.
-//! doc/architecture/palette-lead.md §3.
 use super::*;
 use crate::api::{LeadStatus, StatusState};
 

@@ -1,6 +1,6 @@
 //! Plugin panels, each compiled on its own and embedded in the shell (or
 //! the sidebar's floating window) through Slint's `ComponentContainer`
-//! (doc/architecture/panel-slots.md "Per-panel compilation").
+//!.
 //!
 //! The shell is compiled once and names no panel: each slot (the bottom
 //! bar, the backdrop, the sidebar, the adjust column) is a container with a

@@ -1,5 +1,5 @@
-//! In-flight work per unit (an event in flight extends the lifetime,
-//! supervisor.md §4): the one "busy" (the Host's busy checks are work items
+//! In-flight work per unit (an event in flight extends the lifetime):
+//! the one "busy" (the Host's busy checks are work items
 //! here) and the request deadline.
 //!
 //! Two kinds (coordinator ruling): a host→plugin request

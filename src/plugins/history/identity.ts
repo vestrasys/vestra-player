@@ -178,7 +178,7 @@ export function clock(seconds: number): string {
   return h ? `${h}:${two(m)}:${two(s)}` : `${two(m)}:${two(s)}`;
 }
 
-// doc/product/feature-requirements.md appendix B.5.
+// The video and audio extensions of the feature requirements (appendix B.5).
 const VIDEO = new Set(
   "mp4 m4v mkv webm mov avi wmv asf flv f4v ts m2ts mts mpg mpeg vob ogv 3gp rm rmvb".split(" "),
 );

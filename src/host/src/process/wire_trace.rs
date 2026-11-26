@@ -1,5 +1,5 @@
 //! The wire trace, a test switch (`VESTRA_TEST_WIRE_TRACE=<file>`, core
-//! thread plan S1.1, doc/architecture/core-thread.md §8): every line the
+//! thread plan S1.1): every line the
 //! host reads from or writes to a plugin, one JSON line each, appended to
 //! `<file>`:
 //!

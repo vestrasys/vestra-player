@@ -351,7 +351,7 @@ fn m_standby_running_restart_waits_then_applies_fresh() {
 
 // --- Stop [waiting] -------------------------------------------------------
 
-// ANSWERED (supervisor.md), was a design question: which Stop reasons are *not* "for disable/uninstall" in this cell
+// ANSWERED, was a design question: which Stop reasons are *not* "for disable/uninstall" in this cell
 // (Start replaces the Stop)? Best reading: any other reason, e.g. a `Stop{Failed}` enqueued internally, or a cancel.
 #[test]
 fn m_stop_waiting_start_replaces_on_active_unit() {
@@ -463,7 +463,7 @@ fn m_stop_running_start_becomes_restart_waiting_for_reap() {
     assert_eq!(spawns(&sim.cleaned(pid)).len(), 1);
 }
 
-// ANSWERED (supervisor.md), was a design question: this cell says a Start on a running *disable* Stop is refused,
+// ANSWERED, was a design question: this cell says a Start on a running *disable* Stop is refused,
 // while named case "enable while disabling" says the Start waits for reap. Best reading: a trigger Start is
 // refused (`Dropped`); a `Start{Enable}` after `set_enabled(true)` waits (see named_cases.rs).
 #[test]

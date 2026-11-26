@@ -1,5 +1,5 @@
-// The static gates of an additions-only change (scripts/verify-gates.mjs,
-// doc/process/verify-additions.md): each gate passes on additions and fails
+// The static gates of an additions-only change (scripts/verify-gates.mjs):
+// each gate passes on additions and fails
 // on a removed or modified line, in throwaway repositories built with git
 // plumbing (no `git commit`: no hooks, no signing, no user configuration).
 import assert from "node:assert/strict";

@@ -50,7 +50,7 @@ export function displayed(i18n: I18n, stats: PlaybackStats): TextArg | null {
   return source === null ? i18n.text("{} fps", [shown]) : i18n.text("{} fps (source {})", [shown, source]);
 }
 
-/** The overlay text (ui-spec §9.2): one fact per line, as text values the player translates. */
+/** The overlay text: one fact per line, as text values the player translates. */
 export function describe(i18n: I18n, state: PlayerState, stats: PlaybackStats): TextList {
   const { text, list } = i18n;
   const { video, audio } = stats;

@@ -1,6 +1,6 @@
 //! Which renderer pair draws: the video renderer (libmpv on the GPU, or its
 //! software renderer) and Slint's window renderer, decided once at start
-//! from plain facts, with the reason (doc/architecture/README.md §4.3).
+//! from plain facts, with the reason.
 //! Pure: `main.rs` gathers the facts (environment, the saved
 //! preference, the adapter, the driver denylist, the crash guard) and
 //! passes them in; nothing here calls the system.

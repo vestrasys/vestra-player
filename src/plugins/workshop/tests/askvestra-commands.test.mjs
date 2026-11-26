@@ -63,7 +63,7 @@ const row = (id, label, extra = {}) => ({
 
 /**
  * Answers `commands.list` and `commands.run` with `rows`, as the player
- * would (doc/architecture/palette-lead.md §2, SDK 1.7.16's TestHost): a run
+ * would (SDK 1.7.16's TestHost): a run
  * with `then` is judged with its plan, and when any of it asks the
  * approval sheet asks once (one queued dialog answer, recorded in `asks`
  * as the plan's ids); Run keeps the rest of the plan for the ticket, each

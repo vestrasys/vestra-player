@@ -1,4 +1,4 @@
-//! `triggers` (SDK 1.10.0, events-and-triggers.md §4.10): a plugin hands
+//! `triggers` (SDK 1.10.0): a plugin hands
 //! over, replaces and removes the conditions of its triggers
 //! (`triggers.set`, `triggers.off`) and says which triggers its
 //! `activate()` declared (`triggers.declare`). The conditions are kept by

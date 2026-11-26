@@ -4,7 +4,7 @@
 // "workshop"), in a throwaway profile.
 //
 // Needs a built player: set VESTRA_HOST_EXE to vestra-host[.exe] (for example
-// a staged release, C:\vestra\stage-…\VestraPlayer-…\vestra-host.exe).
+// a staged release, <stage>\VestraPlayer-…\vestra-host.exe).
 // Skipped without it: the plugin test jobs have no player binary.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";

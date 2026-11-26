@@ -58,7 +58,7 @@ skrifa = { version = "=0.44.0", default-features = false, features = ["std"] }
 # ordinary path means the same file (Slint imports, mpv, FFmpeg); same as std
 # elsewhere. `clippy.toml` disallows std's canonicalize.
 dunce = "=1.0.5"
-# Interface language (doc/architecture/i18n.md): the system's preferred
+# Interface language: the system's preferred
 # languages (platform::preferred_languages), already in the tree via Slint.
 sys-locale = "=0.3.2"
 # Menu width estimate (menu.rs): East Asian Width, already in the tree.
@@ -121,7 +121,7 @@ getrandom = "=0.3.4"
 vestra-win32 = { path = "unsafe/win32" }
 # Every window draws with Slint's femtovg renderer on wgpu (Direct3D 12) and
 # libmpv's Direct3D 11 frames are shown from textures shared with that device
-# (doc/architecture/README.md §4.3); the `unsafe` stays in
+#; the `unsafe` stays in
 # unsafe/render. Windows only: macOS keeps femtovg on OpenGL. `femtovg` (GL)
 # and the software renderer stay as the fallbacks (platform/windows.rs).
 slint = { version = "=1.18.1", default-features = false, features = ["renderer-femtovg-wgpu", "unstable-wgpu-30"] }

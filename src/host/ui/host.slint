@@ -1,4 +1,4 @@
-// Main window shell (core-ui-design.md §1). composition.rs replaces the
+// Main window shell. composition.rs replaces the
 // insertion markers with the mounted panels; without mounts it is the bare shell.
 import { MenuView, MenuLevel } from "menu-view.slint";
 import { PaletteView, PaletteRow, PaletteLead } from "command-palette.slint";
@@ -370,7 +370,7 @@ export component HostWindow inherits Window {
                                 reject
                             }
                         }
-                        // The OSD (ui-spec §6.6): white text on a translucent dark plate
+                        // The OSD: white text on a translucent dark plate
                         // with the accent gradient along its bottom edge. Its padding and
                         // corners scale with the font (12×5px and 8px at 18px). The video
                         // area is dark in every palette, so the colours are fixed.

@@ -1,4 +1,4 @@
-//! Plugin process supervisor, pure core (doc/architecture/supervisor.md):
+//! Plugin process supervisor, pure core:
 //! decides when a plugin process should exist — start, stop, restart,
 //! standby, limits. No `Host`, no
 //! I/O, no environment, no clock: time comes in as `Ms`, randomness from a
@@ -912,7 +912,7 @@ impl<P: Clone> Supervisor<P> {
 
     /// A message goes now to `pid`, its unit's running process, without a
     /// `wake` (a trigger notification or a source event the host sends a
-    /// running plugin, events-and-triggers.md §4.9): as a trigger to an
+    /// running plugin): as a trigger to an
     /// Active unit in `wake`, it counts as use and cancels a standby on its
     /// way (the idle timer's job, waiting or asking for resources), so the
     /// process is not stopped under the handler the message starts. Nothing
@@ -1325,7 +1325,7 @@ impl<P: Clone> Supervisor<P> {
     /// `classified` (formerly `lazy_classified`). `resident`: why it holds a live
     /// resource. A run without a checkpoint is classified (the 5 s timer runs);
     /// any other ready run of a recordable unit may be, once per run, as
-    /// today's `lazy_ready` classifies on every ready (supervisor.md). A lazy
+    /// today's `lazy_ready` classifies on every ready. A lazy
     /// first run goes to standby after `first_run_quiet` of idle time (at
     /// once with that 0) unless it is busy: a job, or work in flight (the
     /// Host's own idle check is declared work, `work.rs`; today's
@@ -1385,7 +1385,7 @@ impl<P: Clone> Supervisor<P> {
                 self.arm_idle(u);
             } else if self.tunables.first_run_quiet > 0 {
                 // After a short quiet period, counted from the end of its
-                // classification (work: supervisor.md §4), through the idle
+                // classification (work), through the idle
                 // timer's Standby job: what the run takes up meanwhile (a
                 // saved effect restored after a timer or a round trip)
                 // reaches the playback worker while it runs, is asked about
@@ -1438,7 +1438,7 @@ impl<P: Clone> Supervisor<P> {
     /// says resident, so the next start launches it (and it takes up what it
     /// holds again) instead of replaying its entry points. As a resident
     /// classification at ready, the next ready classifies it again: one that
-    /// let go by then goes back to standby (supervisor.md §4). `false`:
+    /// let go by then goes back to standby. `false`:
     /// nothing changed (not active, its class still asked, resident already).
     pub fn holds_live(&mut self, pid: Pid) -> bool {
         let Some(u) = self.current(pid) else {
@@ -1640,7 +1640,7 @@ impl<P: Clone> Supervisor<P> {
         self.pending.push(Action::Notify { unit: None, notice });
     }
 
-    /// `memory_pressure` (supervisor.md §8): Low/Critical put every idle reclaimable unit in
+    /// `memory_pressure`: Low/Critical put every idle reclaimable unit in
     /// standby through the same Standby job, most important last; Critical also
     /// takes the Interactive overrun away (`admit`). The adapter calls it when
     /// the level changes.

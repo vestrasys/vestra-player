@@ -1,6 +1,6 @@
 /**
  * The shared runner: several trusted plugins in one Node process and one V8
- * isolate (doc/architecture/README.md §2). The host
+ * isolate. The host
  * starts it as `node shared-runner.js` and talks JSONL on stdin/stdout like
  * to an own-process runner, except that every line carries the owner
  * generation `g` as its first key: `{"g":12,"id":7,"method":…}`. `g` 0 is the

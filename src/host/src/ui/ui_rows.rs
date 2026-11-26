@@ -1,7 +1,6 @@
 //! The model behind every array the host converts for a view (`Rows`), and
 //! the plain row form that arrays are converted to, off the UI thread when
-//! they are large (`Plain`; player 0.6.0, doc/architecture/large-lists.md
-//! §4).
+//! they are large (`Plain`; player 0.6.0).
 //!
 //! `Rows` is Slint's `VecModel` with range operations: `insert_rows` and
 //! `remove_rows` change any run of rows with one `row_added` or
@@ -504,7 +503,7 @@ impl Model for Rows {
     }
 
     /// A view writing into its own rows (`rows[i].x = …`, allowed by Slint
-    /// on a writable model; doc/architecture/large-lists.md §2.3).
+    /// on a writable model).
     fn set_row_data(&self, row: usize, data: Value) {
         self.set_row(row, Row::Value(data));
     }

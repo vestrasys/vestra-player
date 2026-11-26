@@ -1,5 +1,5 @@
 //! The playback thread's part of the second batch of events
-//! (`crate::fact_events`; events-and-triggers.md §4.6): `video.reconfigured`,
+//! (`crate::fact_events`): `video.reconfigured`,
 //! `audio.reconfigured` and `subtitles.changed`. mpv is read here, on the
 //! thread that owns it, never on the core.
 //!

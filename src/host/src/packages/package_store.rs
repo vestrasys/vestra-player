@@ -397,7 +397,7 @@ impl Store {
     }
 
     /// The library at `root` as a guest window sees it
-    /// (doc/architecture/guest-windows.md §4): read as `open` reads it, the
+    ///: read as `open` reads it, the
     /// records screened the same way, and nothing written, ever: no
     /// directory, no backup, no `quarantine.json`, no catalog (`publish`
     /// changes only the copy in memory). Its own state goes to `local`.
@@ -3461,7 +3461,7 @@ pub(crate) mod tests {
         files
     }
 
-    /// Guest windows (doc/architecture/guest-windows.md §4): the main
+    /// Guest windows: the main
     /// library opens read-only as `open` would screen it (a record set
     /// aside, an unknown catalog field set aside, built-ins added, a package
     /// disabled, all in memory), and not one byte under it changes; the guest's own state goes to `local`.

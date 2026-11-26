@@ -1,7 +1,7 @@
 //! The `when` language (SDK 1.5.40, `plugin.when`; grown in SDK 1.10.0 /
-//! player 0.10.0, doc/architecture/events-and-triggers.md §4.3): a
+//! player 0.10.0): a
 //! condition on state the player owns, evaluated here, so a plugin that is
-//! not running (in standby, doc/architecture/supervisor.md §4) still shows
+//! not running (in standby) still shows
 //! a menu that follows playback, fullscreen and the appearance, and is
 //! woken when a trigger's condition flips (`crate::triggers`).
 //!

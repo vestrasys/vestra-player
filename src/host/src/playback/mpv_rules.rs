@@ -1,5 +1,4 @@
-//! The mpv pass-through's rules, as data (capability `mpv`, SDK 1.8.0;
-//! doc/architecture/README.md §4.9):
+//! The mpv pass-through's rules, as data (capability `mpv`, SDK 1.8.0):
 //! what a plugin may not send through `mpv.command`, `mpv.get`, `mpv.set`
 //! and `mpv.observe`, by the boundary it would cross, and the channel's
 //! limits. The list is closed: a command or property not named here goes

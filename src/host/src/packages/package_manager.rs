@@ -22,7 +22,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-/// A guest window's library (doc/architecture/guest-windows.md §4): the
+/// A guest window's library: the
 /// main one read-only, with the package versions it refers to leased
 /// (`guest::lease`) before any of them runs. The catalog is read again
 /// after each lease until it names nothing the lease does not: the main
@@ -72,7 +72,7 @@ pub struct Manager {
     /// Installed plugins still to load into the supervisor at start-up, in
     /// start order (built-ins first, then the others, each in id order;
     /// `start_order`), a few per tick (`load_queued`); their starts wait in
-    /// the supervisor's lanes (supervisor.md §5).
+    /// the supervisor's lanes.
     to_load: VecDeque<String>,
     /// Starts that wait for a built-in's digest check (`Action::Verify`),
     /// by id (`verify_tick`).
@@ -105,7 +105,7 @@ pub struct Manager {
     /// `packages.validate*` on their threads (package_validate.rs).
     validations: crate::packages::package_validate::Validations,
     /// The guests directory whose leases the library cleanup keeps
-    /// (`guest::leased`, guest-windows.md §4); `None` in the host's unit
+    /// (`guest::leased`); `None` in the host's unit
     /// tests, which never read the user's.
     guests: Option<PathBuf>,
 }
@@ -273,7 +273,7 @@ impl Manager {
             crate::packages::package_validate::sweep_stale();
         }
         // The main profile's library, also in a guest window, which reads it
-        // (doc/architecture/guest-windows.md §4).
+        //.
         let root = std::env::var_os("VESTRA_PACKAGE_STORE")
             .map(PathBuf::from)
             .unwrap_or_else(|| {
@@ -436,7 +436,7 @@ impl Manager {
 impl Core {
     /// The shared runner at a host tick: the heartbeat (a hang restarts
     /// every member), and an idle runner let go (after the runner idle
-    /// exit, at least 30 s; supervisor.md §6).
+    /// exit, at least 30 s).
     fn shared_tick(&mut self) {
         let now = self.now_ms();
         let after = crate::host::supervisor::runner_idle_exit(&self.supervisor);
@@ -507,7 +507,7 @@ impl Core {
         // the third in a minute (`Policy::restart`), as the core does.
         let now = self.now_ms();
         self.shared_policy.restart(now);
-        // The core's runner group restart (supervisor.md §7): every member
+        // The core's runner group restart: every member
         // stops at once (no member gets its `runtime.stop`: the runner is
         // killed), goes back to standby by replay when it has a standby
         // recording, else starts again in the built-in lane: the first
@@ -562,7 +562,7 @@ impl Core {
     }
     /// `load_package`'s process: in the shared runner (started if none
     /// runs) when trusted, else its own, its heap capped by its class
-    /// (the heap cap, 512 MB; supervisor.md §8). `None`: its own process is created
+    /// (the heap cap, 512 MB). `None`: its own process is created
     /// on the spawn thread (`Event::Spawned`).
     fn spawn_package(
         &mut self,
@@ -686,7 +686,7 @@ impl Core {
         params: &Value,
     ) -> std::result::Result<Value, RpcError> {
         // A guest window runs the main profile's plugins as they are
-        // (doc/architecture/guest-windows.md §4).
+        //.
         if self.packages.read_only()
             && matches!(
                 method,
@@ -965,7 +965,7 @@ impl Core {
     /// (`runs_from`); nothing is copied. The supervisor replays a valid
     /// recording of a plugin that was lazy at its ready (on-demand start:
     /// it starts on its first use), starts one that was resident, and
-    /// queues a first run without one (supervisor.md §4).
+    /// queues a first run without one.
     pub(crate) fn load_installed(&mut self, id: &str) {
         if self.running(id).is_some() || self.parked_id(id).is_some() {
             return;
@@ -1123,7 +1123,7 @@ impl Core {
                 self.packages.store.pending_of(&id),
             );
             let warnings = self.warnings_of(owner);
-            // The supervisor's state of its unit, its activation read (supervisor.md §10).
+            // The supervisor's state of its unit, its activation read.
             let listed = self
                 .supervisor
                 .by_id(&id)
@@ -1167,7 +1167,7 @@ impl Core {
             }
         };
         // The catalog's records as they are (not a copy of it: `notify_tick`
-        // builds this list while plugins come and go, supervisor.md).
+        // builds this list while plugins come and go).
         for (id, record) in self.packages.store.installed_records() {
             if list.contains_key(id) {
                 continue;
@@ -1176,7 +1176,7 @@ impl Core {
             let Some(package) = self.packages.runs_from(&id, record) else {
                 continue;
             };
-            // The supervisor's state of its unit (supervisor.md §10): a start it waits for
+            // The supervisor's state of its unit: a start it waits for
             // (a first run waiting for a place, a reload or an enable
             // waiting for the previous process) and a package operation
             // count as starting; one waiting at start-up lists `stopped`.
@@ -1360,7 +1360,7 @@ impl Core {
             if let Some(stopped) = stopped {
                 self.session_storage.clear(&stopped);
             }
-            // And its trigger conditions (events-and-triggers.md §4.10).
+            // And its trigger conditions.
             self.triggers_clear(id);
             return Ok(());
         }
@@ -1490,7 +1490,7 @@ impl Core {
         let receipt =
             json!({"operationId":request,"packageId":id,"status":"committed","request":spec});
         // Its recording goes at the request, not when the stop lands; so do
-        // its trigger conditions (events-and-triggers.md §4.10).
+        // its trigger conditions.
         self.drop_recording(&id);
         self.triggers_clear(&id);
         // The supervisor stops it (`Stop{Uninstall, then: Removed}`); its
@@ -2026,8 +2026,7 @@ impl Core {
     }
 }
 impl Core {
-    /// Where plugin `id`, about to run from `directory`, runs (doc/
-    /// architecture/README.md §2): in the shared runner only a
+    /// Where plugin `id`, about to run from `directory`, runs: in the shared runner only a
     /// built-in by provenance — listed in `builtin.json`, running from the
     /// installation's own directory, recorded as built-in in the catalog —
     /// whose files still have the digest packaging recorded, unless
@@ -2441,7 +2440,7 @@ impl Core {
             return;
         }
         let library = self.packages.store.library();
-        // A version a running guest window uses stays (guest-windows.md §4);
+        // A version a running guest window uses stays;
         // the next start's `collect` takes it.
         let leased = crate::guest::leased(self.packages.guests.as_deref());
         for digest in freed {
@@ -2701,7 +2700,7 @@ pub(crate) fn display_name(
         .map_or_else(|| manifest.id.clone(), str::to_owned)
 }
 
-/// The 2026-10-24 ruling (ecosystem-plan.md): a reserved `vestra.` id
+/// The 2026-10-24 ruling: a reserved `vestra.` id
 /// (`manifest::reserved_id`) is installed and started only as the
 /// installation's built-in instance, which `builtin.json` alone creates
 /// (`builtin::read` accepts only reserved ids). Store, file, link and
@@ -3076,7 +3075,7 @@ mod cleanup {
                     }
                 }
                 // The versions running guest windows use stay, read just
-                // before deleting (guest-windows.md §4); the next start's
+                // before deleting; the next start's
                 // `collect` takes them once those guests are gone.
                 // A guest whose lease cannot be read keeps everything
                 // this time (`Leases::All`).
@@ -4157,7 +4156,7 @@ mod tests {
         (guests, lock)
     }
 
-    /// Guest windows (guest-windows.md §4): the cleanup thread leaves the
+    /// Guest windows: the cleanup thread leaves the
     /// versions a running guest leases, for a removal of named versions
     /// (`Work::Only`, after an update or uninstall) and for the start-up
     /// collection (`Work::Unreferenced`); once that guest is gone they go.
@@ -4435,7 +4434,7 @@ mod tests {
         diag!("slint all built-ins: {total} ms");
     }
 
-    /// Characterization test (supervisor.md §6): start-up and wait tunables
+    /// Characterization test: start-up and wait tunables
     /// as they were pinned before the supervisor (the 15 s activation
     /// deadline and the install wait of 20 s were literals in
     /// `load_package` and `advance_package`).

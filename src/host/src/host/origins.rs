@@ -1,5 +1,5 @@
 //! Which window a plugin's `dialogs.confirm` belongs to: the one where the
-//! user last acted for that plugin (doc/architecture/palette-lead.md §2.3).
+//! user last acted for that plugin.
 //!
 //! A confirmation reaches the host after the user's click has travelled to
 //! the plugin's process and back, sometimes after a download or a check, so

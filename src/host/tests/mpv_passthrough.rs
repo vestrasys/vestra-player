@@ -1,5 +1,4 @@
-//! The mpv pass-through with the real host, headless (doc/architecture/
-//! README.md §4.9): a built-in fixture that declares `mpv` writes, reads
+//! The mpv pass-through with the real host, headless: a built-in fixture that declares `mpv` writes, reads
 //! and observes an mpv property, runs commands, adds its own labelled
 //! filter and meets the closed refusal rules; a development load (not
 //! built-in, declaring nothing) uses the same methods (player 0.9.0;

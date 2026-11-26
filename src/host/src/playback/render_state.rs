@@ -1,5 +1,5 @@
 //! The render files in the application data directory
-//! (doc/architecture/README.md §4.3):
+//!:
 //!
 //! - `render.json`: the user's preference (`auto`, `gpu`, `software`),
 //!   written at once and read at the next start.
@@ -483,7 +483,7 @@ fn one_writer() -> std::sync::MutexGuard<'static, ()> {
 pub const FIRST_DRAWS: u64 = 3;
 
 /// Whether CPU mode's Direct3D 12 windows have started, so the crash guard
-/// settles (doc/architecture/README.md §4.3): the first video
+/// settles: the first video
 /// picture was shown (`pictures`, the presentation's presented frames: its
 /// upload into the windows' texture went through), or the window drew
 /// [`FIRST_DRAWS`] times and no source is being opened (`opening`: a start

@@ -1,6 +1,6 @@
 import type { JsonStore, Scope } from "@vestra-player/sdk";
 
-/** `<dataDirectory>/visualizer.json` (feature-requirements J11, H12). */
+/** `<dataDirectory>/visualizer.json` (requirements J11, H12). */
 export interface Settings {
   audio: { on: boolean };
   /** `logo`: the custom logo's file name in the data directory (`logo.png` / `logo.jpg`), or null for the brand logo. */

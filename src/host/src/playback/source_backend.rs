@@ -1245,7 +1245,7 @@ impl Sources {
     }
     /// The host could not deliver resolution request `id` to its resolver
     /// (a plugin starting from standby that could not start, or whose held
-    /// requests overflowed: supervisor.md §4): the open fails now with
+    /// requests overflowed): the open fails now with
     /// `message` instead of at its deadline. Nothing goes to the resolver,
     /// which never got the request.
     pub fn refuse_resolution(&mut self, id: u64, message: String) {
@@ -1940,7 +1940,7 @@ fn chapter_list(node: Node) -> Vec<Value> {
         })
         .collect()
 }
-/// `audio.devices.changed` (events-and-triggers.md §4.6): `{ devices,
+/// `audio.devices.changed`: `{ devices,
 /// requested, active }` (`devices` as `player.audioDevices()` lists them,
 /// `requested` the device `player.setAudioDevice` asked for, `active` the
 /// one in use, `null` for the system default, as `PlayerState.audioOutput`)
@@ -3066,7 +3066,7 @@ mod resolution_tests {
             Some(rom("a.nes").as_str())
         );
     }
-    /// supervisor.md §4: a resolution request the host could not
+    /// A resolution request the host could not
     /// deliver (its resolver could not start, or held too many) fails the
     /// open at once with the host's text; nothing goes to the resolver, and
     /// its late answer is stale.

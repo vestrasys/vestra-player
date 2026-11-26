@@ -452,8 +452,8 @@ fn keep_reachable(window: &slint::Window) {
 ///
 /// Every imported `.slint` file comes through the file loader, which puts
 /// the interface language's translations into its `@tr` literals with the
-/// catalog of the package that holds it (`ui/` files: the player's own;
-/// doc/architecture/i18n.md §4). The file a compile starts from is given as
+/// catalog of the package that holds it (`ui/` files: the player's own).
+/// The file a compile starts from is given as
 /// source: `build_from_source` callers pass it through [`translate`].
 pub fn compiler() -> Compiler {
     let mut compiler = Compiler::default();
@@ -488,8 +488,7 @@ pub fn translate(source: String, path: &Path) -> String {
 
 /// Fonts: no window sets `default-font-family`, so every window uses the
 /// system UI font and Slint's per-character fallback for scripts it lacks;
-/// the CJK fallback chains are the host's (`ui_fonts`, architecture README
-/// "fonts").
+/// the CJK fallback chains are the host's (`ui_fonts`).
 pub fn compile(path: &Path) -> Result<ComponentInstance> {
     compile_source(std::fs::read_to_string(path)?, path)
 }
@@ -1051,7 +1050,7 @@ export component W inherits Window {
         assert_eq!(alpha(), 0x80);
     }
 
-    /// i18n.md §4: a package's `.slint` files, the one opened and the ones
+    /// A package's `.slint` files, the one opened and the ones
     /// it imports, show its catalog's translations; the player's library
     /// keeps the player's own (none in an English run).
     #[test]
@@ -2528,7 +2527,7 @@ export component W inherits Window {
         composed.shell.hide().unwrap();
     }
 
-    /// sidebar-tabs.md: twenty sidebar tabs; only the tabs shown compile
+    /// Twenty sidebar tabs; only the tabs shown compile
     /// (`ui/panels.rs`), a switch to one shown before compiles nothing, and
     /// the strip moves the current tab into its last place with the `»`
     /// button beside it.
@@ -2582,7 +2581,7 @@ export component W inherits Window {
         shell.hide().unwrap();
     }
 
-    /// The strip's overflow (sidebar-tabs.md): tabs stay at least 72 px; the
+    /// The strip's overflow: tabs stay at least 72 px; the
     /// rest go into `»`, and the current tab takes the last place when it
     /// would not fit.
     #[test]

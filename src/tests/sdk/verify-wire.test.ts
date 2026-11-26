@@ -3,7 +3,7 @@
 // numbers, request ids, times, paths and heartbeats; a line reordered by
 // hand is caught, per plugin; the allowed-reorders mode (rule R4) lets the
 // UI-bound and UI-independent streams of a plugin interleave differently
-// but nothing else; the stream map matches the design's method table.
+// but nothing else; the stream map holds the design's 126 methods.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
@@ -30,20 +30,10 @@ const {
   normaliseTrace,
   readTrace,
   streamOf,
-  streamsFromDesign,
 } = tool;
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SCRIPT = join(HERE, "..", "..", "scripts", "verify-wire.mjs");
-const DESIGN = join(
-  HERE,
-  "..",
-  "..",
-  "..",
-  "doc",
-  "architecture",
-  "core-thread.md",
-);
 const STREAMS = JSON.parse(readFileSync(STREAMS_FILE, "utf8"));
 
 type Line = Record<string, unknown>;
@@ -126,12 +116,10 @@ const normalise = (text: string, run: typeof A) =>
     roots: [[run.profile, "<profile>"]],
   });
 
-test("the stream map is the design's method table (126 rows: 110 I, 16 B)", () => {
-  const streams = streamsFromDesign(readFileSync(DESIGN, "utf8"));
-  assert.deepEqual(STREAMS, streams, "regenerate: verify-wire.mjs streams");
-  assert.equal(streams.rows, 126);
-  assert.equal(streams.uiBound.length, 16);
-  assert.equal(streams.uiIndependent.length, 110);
+test("the stream map holds the design's method table (126 rows: 110 I, 16 B)", () => {
+  assert.equal(STREAMS.rows, 126);
+  assert.equal(STREAMS.uiBound.length, 16);
+  assert.equal(STREAMS.uiIndependent.length, 110);
   for (const name of [
     "ui.open",
     "ui.mount",
@@ -619,11 +607,6 @@ test("the command line compares V2 run directories step by step", () => {
   assert.match(caught.stdout, /x\.one \(read from it\), line 1:/);
   assert.match(caught.stdout, /RESULT: FAIL, 1 difference/);
   assert.equal(run(["diff", join(root, "a")]).status, 2);
-  assert.equal(
-    run(["streams", "--check", STREAMS_FILE]).status,
-    0,
-    "the data file matches the design",
-  );
 });
 
 test("the noise of two base runs hides their differences, not new ones", () => {

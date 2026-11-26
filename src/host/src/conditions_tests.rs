@@ -1,4 +1,4 @@
-//! The `when` language of SDK 1.10.0 (events-and-triggers.md §4.3): the
+//! The `when` language of SDK 1.10.0: the
 //! tests of the atoms it adds; those of the first seven are in
 //! conditions.rs.
 use super::*;

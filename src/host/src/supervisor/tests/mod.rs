@@ -2,8 +2,7 @@
 //! without reading the implementation. Each test is named after the row of
 //! the original design tables it checks (`t19_…` = transition row,
 //! `m_<row>_<col>` = a merge table cell, `nc_…` = a named case, …; that
-//! text is in git history, doc/architecture/supervisor.md has the rules
-//! today).
+//! text is in git history).
 //!
 //! Every guess about the concrete Rust shape (type and field names,
 //! argument types, how a finished job's result is read) is confined to the
@@ -40,7 +39,7 @@ pub(super) const VERIFY_WAIT: Ms = 3_000;
 pub(super) const STARTING_OSD: Ms = 400;
 /// `QUIET_AFTER_START_MS` ("Event wakes").
 pub(super) const QUIET_AFTER_START: Ms = 1_000;
-/// A lazy first run's idle time before standby (supervisor.md §4 "First run").
+/// A lazy first run's idle time before standby.
 pub(super) const FIRST_RUN_QUIET: Ms = 1_000;
 /// Text of a Start that waited on a stop job (reload).
 pub(super) const TEXT_RELOAD_STUCK: &str = "the previous process did not stop within 20 s";
@@ -1055,8 +1054,8 @@ pub(super) fn revoked(a: &Act) -> Option<(UnitId, Pid)> {
 }
 
 /// A plugin-declared long work kind (`commands.busy`, a settings page busy):
-/// `WorkKind::Declared`, never capped (coordinator ruling; supervisor.md
-/// §4). The number is the adapter's own; see
+/// `WorkKind::Declared`, never capped (coordinator ruling).
+/// The number is the adapter's own; see
 /// `b3::w_declared_busy_has_no_request_cap`.
 pub(super) const DECLARED_BUSY: WorkKind = WorkKind::Declared(0);
 

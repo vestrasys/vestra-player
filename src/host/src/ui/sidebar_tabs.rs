@@ -1,4 +1,4 @@
-//! Tabs on demand in the player's tab columns (doc/architecture/sidebar-tabs.md):
+//! Tabs on demand in the player's tab columns:
 //! the sidebar and, since the menu redesign (step 3b), the adjust column.
 //! The tab order, the current tab after a change, and which tab keeps its
 //! plugin running: the same rules, per column (each panel compiles on its
@@ -166,7 +166,7 @@ pub fn awaits_remembered<'a>(
     active != Some(remembered) && !column.any(|manifest| manifest == remembered)
 }
 
-/// Whether a panel is something live (supervisor.md §2): the bottom bar and
+/// Whether a panel is something live: the bottom bar and
 /// the backdrop are, and make their plugin Resident. A tab of a column (the
 /// sidebar, the adjust column) never is (user ruling 2026-11-03): its
 /// `ui.mount` is recorded, so its plugin is Normal, and the tab stays as a

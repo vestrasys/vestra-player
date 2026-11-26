@@ -1,5 +1,5 @@
-//! A pure simulation of the position model (events-and-triggers.md §4.4,
-//! plan step A2): the playback thread's model (`PositionModel`) and the UI
+//! A pure simulation of the position model (plan
+//! step A2): the playback thread's model (`PositionModel`) and the UI
 //! thread's evaluator (`Triggers`) exchanging reports and boundaries as the
 //! Host does, over a simulated mpv whose `time-pos` moves by frames, with a
 //! virtual clock. Nothing waits: time is passed in. Covered: entering,

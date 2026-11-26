@@ -2,7 +2,7 @@
 /**
  * Core-thread plan step S2d, Done-when: "no core method takes a Slint type
  * as a parameter or returns one"; widened in plan step S2f(3) to all core
- * code and to `Host` (doc/process/core-thread-plan.md §4, rows R3 and "the
+ * code and to `Host` (rows R3 and "the
  * core turn takes no Host"). Needs no build.
  *
  *   node src/scripts/check-core-slint.mjs [<src/host/src>]

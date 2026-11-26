@@ -34,7 +34,7 @@ pub(crate) enum Event {
     /// A column's tab strip (shell or floating window generation): a tab
     /// clicked (its index in that window's tab order).
     Tab(u64, crate::ui::sidebar_tabs::Column, usize),
-    /// A strip's `»` (sidebar-tabs.md): the overflow menu's origin, logical px.
+    /// A strip's `»`: the overflow menu's origin, logical px.
     TabOverflow(u64, crate::ui::sidebar_tabs::Column, f64, f64),
     /// The sidebar strip's detach/attach button.
     SidebarDetach(u64),
@@ -142,7 +142,7 @@ pub(crate) enum Event {
 
 /// See [`Event::CoreQuit`].
 pub(crate) struct CoreQuit {
-    /// The plugins' shutdown budget (supervisor.md §9: 1 s at quit, 300 ms
+    /// The plugins' shutdown budget (1 s at quit, 300 ms
     /// after a device loss).
     pub(crate) budget: Duration,
     /// The windows' device was lost: the core restarts the player.

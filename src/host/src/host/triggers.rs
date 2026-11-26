@@ -1,5 +1,4 @@
-//! The Host's side of triggers (`crate::triggers`, events-and-triggers.md
-//! §4.9, §4.10): the facts it hands the registry, the position model's
+//! The Host's side of triggers (`crate::triggers`): the facts it hands the registry, the position model's
 //! reports and boundaries (`playback/position_model.rs`), the clock, and the
 //! delivery of `triggers.fired`: sent to a running plugin, held for one
 //! that starts, a wake for one in standby (the "event" lane, merged per

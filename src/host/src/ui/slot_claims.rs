@@ -1,7 +1,7 @@
 //! Who holds a shell slot, and who claims one first.
 //!
 //! The bottom bar and the backdrop hold one component each; the sidebar
-//! holds any number of panels as tabs (doc/architecture/sidebar-tabs.md).
+//! holds any number of panels as tabs.
 //! A second plugin asking for a taken bottom bar or backdrop is refused at
 //! `ui.mount` with `conflict` (not later, as a compile failure), and the
 //! refusal does not fail its activation (nor does `sequence.set` refused for another

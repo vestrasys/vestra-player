@@ -54,7 +54,7 @@ export const STOP_COMMAND = "askvestra.stop";
  * A command in no menu, palette or bar (panel-only in a plugin without a panel, no
  * keys) whose only job is to be busy while a request runs: the supervisor
  * does not put a plugin in standby while one of its commands is busy
- * (doc/architecture/supervisor.md §4, declared work). Stop cannot carry the
+ * (declared work). Stop cannot carry the
  * flag: the player does not run a busy command.
  */
 export const WORKING_COMMAND = "askvestra.working";

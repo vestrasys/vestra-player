@@ -845,7 +845,7 @@ pub fn physical_memory() -> Option<PhysicalMemory> {
 /// low. Read without waiting (`QueryMemoryResourceNotification`). The
 /// handle is an [`OwnedHandle`](std::os::windows::io::OwnedHandle): the
 /// value is `Send` and `Sync` (the host's core may own it on a thread of
-/// its own, doc/architecture/core-thread.md) and the handle is closed on
+/// its own) and the handle is closed on
 /// drop (`CloseHandle`), once.
 #[derive(Debug)]
 pub struct LowMemoryNotification(std::os::windows::io::OwnedHandle);
@@ -1500,8 +1500,7 @@ fn monitor_of(hwnd: isize) -> isize {
     unsafe { MonitorFromWindow(hwnd as HWND, MONITOR_DEFAULTTOPRIMARY) as isize }
 }
 
-/// A DXGI adapter as the driver check sees it (doc/architecture/README.md
-/// §4.3).
+/// A DXGI adapter as the driver check sees it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DxgiAdapter {
     pub name: String,
@@ -1602,7 +1601,7 @@ fn version_parts(value: i64) -> [u16; 4] {
 
 /// NVIDIA's PPE stream extension (`{d43ce1b3-1f4b-48ac-baee-c3c25375e6f7}`),
 /// the one mpv's `d3d11vpp=scaling-mode=nvidia` sets for RTX Video Super
-/// Resolution (doc/architecture/README.md §4.4).
+/// Resolution.
 const NVIDIA_PPE: windows::core::GUID =
     windows::core::GUID::from_u128(0xd43ce1b3_1f4b_48ac_baee_c3c25375e6f7);
 
@@ -2373,7 +2372,7 @@ mod tests {
         assert!(error.contains("no adapter"), "{error}");
     }
 
-    /// Real machine, read-only (doc/architecture/README.md §4.4):
+    /// Real machine, read-only:
     /// `cargo test -p vestra-win32 -- --ignored --nocapture super_resolution_on_each`
     /// prints every adapter's answer. It wakes a sleeping discrete GPU for a
     /// moment; it renders nothing and changes no setting. Expected: the RTX

@@ -139,7 +139,7 @@ export function folderError(error: unknown): ReadFailure {
 }
 
 // ------------------------------------------------------------------ A13 / IA-PL-01 similar files
-// The rule is specified in interaction-spec.md IA-PL-01 「同类文件规则」. The constants and
+// The rule is IA-PL-01 「同类文件规则」 of the interaction spec. The constants and
 // the integer divisions are part of the spec and must not be tuned.
 
 /** `T1`: the separators the comparison ignores (12 characters). */

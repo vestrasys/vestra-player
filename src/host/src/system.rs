@@ -223,7 +223,7 @@ impl Core {
                     .ok_or_else(|| RpcError::new("disabled", "plugin no longer running"))?;
                 let name = secret_name(params)?.to_owned();
                 // A guest window reads the main profile's entries and
-                // changes none (user ruling 2026-11-21, guest-windows.md §4).
+                // changes none (user ruling 2026-11-21).
                 if method != "secrets.get" && crate::guest::active() {
                     return Err(RpcError::new("unavailable", GUEST_SECRETS));
                 }

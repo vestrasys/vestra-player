@@ -1,4 +1,4 @@
-//! Exit causes (supervisor.md §7). Every cause maps onto the wire stop reason
+//! Exit causes. Every cause maps onto the wire stop reason
 //! `Failed`.
 #![forbid(unsafe_code)]
 

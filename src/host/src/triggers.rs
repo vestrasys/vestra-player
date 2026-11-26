@@ -1,4 +1,4 @@
-//! Triggers (doc/architecture/events-and-triggers.md §3, §4.1, §4.2,
+//! Triggers (§4.2,
 //! §4.10): the conditions plugins hand over with `plugin.trigger()
 //! .firesOn(condition)`, kept and evaluated here, with or without the
 //! plugin's process; `enter` when one turns true, `leave` when it turns

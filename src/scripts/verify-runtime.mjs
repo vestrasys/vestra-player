@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Runtime differential of two staged players (doc/process/verify-additions.md):
+ * Runtime differential of two staged players:
  * runs the same start-up, standby and wake scenarios on each, offscreen and in
  * isolated profiles, and compares what the host's registries, its standby
  * log lines and the standby recordings say for every plugin. An empty
@@ -8,7 +8,8 @@
  * (host/src/host/supervisor/probe.rs, ui/offscreen.rs).
  *
  *   node src/scripts/verify-runtime.mjs run --stage <staged player> --out <directory>
- *     [--store-plugins <plugin repository>]   default C:\vestra\plugins-repo: each
+ *     [--store-plugins <plugin repository>]   default ../plugins-repo beside
+ *                                   this checkout: each
  *                                   plugins/<name> with a manifest.json is loaded
  *                                   with --plugin (its dist/ when built, else
  *                                   the source directory)
@@ -18,7 +19,8 @@
  *                                   two-minute test clip made with the stage's ffmpeg
  *     [--slow <factor>]             multiply every run time (a loaded machine)
  *     [--quiet-flag <file>]         wait while it exists before each player run
- *                                   (default C:\vestra\quiet.flag)
+ *                                   (Windows default: ../quiet.flag beside
+ *                                   this checkout)
  *     [--wire-trace]                each step also writes its wire trace
  *                                   (VESTRA_TEST_WIRE_TRACE, a host test switch
  *                                   since the core thread's S1.1) to
@@ -104,6 +106,9 @@ import { pathToFileURL } from "node:url";
 import { packageDigest } from "./stage-plugins.mjs";
 
 class RunError extends Error {}
+
+/** A path beside this checkout (the work directory that holds it). */
+const beside = (name) => resolve(import.meta.dirname, "..", "..", "..", name);
 
 /** Seconds: how long each step runs, and what it must have seen by then. */
 const STEPS = {
@@ -773,10 +778,10 @@ async function run(options) {
     if (!STEPS[name]) throw new RunError(`unknown scenario ${name}`);
   const store = options.noStorePlugins
     ? []
-    : storePlugins(options.storePlugins ?? "C:\\vestra\\plugins-repo");
+    : storePlugins(options.storePlugins ?? beside("plugins-repo"));
   const storeRoot = options.noStorePlugins
     ? null
-    : resolve(options.storePlugins ?? "C:\\vestra\\plugins-repo");
+    : resolve(options.storePlugins ?? beside("plugins-repo"));
   rmSync(join(out, "raw"), { recursive: true, force: true });
   mkdirSync(join(out, "raw"), { recursive: true });
 
@@ -1089,7 +1094,7 @@ async function main(argv) {
   const command = argv[0];
   const options = parse(argv.slice(1), ["--no-store-plugins", "--wire-trace"]);
   if (process.platform === "win32" && options.quietFlag === undefined)
-    options.quietFlag = "C:\\vestra\\quiet.flag";
+    options.quietFlag = beside("quiet.flag");
   if (command === "run" && options.stage && options.out) {
     await run(options);
     return 0;

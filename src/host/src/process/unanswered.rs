@@ -2,7 +2,7 @@
 //! have at most [`MAX_UNANSWERED_REQUESTS`] request lines and
 //! [`MAX_UNANSWERED_BYTES`] of request bytes unanswered; a request past
 //! either is answered at once with `limit` on the reader thread, never
-//! queued for the UI thread (doc/architecture/supervisor.md §7, "Request
+//! queued for the UI thread ("Request
 //! limits").
 //!
 //! Counted per plugin (an own process's, or one shared-runner member's),

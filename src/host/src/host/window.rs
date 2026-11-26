@@ -861,7 +861,7 @@ impl Host {
             .collect::<Vec<_>>();
         sidebar_tabs::order(column, &tabs, &self.column_memory(column).order)
     }
-    /// What a column's current tab needs (sidebar-tabs.md): a placeholder's
+    /// What a column's current tab needs: a placeholder's
     /// plugin is woken once (its activation mounts the panel again). A
     /// running plugin's panel needs nothing here: it compiles on its own
     /// when it is first shown (`sync_panels`).
@@ -1092,7 +1092,7 @@ impl Host {
         }
     }
     /// The floating window with every tab in its strip and the shell's
-    /// compiled panels (sidebar-tabs.md); it opens again when they change.
+    /// compiled panels; it opens again when they change.
     pub(crate) fn open_floating(&mut self, owners: &[u64]) -> Result<()> {
         let tabs = owners
             .iter()
@@ -1337,10 +1337,9 @@ impl Core {
             self.broadcast("window.state", facts);
         }
     }
-    /// The second batch's facts of the interface (events-and-triggers.md
-    /// §4.6), at `UiReport::FactsSettled` only, after `window.state`: the
+    /// The second batch's facts of the interface, at `UiReport::FactsSettled` only, after `window.state`: the
     /// facts are then those of a whole interface tick, never an in-between
-    /// value (core-thread.md, S3a(4) review F2). `window.changed` at once
+    /// value (S3a(4) review F2). `window.changed` at once
     /// for a flip, after `fact_events::QUIET_MS` for a size change
     /// (`window_change_tick`); `layout.changed` when the positions changed.
     pub(crate) fn facts_events(&mut self) {

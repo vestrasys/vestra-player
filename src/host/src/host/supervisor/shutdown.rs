@@ -1,4 +1,4 @@
-//! Quit and a device-loss restart (doc/architecture/supervisor.md §9): the
+//! Quit and a device-loss restart: the
 //! core's `shutdown` with one deadline for every plugin process, 1 s at quit
 //! and 300 ms after a GPU device loss. Every checkpoint is written before the
 //! first stop (coordinator ruling); then every process gets its `runtime.stop`
@@ -136,7 +136,7 @@ impl Core {
     /// The player quits with a source in playback: each running plugin that
     /// listens to `source.ended` gets it with `reason: "quit"` and the
     /// source's last state, ahead of its stop on the same pipe, so within
-    /// the quit's deadline (events-and-triggers.md §4.6). A plugin in
+    /// the quit's deadline. A plugin in
     /// standby gets nothing: it is neither woken nor is the event kept
     /// (§6, M5).
     fn quit_source_ended(&mut self) {

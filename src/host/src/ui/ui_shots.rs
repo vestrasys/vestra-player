@@ -1,5 +1,5 @@
 //! Offscreen screenshots of plugin windows and settings pages
-//! (doc/architecture/ui-shots.md; `npm run ui:shots`).
+//! (`npm run ui:shots`).
 //!
 //! Plugin authors cannot see a GUI. This renders each view a plugin's tests
 //! produced, with the player's own pipeline and no window on screen:

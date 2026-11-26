@@ -1,7 +1,7 @@
 //! Graphics drivers the player does not render on with the GPU: the rules
 //! built into the host (`src/host/render-denylist.json`) and a local file of
 //! the same shape that adds or replaces rules by id, so a rule can change
-//! without a player release (doc/architecture/README.md §4.3). The
+//! without a player release. The
 //! format follows Chromium's `software_rendering_list.json`. Pure: the
 //! caller reads the local file and the adapter facts.
 #![forbid(unsafe_code)]

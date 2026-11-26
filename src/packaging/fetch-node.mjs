@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * The Node.js the player ships (doc/architecture/packaging-proposal.md §2):
+ * The Node.js the player ships:
  * the official nodejs.org binary pinned in node.json.
  *
  *   node packaging/fetch-node.mjs --platform darwin-arm64|win-x64 --out <dir>

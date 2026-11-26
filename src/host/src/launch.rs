@@ -34,7 +34,7 @@ pub struct Launch {
     /// (`--vestra-resume SECONDS:paused|playing`, written by the host only).
     pub resume: Option<Resume>,
     /// Internal: `--guest`, a guest window with a temporary profile of its
-    /// own (doc/architecture/guest-windows.md), written by the host only
+    /// own, written by the host only
     /// (`app.openWindow`); not in the usage text.
     pub guest: bool,
     /// Internal: the guest directory a restarted guest takes over

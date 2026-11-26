@@ -646,7 +646,7 @@ impl Backend {
                                 continue;
                             }
                             // A resolution request the host could not
-                            // deliver to its resolver (supervisor.md §4).
+                            // deliver to its resolver.
                             "owner.refuseResolution" => {
                                 if let Some(id) = command.params["requestId"].as_u64() {
                                     let message = command.params["message"]
@@ -2263,7 +2263,7 @@ pub const SPEED_OBSERVATION: u64 = 3;
 pub const CACHE_OBSERVATION: u64 = 4;
 
 /// The playback thread's side of the position model
-/// (`position_model.rs`, events-and-triggers.md §4.4): the boundaries the
+/// (`position_model.rs`): the boundaries the
 /// UI thread hands over (`position.watch`), one read of the playback state
 /// after each anchoring event, at each 100 ms state push and at the
 /// model's deadline, and the reports. Without a watch it does nothing.

@@ -146,8 +146,8 @@ pub fn valid_id(id: &str) -> bool {
             .all(|b| b.is_ascii_alphanumeric() || b".-_".contains(&b))
 }
 
-/// An id reserved for the player's built-in plugins (ecosystem-plan.md,
-/// 2026-10-24 ruling): `vestra` and `vestra.<name>`, ignoring ASCII case. Only
+/// An id reserved for the player's built-in plugins (2026-10-24
+/// ruling): `vestra` and `vestra.<name>`, ignoring ASCII case. Only
 /// the installation's built-in set installs such a package; development loads
 /// (`--plugin`) may use one but are never installed.
 pub fn reserved_id(id: &str) -> bool {

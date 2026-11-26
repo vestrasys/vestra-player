@@ -1367,7 +1367,7 @@ fn crash_during_wake_keeps_a_start_only_for_held_events() {
 
 /// A Resident whose start times out restarts by its class's restart rule (on
 /// failure, 1 s × 2ⁿ from the reap), never in standby. A start timeout is not
-/// retried (coordinator ruling, supervisor.md §7); it used to be retried
+/// retried (coordinator ruling); it used to be retried
 /// 250 ms after the reap.
 #[test]
 fn resident_start_timeout_restarts_by_its_class_and_never_lands_in_standby() {

@@ -1,4 +1,4 @@
-//! The Direct3D side (doc/architecture/README.md §4.3):
+//! The Direct3D side:
 //!
 //! - the adapter (DXGI), and on it the windows' wgpu device on the
 //!   Direct3D 12 backend ([`Gpu`]; Slint's `WGPUConfiguration::Manual` takes
@@ -46,8 +46,8 @@ fn luid64(luid: LUID) -> u64 {
 /// Which adapter the windows and the renderer use. Which one to choose is
 /// the host's policy (its platform module: GPU rendering takes the
 /// high-performance GPU unless the user chose one for Vestra in Windows
-/// Settings, CPU mode Windows' order, `VESTRA_GPU_ADAPTER` overrides both;
-/// doc/architecture/README.md §4.3); the host passes the adapter it
+/// Settings, CPU mode Windows' order, `VESTRA_GPU_ADAPTER` overrides both);
+/// the host passes the adapter it
 /// resolved (`Luid`) with its reason. The adapter is chosen once per
 /// process; a change needs a restart.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -19,7 +19,7 @@ impl Capability for TimelineMarks {
     }
     /// A layer is plain data the host draws by itself: kept through standby
     /// by the installed instance, it holds nothing that keeps the plugin
-    /// running (events-and-triggers.md §4.8; `Host::stop_run` keeps it at a
+    /// running (`Host::stop_run` keeps it at a
     /// park, removes it at any other stop).
     fn record(&self, _: &Core, _: u64, _: &Value) -> Recorded {
         Recorded::Nothing

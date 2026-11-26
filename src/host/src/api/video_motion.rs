@@ -2,7 +2,7 @@
 //! GPU vendor's frame-rate converter (`engine`: AMD AMF's or NVIDIA's
 //! `fruc_vulkan`, on Windows): whether it works here
 //! and why not, and the mode this plugin asks for (`playback/motion.rs`,
-//! SDK 1.7.19, player 0.8.1; doc/architecture/README.md §4.4a). The control
+//! SDK 1.7.19, player 0.8.1). The control
 //! worker answers; the host adds its rendering state, for the advice in a
 //! `rendering` reason.
 //!

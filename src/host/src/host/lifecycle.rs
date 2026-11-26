@@ -5,8 +5,7 @@ use super::*;
 
 /// What a plugin wrote that the host shows by itself (its timeline layer,
 /// its always-on-top and cursor settings) stays when its run stops: only at
-/// a standby (`park` for idle, the stop reason `idle`; events-and-triggers.md
-/// §4.8). A run that stops after a fault is not trusted, and is kept in
+/// a standby (`park` for idle, the stop reason `idle`). A run that stops after a fault is not trusted, and is kept in
 /// standby without them; a disable, uninstall, reload, upgrade or quit
 /// removes them.
 pub(crate) fn keeps_shown_state(park: bool, reason: StopReason) -> bool {
@@ -198,7 +197,7 @@ impl Core {
             Default::default()
         };
         // Its panels (one per slot): parked, a tab stays, a placeholder
-        // (sidebar-tabs.md), its panel in the shell if it is compiled; the
+        //, its panel in the shell if it is compiled; the
         // others go.
         let gone = self
             .mounts
@@ -278,7 +277,7 @@ impl Core {
         // Waiting for graceful disposal/killing belongs off the Slint event
         // loop: the reaper thread's, which reports `Event::Reaped`; until
         // then (and the playback worker's `BackendCleaned`) the unit is
-        // deactivating, and every start of it waits (supervisor.md).
+        // deactivating, and every start of it waits.
         if let Some(mut plugin) = self.plugins.remove(&owner) {
             self.plugins_revision += 1;
             plugin.set_stop_reason(reason);
@@ -483,7 +482,7 @@ impl Core {
         self.plugins.insert(owner, plugin);
         self.plugins_revision += 1;
         // Before it sends anything: conditions another version gave lose
-        // their unnamed triggers (events-and-triggers.md §4.2).
+        // their unnamed triggers.
         self.triggers_spawned(owner);
     }
     /// The core's spawn of a development unit (`Action::Spawn`): today's

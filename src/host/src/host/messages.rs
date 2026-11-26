@@ -1,5 +1,5 @@
 //! The two kinds of message that cross between the core and the UI thread
-//! (doc/architecture/core-thread.md, rule R3): [`UiCommand`] (core → UI) and
+//! (rule R3): [`UiCommand`] (core → UI) and
 //! [`UiReport`] (UI → core). Plan step S2a added the types; S2c and S2d
 //! route today's code through them while still on one thread (S2c(1):
 //! [`UiReport::WindowFacts`], `Host::ui_report`; S2c(3): [`UiCommand::Mount`],

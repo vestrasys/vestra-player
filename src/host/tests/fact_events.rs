@@ -1,5 +1,4 @@
-//! The second batch of events (doc/architecture/events-and-triggers.md
-//! §4.6, release B): each is sent by the running player and wakes a plugin
+//! The second batch of events (release B): each is sent by the running player and wakes a plugin
 //! in standby. The host offscreen (`VESTRA_TEST_OFFSCREEN=1`, so the
 //! interface's facts flow), the shared runner, a short idle time; one
 //! listener per event, each a built-in that listens to that event alone

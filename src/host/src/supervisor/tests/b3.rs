@@ -1,7 +1,6 @@
 //! Start-limit spec tests (queue limits), written from the design tables,
 //! not from the core: lanes, priorities, `max_active`, the Interactive
-//! reserve, built-ins first, bounds, deadlines and answers (supervisor.md
-//! §5 "Start order and limits", §4): no 64-start limit, wake failures keep
+//! reserve, built-ins first, bounds, deadlines and answers: no 64-start limit, wake failures keep
 //! registrations, 200-wake storms, and the request timeout capping only
 //! `source.resolveRequest` (§4, §6).
 //!
@@ -533,7 +532,7 @@ fn d_start_timeout_counts_from_the_spawn_after_a_slot_wait() {
     );
 }
 
-/// The start timeout per class (supervisor.md §6; a development load keeps
+/// The start timeout per class (a development load keeps
 /// its own 1–120 s).
 #[test]
 fn d_start_timeout_per_class() {
@@ -898,7 +897,7 @@ fn w_request_timeout_is_per_request_in_flight() {
     );
 }
 
-/// Coordinator ruling (supervisor.md §4): the 5 min applies only to
+/// Coordinator ruling: the 5 min applies only to
 /// host→plugin requests awaiting a reply; plugin-declared long work
 /// (`commands.busy`, settings busy) has no cap, though it keeps the unit
 /// busy (out of standby).

@@ -7,8 +7,7 @@
 //! while the start-up panels still compiled: whatever layout was remembered
 //! (the adjust column open or closed, a third-party sidebar tab), each
 //! panel shown at start-up compiles once, before the file opens, a panel
-//! not shown compiles nothing, and opening a file compiles nothing
-//! (doc/architecture/README.md, adjust-column.md, sidebar-tabs.md).
+//! not shown compiles nothing, and opening a file compiles nothing.
 //!
 //! Each case runs a fresh profile twice: once to record the plugins' first
 //! runs (as any player started before), then the start that is counted; one

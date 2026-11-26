@@ -1,7 +1,6 @@
 //! `plugin.storage.session` (SDK 1.5.25, player 0.5.5): JSON values that
 //! live as long as the player process, not the plugin process. User ruling
-//! 2026-10-27 (doc/process/rounds/history.md §2); the code map row in
-//! doc/architecture/README.md §5.
+//! 2026-10-27 (doc/process/rounds/history.md §2).
 //!
 //! The store is keyed by the plugin's [`DataKey`](crate::process::DataKey) (its installed instance or
 //! development id: the same identity as its data directory and secrets), never

@@ -1,5 +1,5 @@
 //! The palette lead and `commands.run` with the real host, headless
-//! (doc/architecture/palette-lead.md): a built-in fixture holds the command
+//!: a built-in fixture holds the command
 //! palette's first row, gets the typed query with a ticket when the row is
 //! activated (`VESTRA_TEST_EXECUTE=lead:<query>@<ms>`, as Enter would), runs
 //! its own command with it (the OSD line names it), a destructive one after

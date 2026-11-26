@@ -1,4 +1,4 @@
-//! The plugin reaper (doc/architecture/supervisor.md §1): one
+//! The plugin reaper: one
 //! `plugin-reaper` thread waits for every plugin process the host stops,
 //! side by side, instead of one thread per stop: an own process until it
 //! exits or its grace (`Plugin::set_stop_wait`) is over, then it is killed;
@@ -10,7 +10,7 @@
 //! supervisor's `process_reaped`). Polled every [`POLL`], as each stop's
 //! own thread polled before.
 //!
-//! At quit (supervisor.md §9) every plugin is handed over here too, and
+//! At quit every plugin is handed over here too, and
 //! `finish_by` cuts every stop's grace to the quit's one deadline and
 //! answers once none is left; `kill` cuts one stop's grace short now. A
 //! plugin dropped where it is still waits on that thread (`Drop for
@@ -50,7 +50,7 @@ enum Item {
     /// process).
     Kill(u64),
     /// Every stop under way ends by this deadline (the quit's one
-    /// deadline, supervisor.md §9).
+    /// deadline).
     Hasten(Instant),
     /// Answered once nothing is waited for any more.
     Flush(mpsc::Sender<()>),

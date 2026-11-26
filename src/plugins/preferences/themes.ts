@@ -38,7 +38,7 @@ const rgb = (hex: string): Rgb => {
  * The player's palettes, in menu order, with their menu titles (English
  * source text; the player shows them translated). The preview colours copy
  * the player's own tables (bg-video, bg-bar, line, text-dim, accent and the
- * accent-fill stops; doc/product/ui-spec.md §2.1): `Theme` only ever holds
+ * accent-fill stops): `Theme` only ever holds
  * the current palette, so the preview of another one cannot come from it.
  */
 export const THEMES = [

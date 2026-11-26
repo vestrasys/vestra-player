@@ -114,7 +114,7 @@ impl Core {
         if route.builtin_only() {
             route.check_caller(self.is_builtin(reply.owner))?;
         }
-        // Text values (i18n.md §7) in property values, timeline titles,
+        // Text values in property values, timeline titles,
         // subtitle track titles and resolver failures become the strings
         // they show, in this plugin's catalog, before anything reads them (so
         // the value and length limits count what is shown).

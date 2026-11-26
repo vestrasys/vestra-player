@@ -1,6 +1,6 @@
 # CI (GitHub Actions)
 
-For the design and trade-offs see [ci-research.md](ci-research.md) §10.1–10.5; this document only describes how it actually runs now. The check commands match [agentic-workflow.md](../../agentic-workflow/agentic-workflow.md) §6.1.
+This document only describes how it actually runs now. The check commands match [agentic-workflow.md](../../agentic-workflow/agentic-workflow.md) §6.1.
 
 ## Files
 
@@ -97,7 +97,7 @@ The SDK's test host does not know the Slint declarations, so a value Slint refus
 
 ## Packaging
 
-The scripts are all in `src/packaging/` (Node built-in modules, no npm dependencies). `_package.yml` calls them, and they also run locally. For the design see [packaging-proposal.md](../architecture/packaging-proposal.md), for the decisions see the [project history](rounds/history.md#packaging-and-releases).
+The scripts are all in `src/packaging/` (Node built-in modules, no npm dependencies). `_package.yml` calls them, and they also run locally. For the decisions see the [project history](rounds/history.md#packaging-and-releases).
 
 | File | Purpose |
 | --- | --- |

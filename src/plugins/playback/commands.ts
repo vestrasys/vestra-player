@@ -22,7 +22,7 @@ export type PanelActions = {
   revealSteps: () => Promise<void>;
 };
 
-/** The 播放控制 chapter's features (doc/product/feature-requirements.md). */
+/** The 播放控制 chapter's features. */
 export type Features = {
   openUrl: OpenUrl;
   reopener: Reopener;
@@ -48,7 +48,7 @@ type Entry = {
   category: Category;
   /** The command that opens the place where this command's control lives (`panel`: the Playback panel). */
   home?: "panel";
-  /** Menu position: doc/product/menus.md, and the 播放控制 chapter's 菜单与快捷键 table for new items. */
+  /** Menu position: the item's fixed order in its menu. */
   order?: number;
   group?: string;
   radio?: boolean;

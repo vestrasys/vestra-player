@@ -82,7 +82,7 @@ fn windows_resources(manifest_dir: &str, out_dir: &str) {
     // The host version (`src/host/Cargo.toml`), not the release version of
     // `src/release.json`: one built binary ships in every release until the
     // host changes, so its resource can only name itself (file version ≠
-    // product release; doc/architecture/README.md, "Versions").
+    // product release, "Versions").
     let version = env!("CARGO_PKG_VERSION");
     let res = resources::resource_file(
         &ico,
@@ -104,7 +104,7 @@ fn windows_resources(manifest_dir: &str, out_dir: &str) {
     println!("cargo:rustc-link-arg={}", path.display());
 }
 
-/// The player's own catalogs (doc/architecture/i18n.md §6): every
+/// The player's own catalogs: every
 /// `locales/<lang>.po` compiled to `$OUT_DIR/locales/<lang>.json`, and
 /// `$OUT_DIR/host_catalogs.rs` listing them all (`HOST_CATALOGS`, included by
 /// `src/i18n/mod.rs`), so a new `.po` is embedded without touching the code.

@@ -1,4 +1,4 @@
-//! Restart and backoff (supervisor.md §7: the restart rule per class, a
+//! Restart and backoff (the restart rule per class, a
 //! delay that grows on repeats up to a cap, a start limit per window), the
 //! runner's
 //! fail-open counter (mirrors `shared_runner::Policy`), and the seeded

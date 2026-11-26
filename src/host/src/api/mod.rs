@@ -5,7 +5,7 @@
 //! `revoke`, `prune`, `replay`). The modules keep the names of the
 //! manifest capabilities they once were (`commands`, `ui.mount`, ...);
 //! since player 0.9.0 (SDK 1.9.0) a manifest declares nothing, and every
-//! plugin may make every request (doc/plugins/README.md). The one refusal
+//! plugin may make every request. The one refusal
 //! left is by provenance: the built-in-only areas (`commands.run`,
 //! `palette.lead`, `app.windows`) answer only built-in plugins
 //! (`Route::check_caller`).
@@ -94,7 +94,7 @@ impl Call {
 }
 
 /// What an owner holds through a capability, for standby
-/// (doc/architecture/supervisor.md §2, "something live").
+///.
 #[derive(Debug, PartialEq)]
 pub enum Recorded {
     /// Nothing the host keeps for it here.
@@ -236,14 +236,14 @@ pub static ALL: &[&dyn Capability] = &[
     &rendering_manage::RenderingManage,
     &video_upscaling::VideoUpscaling,
     &video_motion::VideoMotion,
-    // Built-in only (Ask Vestra, doc/architecture/palette-lead.md).
+    // Built-in only (Ask Vestra).
     &commands_run::CommandsRun,
     &palette_lead::PaletteLead,
     // The mpv pass-through (SDK 1.8.0).
     &mpv::Mpv,
     // Triggers (SDK 1.10.0).
     &triggers::Triggers,
-    // Built-in only: guest windows (player 0.10.3, guest-windows.md).
+    // Built-in only: guest windows (player 0.10.3).
     &app_windows::AppWindows,
 ];
 

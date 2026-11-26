@@ -183,7 +183,7 @@ fn l_max_active_limits_wakes_target() {
     assert_eq!(spawns(&sim.run()).len(), p.max_active);
 }
 
-// Interactive reserve: +1 slot for Interactive; if taken, may overrun by 1 more ANSWERED (supervisor.md), was
+// Interactive reserve: +1 slot for Interactive; if taken, may overrun by 1 more ANSWERED, was
 // a design question: read as "Interactive may run up to max_active + 2 Starts in total (reserve + overrun)".
 // The alternative reading — the overrun *is* the reserve — would allow only max_active + 1.
 #[test]

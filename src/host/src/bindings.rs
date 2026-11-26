@@ -1,4 +1,4 @@
-//! Input binding table (core-ui-design.md §3): command default bindings plus
+//! Input binding table: command default bindings plus
 //! the user's overlay, resolved by scope with deterministic conflict rules.
 //! Pure data; the shell forwards Slint key and mouse events here.
 #![forbid(unsafe_code)]
@@ -685,12 +685,12 @@ pub struct Table {
     /// Advances when what `bindings.list` shows of the table may have
     /// changed: not when a woken plugin's declarations move to its new
     /// owner generation (`rekey`, which keeps their rank) or it declares
-    /// them again as they were (supervisor.md).
+    /// them again as they were.
     listed: u64,
 }
 
 /// The interface's read-only copy of the binding table (rule R8 of
-/// doc/architecture/core-thread.md; plan step S2c): the core owns the
+/// the core thread design; plan step S2c): the core owns the
 /// table, and the interface (the key and mouse callbacks, menus, the bar)
 /// looks inputs up in the newest copy it was given, replaced whole. Shared
 /// (`Arc`): a copy is made once per change and handed over without another.
@@ -2343,7 +2343,7 @@ mod tests {
         assert!(table.listed_revision() > listed);
     }
 
-    /// `bindings.list`'s gate (supervisor.md): the listed revision
+    /// `bindings.list`'s gate: the listed revision
     /// moves with what the list shows, not when a woken plugin's
     /// declarations move to its new generation and are declared again as
     /// they were.

@@ -6,7 +6,7 @@
 use super::limits::Policy;
 use super::unit::{Ms, StopReason, Then};
 
-/// The stop grace (supervisor.md §6): after a failure `failure_grace`, into
+/// The stop grace: after a failure `failure_grace`, into
 /// standby `standby_grace`, otherwise `stop_grace`.
 pub fn grace(policy: &Policy, reason: StopReason, then: Then) -> Ms {
     match (reason, then) {
