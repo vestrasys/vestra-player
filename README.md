@@ -53,70 +53,17 @@ Then, in `src/`:
 npm ci
 node scripts/stage-plugins.mjs <dir>/plugins           # build the built-in plugins
 VESTRA_BUILTIN_PLUGINS=<dir>/plugins npm start          # run the player with them
+# PowerShell: $env:VESTRA_BUILTIN_PLUGINS="<dir>/plugins"; npm start
 npm run ci:local                                        # the checks CI runs
 npm run package:windows                                 # or package:macos
 ```
 
-## How it is built
+## How it works
 
-The player is one Rust program (the `vestra-host` crate). It plays media with libmpv, draws its windows with Slint, and starts the plugins. Everything you use is a TypeScript plugin in a Node process outside the player: the playback bar, playlist, adjustments, subtitles, capture and export, history, shortcuts, the Plugin Store and Vestra Player AI.
+Every feature is a TypeScript plugin running in Node, outside the player. That covers the playback bar, playlist, adjustments, subtitles, capture and export, history, shortcuts, the Plugin Store and Vestra Player AI. Built-in plugins use the same public API as third-party plugins. The player keeps playback responsive whatever a plugin does.
 
-Plugins talk to the player over `vestra/1`, a JSON-lines protocol on the plugin's stdin/stdout, through the `@vestra-player/sdk` package. Inside the player, the core holds all state outside the windows (plugins, playback, triggers and packages), and the UI thread draws the windows. A trigger is a condition, such as "playing and fullscreen", that a plugin hands to the core. The core watches the condition and tells the plugin when it turns true or false.
-
-Built-in plugins ship with the player and share one Node process, the shared runner. Third-party plugins come from the store, and each gets its own process.
-
-```mermaid
-flowchart LR
-    subgraph HOST["The player: vestra-host (one Rust process)"]
-        direction LR
-        RT["Render thread<br/>newest frame only"]
-        UI["UI thread<br/>input, Slint windows, plugin UIs"]
-        CORE["Core thread<br/>plugin requests, supervisor, triggers"]
-        PB["Playback worker<br/>all libmpv calls"]
-        IO["Plugin I/O threads<br/>reader + writer per process"]
-    end
-    SR["Node: shared runner<br/>all built-in plugins"]
-    TP["Node: one process per<br/>third-party plugin"]
-    RT -- "frames" --> UI
-    UI <-->|"commands / reports"| CORE
-    CORE <-->|"commands / state"| PB
-    CORE <-->|"answers, events / requests"| IO
-    IO <-->|"vestra/1: JSON lines"| SR
-    IO <-->|"vestra/1"| TP
-```
-
-Built-in and third-party plugins use the same public API. The only exceptions are three built-in-only API areas: `commands.run` (`commands.list` and `commands.run`), `palette.lead` (`set`, `clear` and `done`) and `app.windows` (`app.openWindow`). The Plugin Store installs from an index that is signed with Ed25519 and published from [vestra-player-plugins](https://github.com/vestrasys/vestra-player-plugins). Plugins are trusted code: the player has no permission system, and each third-party plugin runs in its own process, isolated from the player but not sandboxed.
-
-## Staying responsive
-
-Anything that can block (drawing, libmpv calls, plugin stdin/stdout, file access) runs on its own thread, so a slow window or a slow plugin never stalls playback or other plugins. The core never touches a window and never waits on the UI thread: the two exchange only messages. If the UI thread stalls, only the windows freeze, while plugins, triggers and playback control carry on. The render thread keeps only the newest video frame, so a slow UI thread skips frames instead of falling behind.
-
-## Plugin lifecycle
-
-The supervisor, the part of the core that decides when each plugin process runs, works like this:
-
-- **Started on demand.** A new plugin runs once, and the player records its commands, shortcuts and settings pages. After that they appear without a running process, and the first use starts the plugin.
-- **Stopped when idle.** After 30 seconds of idle time, a plugin goes into standby: its process stops, but its menus, shortcuts and triggers stay. A plugin goes into standby only if it holds nothing that needs a live process, such as an open window, a panel, a stream or a video filter.
-- **Limited.** Third-party plugins start a few at a time, and user actions go first. The machine's memory sets how many third-party plugin processes may run at once (3 to 16). A plugin with its own process has a 512 MiB heap cap, and the shared runner's heap cap is 1 GiB.
-- **Contained.** A crash stops only that plugin, which restarts after a delay that doubles each time. Five crashes in ten minutes turn it off, and the player says why.
-
-## Writing a plugin
-
-A plugin is a TypeScript package that uses the [SDK](https://vestrasys.github.io/vestra-player-sdk/). For example, this trigger keeps the window on top while a video plays in fullscreen. The player evaluates the condition itself, even while the plugin is in standby:
-
-```ts
-import type { Plugin } from "@vestra-player/sdk";
-
-export default function activate(plugin: Plugin) {
-  const { when, window } = plugin;
-  plugin.trigger()
-    .firesOn(when.playing.and(when.fullscreen))
-    .enter(() => window.setAlwaysOnTop(true))
-    .leave(() => window.setAlwaysOnTop(false));
-}
-```
-
-The [SDK documentation](https://vestrasys.github.io/vestra-player-sdk/) has the tutorial, guides and API reference. [doc/architecture.md](doc/architecture.md) explains how the player is put together.
+- [doc/architecture.md](doc/architecture.md): how the player is put together (threads, plugin processes, the store, a code map).
+- [SDK documentation](https://vestrasys.github.io/vestra-player-sdk/): how to write a plugin (tutorial, guides, API reference).
 
 ## License
 

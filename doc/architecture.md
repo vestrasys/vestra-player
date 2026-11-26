@@ -12,6 +12,28 @@ Inside the player, the **core** holds all state outside the windows: plugins, pl
 
 **Built-in plugins** ship with the player (`src/plugins/`, ids `vestra.<name>`). **Third-party plugins** are everything else, installed from the store or loaded for development.
 
+Built-ins share one Node process, the **shared runner**, to save memory. Each third-party plugin gets its own process.
+
+```mermaid
+flowchart LR
+    subgraph HOST["The player: vestra-host (one Rust process)"]
+        direction LR
+        RT["Render thread<br/>newest frame only"]
+        UI["UI thread<br/>input, Slint windows, plugin UIs"]
+        CORE["Core thread<br/>plugin requests, supervisor, triggers"]
+        PB["Playback worker<br/>all libmpv calls"]
+        IO["Plugin I/O threads<br/>reader + writer per process"]
+    end
+    SR["Node: shared runner<br/>all built-in plugins"]
+    TP["Node: one process per<br/>third-party plugin"]
+    RT -- "frames" --> UI
+    UI <-->|"commands / reports"| CORE
+    CORE <-->|"commands / state"| PB
+    CORE <-->|"answers, events / requests"| IO
+    IO <-->|"vestra/1: JSON lines"| SR
+    IO <-->|"vestra/1"| TP
+```
+
 ## Key choices
 
 - **Rust for the player.** The player owns the native windows, the playback state and the plugin processes, and it does that in safe code. Every crate forbids `unsafe` except the small wrappers in `src/host/unsafe/`. libmpv comes in through the `rsmpv` safe wrapper.
@@ -81,7 +103,7 @@ The built-in plugins. Each is an ordinary plugin package: a manifest, TypeScript
 
 ## Threads
 
-Anything that can block runs on a thread of its own:
+Anything that can block (drawing, libmpv calls, plugin stdin/stdout, file access) runs on a thread of its own, so a slow window or a slow plugin never stalls playback or other plugins:
 
 - **UI thread** (the main thread): Slint's event loop, input, drawing, and compiling plugin Slint files.
 - **Core thread** (`vestra-core`): handles one event at a time from a single queue. The queue carries plugin messages, playback reports and the UI thread's reports. The core never touches a window: what it needs from the UI thread goes through the outbox.
@@ -112,7 +134,6 @@ Command states such as enabled or checked use the same conditions, so menus foll
 
 ## Plugin lifecycle
 
-- **Placement.** Built-ins share one Node process, the **shared runner**, to save memory. Each third-party plugin gets its own process.
 - **On-demand start.** A new plugin runs once. The supervisor saves a **recording** of what it registered: commands, shortcuts, settings pages and the events it waits for. From then on the player shows those registrations without a process, and the first use starts the plugin. A recording is dropped when the plugin or the player is upgraded.
 - **Standby.** After 30 s of idle time a plugin goes into **standby**: its process stops, and its recording stands in for it.
   - Some things only a live process can serve, and a plugin holding one keeps running: an open window or panel, a stream, an event listener, or something it holds in playback such as a filter in the processing chain.
@@ -124,7 +145,7 @@ Command states such as enabled or checked use the same conditions, so menus foll
   - Under memory pressure, idle third-party plugins go into standby.
   - A plugin with its own process has a 512 MiB heap cap. The shared runner's heap cap is 1 GiB. A plugin loaded for development has none.
 - **Crashes.**
-  - A crash stops only that plugin, which starts again after a delay that doubles each time. Five crashes within ten minutes turn it off until it is reloaded.
+  - A crash stops only that plugin, which starts again after a delay that doubles each time. Five crashes within ten minutes turn it off until it is reloaded, and the player shows a notice saying why.
   - The shared runner answers a heartbeat. If it stops answering, it is restarted with the built-ins it runs. If that keeps happening, the built-ins move to their own processes until the player quits.
 
 ## The store
