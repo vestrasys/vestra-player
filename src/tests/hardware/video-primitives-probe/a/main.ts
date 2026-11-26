@@ -1,5 +1,5 @@
-// Hardware test plugin for the video primitives (doc/architecture/README.md
-// §4.5, cases H1–H9): drives a `convolution` /
+// Hardware test plugin for the video primitives (cases
+// H1–H9): drives a `convolution` /
 // `lut3d` filter chain, the shader channel and a processed snapshot from the
 // Video menu, and shows and logs every status. Two copies with different ids
 // (`a/` and `b/`, the same main.ts and assets: keep them identical) give two

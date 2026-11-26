@@ -2,11 +2,9 @@
 /**
  * Plugin-author documentation lives on the SDK's site
  * (https://vestrasys.github.io/vestra-player-sdk/), once. This check keeps
- * it from coming back into this repository's `doc/`:
- *
- * 1. `doc/plugins/` holds only `README.md` (a page of links to the site).
- * 2. No Markdown table in `doc/` re-copies one of the site's Reference
- *    tables. Heuristics, per table (consecutive lines starting with `|`):
+ * it from coming back into this repository's `doc/`: no Markdown table in
+ * `doc/` re-copies one of the site's Reference tables. Heuristics, per
+ * table (consecutive lines starting with `|`):
  *    - limits: 3 or more rows naming a limit constant of the SDK
  *      (`COMMAND_LIMITS.perPlugin`, `OSD_LIMITS`, `MESSAGE_LIMIT`, ...), or
  *      3 or more rows whose second cell starts with the value of one (8 or
@@ -56,13 +54,6 @@ function apiMembers() {
 const repo = resolve(import.meta.dirname, "../..");
 const doc = join(repo, "doc");
 const problems = [];
-
-const plugins = readdirSync(join(doc, "plugins"));
-for (const name of plugins)
-  if (name !== "README.md")
-    problems.push(
-      `doc/plugins/${name}: doc/plugins holds only README.md; author documentation belongs on the SDK site`,
-    );
 
 const limitObjects = Object.entries(runtime).filter(
   ([name, value]) =>

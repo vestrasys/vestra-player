@@ -171,7 +171,7 @@ impl Timeline {
         self.set_ranges(owner, Vec::new());
     }
     /// A parked owner woke as `to` (`Capability::rekey`): its layer, kept
-    /// through standby (events-and-triggers.md §4.8), is the new run's.
+    /// through standby, is the new run's.
     /// Readers are told only when the merged lists change (marks of two
     /// plugins at the same time keep layer order, which follows the owner).
     pub fn rekey(&mut self, from: u64, to: u64) {

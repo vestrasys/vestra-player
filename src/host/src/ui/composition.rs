@@ -205,7 +205,7 @@ const SHELL_PROPERTIES: &str = "in property <bool> bottom-visible: true;\n\
     callback adjust-overflow(float, float);\n\
     callback adjust-dismiss();";
 
-/// The height of the host's sidebar tab strip (the playlist's, ui-spec §5.2).
+/// The height of the host's sidebar tab strip (the playlist's).
 pub const TAB_STRIP_HEIGHT: f64 = 31.0;
 
 /// What fills a column of tabs (docked, overlay, the sidebar's floating

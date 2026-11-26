@@ -577,7 +577,7 @@ impl Host {
             }
             MenuMode::Tabs(column) => {
                 let column = *column;
-                // Every tab, in that window's tab order (sidebar-tabs.md).
+                // Every tab, in that window's tab order.
                 let owners = match &self.floating {
                     Some(floating)
                         if floating.generation == self.menu_generation

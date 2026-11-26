@@ -26,7 +26,7 @@
 
 ## 0.3.2
 
-- Library radio mark (player 0.6.0). Who must change: nobody. What users see: the radios on Options ▸ Appearance and Options ▸ General ▸ Language are the player's shared radio mark (`RadioMark` from `@vestra/widgets.slint`, ui-spec ctx-radio): 12px instead of 14px, and an unchecked ring turns to the accent colour while its row is hovered. The rows (previews, 24px language rows, hover plate) and what a click does are unchanged; the plugin's own `Radio` component is gone. Each row now tells screen readers it is a radio button, whether it is checked, and its name.
+- Library radio mark (player 0.6.0). Who must change: nobody. What users see: the radios on Options ▸ Appearance and Options ▸ General ▸ Language are the player's shared radio mark (`RadioMark` from `@vestra/widgets.slint`, ctx-radio): 12px instead of 14px, and an unchecked ring turns to the accent colour while its row is hovered. The rows (previews, 24px language rows, hover plate) and what a click does are unchanged; the plugin's own `Radio` component is gone. Each row now tells screen readers it is a radio button, whether it is checked, and its name.
 - Requires player 0.6.0 (`minPlayerVersion`).
 
 ## 0.3.1

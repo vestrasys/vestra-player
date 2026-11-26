@@ -47,8 +47,6 @@
 //!   a click asks it to toggle and counts for nothing within the guard, as
 //!   every other input ([`decide`]). What is remembered is the host's list
 //!   (`ConfirmedRun::remember`).
-//!
-//! doc/architecture/palette-lead.md §2.1.
 use super::*;
 use crate::ui::{command_palette, confirm};
 

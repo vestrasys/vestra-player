@@ -56,7 +56,7 @@ mod imp;
 pub use imp::*;
 
 /// The application data directory (the profile): a guest's own
-/// (`guest::profile`, doc/architecture/guest-windows.md), else the
+/// (`guest::profile`), else the
 /// system's for this user (`main_app_data_dir`). Defined here, it takes
 /// the place of the per-system one the glob import above brings in.
 pub fn app_data_dir() -> Option<std::path::PathBuf> {
@@ -822,7 +822,7 @@ pub fn memory_status() -> Option<MemoryStatus> {
 }
 
 /// Memory pressure as the system reports it: the plugin supervisor's input
-/// (doc/architecture/supervisor.md §8, "Memory pressure").
+///.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub enum MemoryPressure {
     #[default]
@@ -832,7 +832,7 @@ pub enum MemoryPressure {
 }
 
 /// The physical memory the supervisor's process budget assumes when the
-/// system does not say: 8 GiB (supervisor.md §8).
+/// system does not say: 8 GiB.
 pub const PHYSICAL_MIB_FALLBACK: u64 = 8 * 1024;
 
 /// Installed physical memory in MiB (Windows: `GlobalMemoryStatusEx`

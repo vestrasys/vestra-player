@@ -1,5 +1,4 @@
-//! Row patches (player 0.6.0, SDK 1.5.44; doc/architecture/large-lists.md
-//! §2): a property write (`ui.setMount`, `ui.set`, `settings.set`) may carry
+//! Row patches (player 0.6.0, SDK 1.5.44): a property write (`ui.setMount`, `ui.set`, `settings.set`) may carry
 //! `patch: {base, seq, ops}` instead of `value`. The ops (`set`, `insert`,
 //! `remove`, `move`, by index, in order) are written into the live model
 //! with `set_row_data`, `insert` and `remove`, without converting the old
@@ -347,7 +346,7 @@ impl Host {
 }
 
 /// A whole array value larger than one request arrives in parts (player
-/// 0.6.0, SDK 1.5.46; doc/architecture/large-lists.md §4.2): a whole write
+/// 0.6.0, SDK 1.5.46): a whole write
 /// of its first rows, then `insert` patches of the rest, each applying on
 /// the one before; every part but the last carries `more: true`. The parts
 /// are held here, not shown, and the last one writes the whole value at

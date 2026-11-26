@@ -11,7 +11,7 @@
 //!
 //! The host log: a release build's stderr usually goes nowhere, so a few
 //! lines also go to a small rolling file, as mpv's `--log-file` and
-//! Chromium's `chrome_debug.log` do (doc/architecture/README.md §4.3):
+//! Chromium's `chrome_debug.log` do:
 //! `<app data>/logs/host.log`, at most [`LOG_CAP`] bytes, then renamed to
 //! `host.log.1` (one older file kept). `logged!` writes a line to stderr
 //! like `diag!` and to that file with the time and the process id; only the

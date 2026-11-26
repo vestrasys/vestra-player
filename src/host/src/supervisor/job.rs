@@ -1,6 +1,6 @@
-//! Jobs (supervisor.md §5): nothing changes a unit's state except a job; one
-//! installed job per unit; a new request merges with or supersedes it by the
-//! table of doc/architecture/supervisor.md.
+//! Jobs: nothing changes a unit's state except a job; one
+//! installed job per unit; a new request merges with or supersedes it by its
+//! merge rules (the merge-table tests in `tests/merge.rs`).
 #![forbid(unsafe_code)]
 
 use super::trigger::AnswerReason;
@@ -76,9 +76,9 @@ pub enum Origin {
     Trigger,
     Timer,
     Crash,
-    /// Memory pressure (`memory_pressure`, supervisor.md §8).
+    /// Memory pressure (`memory_pressure`).
     Pressure,
-    /// Over the process budget (`enforce_budget`, supervisor.md §8).
+    /// Over the process budget (`enforce_budget`).
     Budget,
 }
 

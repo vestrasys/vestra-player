@@ -1,5 +1,5 @@
 // The runtime differential's normaliser and comparison
-// (scripts/verify-runtime.mjs, doc/process/verify-additions.md): two runs
+// (scripts/verify-runtime.mjs): two runs
 // of one behaviour compare equal whatever their owner numbers, times, paths,
 // versions and GUIDs; a changed registration, classification or recording
 // is named. The player runs themselves are not started here.
@@ -58,7 +58,7 @@ const context = (build: Build) => ({
   roots: [
     [build.profile, "<profile>"],
     [build.stage, "<stage>"],
-    ["C:\\vestra\\plugins-repo", "<store-plugins>"],
+    ["D:\\work\\plugins-repo", "<store-plugins>"],
     [null, "<media>"],
   ],
   versions: [build.version, "1.7.20", build === A ? "0.2.17" : "0.2.18"],

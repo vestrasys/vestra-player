@@ -1,5 +1,5 @@
 //! Host adapter of the plugin process supervisor
-//! (doc/architecture/supervisor.md): executes the core's decisions and
+//!: executes the core's decisions and
 //! feeds it the Host's events. Safe code only.
 //!
 //! Identity: the core's unit table says which process runs a
@@ -67,7 +67,7 @@ pub(crate) use standby::{Held, Origin};
 #[cfg(test)]
 const PARK_WAIT: Duration = Duration::from_secs(5);
 /// `VESTRA_IDLE_MS` when unset (the core's `Tunables::idle_timeout`): 30 s
-/// (supervisor.md §6).
+///.
 const IDLE_MS: u64 = 30_000;
 /// How often the Host's busy checks and start-up are polled (`CHECK_MS`
 /// of lazy activation).
@@ -136,7 +136,7 @@ enum Busy {
     /// Its standby recording could not be written ahead (today's `park`
     /// does not park then): busy until the next sync.
     Recording,
-    /// Its sidebar tab is the current one (sidebar-tabs.md): a sidebar
+    /// Its sidebar tab is the current one: a sidebar
     /// panel is never live, so its plugin stays Normal, and this keeps it
     /// running only while the tab is shown.
     ShownTab,
@@ -248,7 +248,7 @@ pub(crate) struct OnDemand {
     spawner: Option<worker::Spawner>,
     /// Starts whose process the spawn thread creates, by pid.
     spawning: BTreeMap<u64, worker::Spawning>,
-    /// The memory pressure source and the level the core has (supervisor.md §8).
+    /// The memory pressure source and the level the core has.
     memory: memory::Memory,
 }
 impl OnDemand {
@@ -793,7 +793,7 @@ impl Core {
             }
         }
         // Trigger conditions: evaluated once, and what the mute kept
-        // delivered (events-and-triggers.md §4.9, T13).
+        // delivered (T13).
         self.triggers_caught_up();
     }
     /// The manifest id of a plugin in standby.
@@ -818,7 +818,7 @@ impl Core {
         }
     }
     /// The sidebar tab of `owner` became the current one while its plugin
-    /// stands by (sidebar-tabs.md): an interactive trigger, as a shown
+    /// stands by: an interactive trigger, as a shown
     /// settings page is; its activation mounts the panel again, which takes
     /// the tab over.
     pub(crate) fn panel_shown(&mut self, owner: u64) {
@@ -1051,7 +1051,7 @@ impl Core {
             Err(error) => diag!("lazy: execute {id}: {error}"),
         }
     }
-    /// Classification at `runtime.ready` (supervisor.md §4): whether
+    /// Classification at `runtime.ready`: whether
     /// installed plugin `owner` holds a live resource. The host's half is
     /// read now (before any trigger it was woken by runs); the playback
     /// worker's half is asked, and its answer comes before anything the
@@ -1268,7 +1268,7 @@ impl Core {
     }
     /// A standby's recording, written before the core decides the standby
     /// (today's `park` writes it first and does not park when it fails), on the
-    /// recorder thread (supervisor.md): `after` waits for it (`recorded`). The
+    /// recorder thread: `after` waits for it (`recorded`). The
     /// core's `Checkpoint` for it is then done. Without the thread it is
     /// written here, as before.
     fn record_ahead(
@@ -1751,7 +1751,7 @@ impl Core {
     }
 }
 impl Core {
-    /// `app.started` (events-and-triggers.md §4.6), once per run: after
+    /// `app.started`, once per run: after
     /// start-up settled and its mute ended, behind what the mute held
     /// (`wake_missed`), so it is the last of start-up's work. Its
     /// `previous` is the version the state file names (the last run's);
@@ -1945,7 +1945,7 @@ fn remove_data(directory: &Path) {
 mod tests {
     use super::*;
 
-    /// Lazy activation's tunables and triggers (supervisor.md): the core's
+    /// Lazy activation's tunables and triggers: the core's
     /// preset and the adapter's constants.
     #[test]
     fn lazy_tunables_and_triggers() {

@@ -1,4 +1,4 @@
-//! Interface languages (doc/architecture/i18n.md): the effective locale of
+//! Interface languages: the effective locale of
 //! this run, the translation catalogs of the player and of each plugin, and
 //! the template formatting the player applies to plugin sentences.
 //!
@@ -393,7 +393,7 @@ pub fn translate_slint(file: &Path, source: String) -> String {
     }
 }
 
-/// CJK glyph variants (doc/architecture/i18n.md §8). Slint picks the
+/// CJK glyph variants. Slint picks the
 /// system UI font and falls back per character; Chinese, Japanese and Korean
 /// share code points whose preferred glyphs differ by language (骨, 直, 角).
 /// The user allowed a per-language system UI font for `ja` and `ko` only if

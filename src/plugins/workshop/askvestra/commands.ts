@@ -1,5 +1,5 @@
 // The command table Ask Vestra gives the model (PROPOSAL §3.1, §8;
-// doc/architecture/palette-lead.md "Personal data"): the palette's rows from
+// "Personal data"): the palette's rows from
 // `plugin.commands.list()`, without the rows a plugin built from the user's
 // data. The host cannot mark those (no `CommandOptions.personal` yet), so
 // they are recognised here by owner and id, and by what a title looks like

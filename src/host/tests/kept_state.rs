@@ -1,5 +1,5 @@
 //! What the host keeps for a plugin in standby, and the state stream, with
-//! the real host, headless (events-and-triggers.md §4.7, §4.8; plan steps
+//! the real host, headless (plan steps
 //! A3 and A4). A timeline layer is kept by the installed instance through
 //! standby and no longer keeps its plugin running: it is still there after
 //! a wake, the woken run's next write replaces it, a fault removes it, a

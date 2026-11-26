@@ -1,4 +1,4 @@
-//! Runnable start jobs (supervisor.md §5 "Start order and limits"): lanes in
+//! Runnable start jobs: lanes in
 //! fixed order, FIFO within a lane.
 //! Entries are validated when they reach the head (lazy deletion), so a
 //! merged or canceled job costs nothing here.

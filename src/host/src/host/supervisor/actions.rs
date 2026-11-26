@@ -1,4 +1,4 @@
-//! The core's actions, executed (doc/architecture/supervisor.md): each executor
+//! The core's actions, executed: each executor
 //! is the body of the code that made the same decision before. Every
 //! start (`Spawn`, after `Verify` or `Replay`) and every stop (`Terminate`)
 //! runs here; the Host announces list changes through `notify_tick`

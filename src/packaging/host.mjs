@@ -724,7 +724,7 @@ export async function resolveHost({
     throw new Error(`no host built from input hash ${hash}; build it`);
   if (!process.env.CARGO_TARGET_DIR)
     console.warn(
-      "host: CARGO_TARGET_DIR is not set; a persistent one (C:\\vestra\\target-release) keeps release builds incremental",
+      "host: CARGO_TARGET_DIR is not set; a persistent one (such as <work dir>/target-release) keeps release builds incremental",
     );
   run("cargo", ["build", "--release", "--locked"], {
     cwd: join(source, "host"),

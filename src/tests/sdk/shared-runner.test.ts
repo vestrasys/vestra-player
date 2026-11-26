@@ -1,5 +1,5 @@
 // The shared runner (runtime/shared-runner.ts): several plugins in one Node
-// process, one envelope `g` per line (doc/architecture/README.md §2, §5).
+// process, one envelope `g` per line.
 // These tests answer like the host does.
 import assert from "node:assert/strict";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";

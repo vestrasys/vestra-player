@@ -1,6 +1,6 @@
 //! `rendering.manage`: choosing GPU or software rendering for the next start
-//! and restarting the player (host/rendering.rs; doc/architecture/README.md
-//! §4.3). Reading the state, `rendering.state`, needs no
+//! and restarting the player (host/rendering.rs).
+//! Reading the state, `rendering.state`, needs no
 //! capability (open.rs).
 use super::{Capability, Handled, Info, Recorded};
 use crate::host::{Core, Reply};

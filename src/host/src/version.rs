@@ -1,4 +1,4 @@
-//! The two versions (doc/architecture/README.md, "Versions").
+//! The two versions ("Versions").
 //!
 //! - The **player version** ([`player`]): the release, from `release.json`
 //!   (`src/release.json`, packaged as `<resources>/release.json`). It goes

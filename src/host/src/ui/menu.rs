@@ -125,7 +125,7 @@ pub enum Token {
         owner: u64,
         id: String,
     },
-    /// A sidebar tab of the overflow menu (sidebar-tabs.md), by owner.
+    /// A sidebar tab of the overflow menu, by owner.
     Tab(u64),
 }
 
@@ -457,7 +457,7 @@ pub fn bar_level(
         "scroll":scrolling,"viewport-y":offset}])
 }
 
-/// The sidebar's overflow menu (sidebar-tabs.md): every tab, in tab order,
+/// The sidebar's overflow menu: every tab, in tab order,
 /// the current one checked, as one context level at `origin`.
 pub fn tabs_level(
     tabs: &[(u64, String)],
@@ -921,7 +921,7 @@ mod tests {
         }
     }
 
-    /// sidebar-tabs.md: `»` lists every tab, in tab order, the current one
+    /// `»` lists every tab, in tab order, the current one
     /// checked; a row's token names its tab.
     #[test]
     fn the_overflow_menu_lists_all_tabs_and_checks_the_current_one() {

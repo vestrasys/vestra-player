@@ -1,5 +1,4 @@
-//! Standby and wake with the real host, headless (doc/architecture/
-//! supervisor.md §4): a trivial built-in that only
+//! Standby and wake with the real host, headless: a trivial built-in that only
 //! adds a menu command is parked when idle, replayed without a process at
 //! the next start, woken by `commands.execute`, and parked again; then
 //! a plugin with only the SDK's mirror subscriptions is parked, one with a
@@ -535,8 +534,8 @@ fn a_first_run_that_restores_its_effect_after_its_ready_starts_at_the_next_launc
 
 /// The old lazy activation pinned at most eight first runs in flight
 /// (`FIRST_RUNS`), built-ins
-/// included. Now built-ins start outside every limit (supervisor.md §5
-/// "Start order and limits"): built-ins' first runs are outside
+/// included. Now built-ins start outside every limit:
+/// built-ins' first runs are outside
 /// the start-job limit and start at once; third-party ones (below,
 /// `third_party_first_runs_start_a_few_at_a_time`) at most `max_active` at a
 /// time, a place freed at each ready.
@@ -582,7 +581,7 @@ fn b3_built_in_first_runs_start_at_once() {
     assert_eq!(recordings(root.path()).len(), 10);
 }
 
-/// doc/architecture/supervisor.md §5: ten installed third-party
+/// Ten installed third-party
 /// plugins on a fresh profile start their first runs at most `max_active`
 /// (`min(4, max(2, cores/2))`) at a time: a place frees at each one's
 /// `runtime.ready`. All ten run, none times out, all are parked.
@@ -827,8 +826,8 @@ fn a_when_command_is_parked_and_its_state_follows_playback() {
 const SUBTITLED: &str = "vestra.fixture-subtitled";
 
 /// A command whose state is `plugin.when.subtitleTrack(id)` follows the
-/// primary subtitle track while its plugin is parked (events-and-triggers.md
-/// §4.3: the command registry gets the same facts as the triggers): disabled
+/// primary subtitle track while its plugin is parked (the
+/// command registry gets the same facts as the triggers): disabled
 /// before the track is selected, enabled once it is, when its use wakes it.
 /// A resident fixture opens a generated file with one embedded subtitle
 /// track and selects it (ffmpeg on `PATH` or `VESTRA_FFMPEG`).
@@ -1512,7 +1511,7 @@ const ENDED: &str = "vestra.fixture-ended";
 const ALL: &str = "vestra.fixture-source-events";
 const PLAYER: &str = "vestra.fixture-player";
 
-/// The discrete source events (events-and-triggers.md §4.6) wake a plugin in
+/// The discrete source events wake a plugin in
 /// standby: three listeners, of `source.opening`, `source.ready` and
 /// `source.ended` alone, are parked (a listener of one keeps nothing
 /// running) and each is woken by its event; a fourth hears all of them in

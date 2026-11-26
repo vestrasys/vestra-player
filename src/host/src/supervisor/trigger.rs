@@ -1,4 +1,4 @@
-//! Held triggers (a unit's backlog, supervisor.md §4): formerly
+//! Held triggers (a unit's backlog): formerly
 //! `lazy::hold_event` (only wake events merge, newest wins), bounds and
 //! explicit answers.
 #![forbid(unsafe_code)]

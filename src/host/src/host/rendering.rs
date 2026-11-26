@@ -1,6 +1,5 @@
 //! `rendering.state`, `rendering.setPreference` and `rendering.restart`
-//! (capability `rendering.manage`, SDK 1.5.35, doc/architecture/README.md
-//! §4.3): the mode now and why, the saved preference
+//! (capability `rendering.manage`, SDK 1.5.35): the mode now and why, the saved preference
 //! and what the next start would choose with it, and a restart that
 //! continues the current file. The preference is saved at once and applies
 //! at the next start, restart or not (as Chrome's and Firefox's hardware
@@ -78,7 +77,7 @@ pub(crate) struct Startup {
     pub windows_adapter: platform::AdapterPick,
 }
 
-/// Gather the facts (doc/architecture/README.md §4.3): the
+/// Gather the facts: the
 /// environment, the system build, the first graphics adapter, the built-in
 /// denylist with `<app data>/render-denylist.json`, the saved preference
 /// (`render.json`) and the crash guard (`render-state.json`). A headless
@@ -411,7 +410,7 @@ pub(crate) fn relaunch_command(
         command.arg("--silent");
     }
     // A guest restarts as the same guest, with its profile
-    // (doc/architecture/guest-windows.md §6).
+    //.
     if let Some(directory) = crate::guest::directory() {
         command.arg("--vestra-guest-dir").arg(directory);
     }

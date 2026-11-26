@@ -1,4 +1,4 @@
-//! The discrete source events (events-and-triggers.md §4.6, first batch):
+//! The discrete source events (first batch):
 //! `source.opening`, `source.ready` and `source.ended`, derived on the UI
 //! thread from two consecutive `source.state` broadcasts. The playback
 //! thread is unchanged: every phase change is pushed in the iteration it

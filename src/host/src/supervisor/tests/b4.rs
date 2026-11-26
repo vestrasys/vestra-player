@@ -1,7 +1,7 @@
 //! Restart-policy spec tests (exit causes, restart policy, backoff, start
 //! limits, heap cap, OOM, shutdown ≤ 1 s), written from the design tables,
 //! not from the core: the policy per class, a trigger while
-//! `Standby{hold_until}`, the heap cap (supervisor.md §7, §8), and the
+//! `Standby{hold_until}`, the heap cap, and the
 //! coordinator's ruling on holds (entries disabled with the reason while a
 //! hold holds).
 //!
@@ -518,7 +518,7 @@ fn sr_resident_and_builtin_never_land_in_standby_on_start_failure() {
     }
 }
 
-// StartTimeout: terminate; not retried (coordinator ruling, supervisor.md §7:
+// StartTimeout: terminate; not retried (coordinator ruling:
 // start retries are for a process that could not be created; a start that
 // times out is a stuck plugin). The click held for it is
 // answered at the timeout, and no second spawn follows the reap within the

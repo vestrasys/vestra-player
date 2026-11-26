@@ -1,10 +1,10 @@
 <#
 .SYNOPSIS
-AI upscaling check (doc/architecture/README.md §4.4): does
+AI upscaling check: does
 RTX Video Super Resolution change the picture on this machine?
 
 .DESCRIPTION
-1. Makes the 1080p reference (C:\vestra\rec\ref1080.mp4) from the 4K clip with
+1. Makes the 1080p reference (-Ref) from the 4K clip with
    the bundled ffmpeg (area downscale, first 10 s); skipped if present.
 2. Runs gpu-probe three times, offscreen, 3840x2160 target, d3d11va decoding,
    vf d3d11vpp=scale=2 (1080p -> 2160p):
@@ -22,22 +22,23 @@ RTX Video Super Resolution change the picture on this machine?
    (WMI Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine, all
    processes and the probe alone) every ~0.5 s during each run.
 
-Everything lands in -Out (default C:\vestra\rec\vsr): PNG files, the probe logs
+Every default path is relative to the current directory (the work
+directory). Everything lands in -Out (default rec\vsr): PNG files, the probe logs
 (<label>.log, full mpv log at -Log level), summary.txt.
 
 .EXAMPLE
-powershell -NoProfile -ExecutionPolicy Bypass -File C:\vestra\wt-wgpu-port\src\host\unsafe\gpu-probe\vsr-check.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File <repo>\src\host\unsafe\gpu-probe\vsr-check.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File ...\vsr-check.ps1 -Nvidia 1 -Amd 0 -Only nvidia-vsr
 #>
 param(
     # DXGI adapter indices (gpu-probe adapters), or warp; empty = pick by vendor id.
     [string]$Nvidia = '',
     [string]$Amd = '',
-    [string]$Probe = 'C:\vestra\gpu-probe\gpu-probe.exe',
-    [string]$Ffmpeg = 'C:\vestra\deps\ffmpeg\ffmpeg.exe',
-    [string]$Source = 'C:\vestra\clips\h264-2160p60.mp4',
-    [string]$Ref = 'C:\vestra\rec\ref1080.mp4',
-    [string]$Out = 'C:\vestra\rec\vsr',
+    [string]$Probe = (Join-Path $PWD 'gpu-probe\gpu-probe.exe'),
+    [string]$Ffmpeg = $(if ($env:VESTRA_FFMPEG) { $env:VESTRA_FFMPEG } else { Join-Path $PWD 'deps\ffmpeg\ffmpeg.exe' }),
+    [string]$Source = (Join-Path $PWD 'clips\h264-2160p60.mp4'),
+    [string]$Ref = (Join-Path $PWD 'rec\ref1080.mp4'),
+    [string]$Out = (Join-Path $PWD 'rec\vsr'),
     # The compared frame (seconds; 5 = frame 300 of a 60 fps clip, on a frame boundary).
     [double]$At = 5,
     [double]$Warmup = 3,

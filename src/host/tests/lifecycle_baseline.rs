@@ -1,6 +1,6 @@
 //! Characterization tests of the plugin lifecycle with the real host,
 //! headless, written before the plugin process supervisor
-//! (doc/architecture/supervisor.md) took over, so that the move could show
+//! took over, so that the move could show
 //! zero behaviour difference; updated where the supervisor changed
 //! behaviour on purpose. They pin what the other suites do not:
 //!
@@ -189,7 +189,7 @@ impl Root {
 /// A plugin that holds nothing live goes to standby at its first ready.
 /// The tests below that need running processes keep their plugins running
 /// this way: a listener of the player's state makes a plugin resident, and
-/// a resident plugin never stands by (supervisor.md §2). Inside
+/// a resident plugin never stands by. Inside
 /// `activate(plugin)`.
 const RESIDENT: &str = "plugin.player.on(\"source.state\", () => {});\n";
 /// What `RESIDENT` needs in the manifest.
@@ -497,7 +497,7 @@ fn a_parked_plugin_is_listed_running_idle_and_its_park_announces_nothing() {
 /// failed spawn ends its activation (and the activation is its unit's, one
 /// per unit): the 65th fails to spawn Node like the others. Node is pointed
 /// at a missing file, so no plugin process runs at all. With the spawn
-/// retry (supervisor.md §6) each start is tried three more times (250 ms × 2ⁿ)
+/// retry each start is tried three more times (250 ms × 2ⁿ)
 /// before it is listed failed, so the failures end in any order.
 #[test]
 #[ignore = "needs libmpv: run with --include-ignored (ci:local)"]
@@ -553,7 +553,7 @@ fn b2a_a_failed_spawn_gives_its_activation_place_back() {
     assert!(!log.contains("activation tracking limit reached"), "{log}");
 }
 
-/// A bug these tests pinned (A18, part 2), since fixed (supervisor.md §3).
+/// A bug these tests pinned (A18, part 2), since fixed.
 /// `Host.cleanup` (whether a stopped owner's process is reaped and the
 /// playback worker cleaned up after it) got an entry at every stop and none
 /// left it in a run: no code removed one. The supervisor replaces it by the unit's
@@ -1161,7 +1161,7 @@ fn standby_holds_wake_enable_and_uninstall_until_the_parked_process_is_gone() {
 /// Quit. These tests first pinned own processes stopped one after another,
 /// each given its 300 ms grace (six plugins whose cleanup never ends made
 /// the quit about 6 × 300 ms longer than with none). Now quitting spends
-/// at most about 1 s on plugin shutdown (supervisor.md §9): every process gets its
+/// at most about 1 s on plugin shutdown: every process gets its
 /// stop at once and one deadline of 1 s, so twelve endless cleanups (3.6 s
 /// one after another) cost about that 1 s.
 #[test]

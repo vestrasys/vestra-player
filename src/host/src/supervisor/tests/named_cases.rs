@@ -142,7 +142,7 @@ fn nc_upgrade_of_disabled_unit_in_standby_does_not_start() {
     let mut sim = Sim::new(&Profile::other_timers());
     let (u, _) = sim.in_standby(normal("a"));
     sim.set_enabled(u, false);
-    // ANSWERED (supervisor.md), was a design question: says Restart on a disabled unit is "refused" (Stop row)
+    // ANSWERED, was a design question: says Restart on a disabled unit is "refused" (Stop row)
     // while this case says the new image starts only "if enabled". Best reading: the upgrade job is accepted,
     // drops the checkpoint, and does not start.
     let _ = sim.rpc_restart(u, true, Some("2.0.0"));

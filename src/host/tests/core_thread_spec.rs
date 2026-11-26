@@ -1,6 +1,6 @@
 //! Spec tests of the core thread, step S3a (core thread plan §3 "S3a
-//! brief", doc/architecture/core-thread.md §5 rules R4, R7, R8, R12, R13,
-//! §5.1, §7 K8 and K9, §8), written from the design by a separate author
+//! brief", the core thread design's rules R4, R7, R8, R12, R13, K8 and
+//! K9), written from the design by a separate author
 //! without reading the implementation. They pin what a plugin can observe
 //! while the interface (the UI thread) is stalled.
 //!
@@ -966,7 +966,7 @@ fn r13_a_layout_change_answered_after_a_stall_is_in_place_when_answered() {
 
 /// K8 (`ResetWrites`, `SetMount`, `SettingsOp::Set` and `ViewOp` travel in
 /// one ordered stream, so a write is judged against the records the reset
-/// before it left; design K8 "Carried forward", large-lists.md §2.3: the
+/// before it left; design K8 "Carried forward": the
 /// initial properties of `ui.open`, `ui.mount` and `settings.register` are
 /// write 0 and those calls reset the record; a patch whose `base` differs
 /// from the record is `stale`).
@@ -1243,7 +1243,7 @@ const K9: &str = "test.spec-k9";
 const K9_SECONDS: i64 = 9;
 const K9_STALL_MS: i64 = 8_000;
 
-/// K9 and risk 5 (supervisor.md §9: at quit every process gets its stop at
+/// K9 and risk 5 (at quit every process gets its stop at
 /// once and what is left is killed after 1 s; S3a: "the core has its own
 /// deadline and exit ... also when the UI never asks"; plan §4: "the plugin
 /// shutdown deadline holds while the UI part is stalled"): the run ends
@@ -1344,11 +1344,11 @@ fn tab_plugin(panel: bool, quiet: i64) -> String {
     )
 }
 
-/// Risk 3 (S3a brief: "`Busy::ShownTab` across a stall"; supervisor.md
-/// §5 "Idle": a plugin whose sidebar tab is the current one is busy). Two
+/// Risk 3 (S3a brief: "`Busy::ShownTab` across a stall":
+/// a plugin whose sidebar tab is the current one is busy). Two
 /// built-ins mount a sidebar panel each, a third mounts none; all three go
 /// quiet 400 ms before a UI stall, so a lazy first run is due to park 600
-/// ms into it (supervisor.md §3). On two threads the core parks during the
+/// ms into it. On two threads the core parks during the
 /// stall from its copy of the shown tab, which may be one report old: the
 /// plugin whose tab is the current one must not park, during the stall or
 /// after it. The other two park (the control: parking does happen).

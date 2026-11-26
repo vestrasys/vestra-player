@@ -63,7 +63,7 @@ fn package(
 
 /// On-demand start is everyone's, so a plugin that holds nothing
 /// live goes to standby at its first ready. These fixtures listen to the
-/// player's state (resident: never in standby, supervisor.md §2), so they keep running
+/// player's state (resident: never in standby), so they keep running
 /// as they did before on-demand start became the default.
 const RESIDENT_CAPABILITIES: [&str; 2] = ["events", "playback.read"];
 

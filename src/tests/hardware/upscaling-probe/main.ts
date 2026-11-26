@@ -1,5 +1,5 @@
-// Hardware test plugin for AI upscaling (doc/architecture/README.md §4.4,
-// cases U1–U6): drives plugin.video.upscaling
+// Hardware test plugin for AI upscaling (cases
+// U1–U6): drives plugin.video.upscaling
 // from the Video menu or keys, and shows and logs every answer. Loaded with
 // `--plugin src/tests/hardware/upscaling-probe`; not a product plugin (the
 // real one is step V4's).

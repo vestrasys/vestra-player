@@ -1,6 +1,6 @@
 //! Theme colours set by the player (R-H6) and `plugin.appearance` (R-S2):
 //! fixed palettes (`vestra`, the dark default, and `vestra-light`; both
-//! Aurora, doc/product/ui-spec.md §2.1), delivered to every view instance
+//! Aurora), delivered to every view instance
 //! (shell with its panels, floating sidebar, tool windows, options window)
 //! through the host-only `VestraPalette` global (`ui/palette.slint`). Plugin
 //! Slint reads `Theme`, whose colours are `out` properties bound to the
@@ -249,7 +249,7 @@ impl Core {
             let language = language.as_deref().unwrap_or(crate::i18n::SYSTEM);
             // `changed` (an additive field): what this event changed, so a
             // plugin woken by it can tell a palette change from a language
-            // one (doc/architecture/i18n.md §2).
+            // one.
             self.broadcast(
                 "appearance.changed",
                 appearance_changed(theme, language, "theme"),
@@ -286,7 +286,7 @@ impl Core {
 
 /// `appearance.changed`'s data: the palette and saved language after the
 /// change, and `changed`, what this event changed (`"theme"` or
-/// `"language"`; an additive field, doc/architecture/i18n.md §2).
+/// `"language"`; an additive field).
 fn appearance_changed(theme: &str, language: &str, changed: &str) -> Value {
     json!({"theme":theme,"language":language,"changed":[changed]})
 }

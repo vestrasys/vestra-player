@@ -1,4 +1,4 @@
-// IA-PL-01 「同类文件规则」: the 17 cases of doc/product/interaction-spec.md, run
+// IA-PL-01 「同类文件规则」: the 17 cases of the interaction spec, run
 // through `siblings` on real folders, and the step each similar file passes
 // (`similarStep`), plus the helpers' edge cases.
 import test from "node:test";

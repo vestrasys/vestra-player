@@ -1,5 +1,5 @@
 // Ask Vestra's palette status with the player's 1.8.0 additions
-// (doc/architecture/palette-lead.md; SDK 1.8.0): Stop ends as the state
+// (SDK 1.8.0): Stop ends as the state
 // `stopped` (the three Stop paths; every other note stays a `note`); while
 // the model plans the row says "Vestra is working · Planning…" and the
 // strip, through `status.strip`, "Planning…" (no `strip` once there are

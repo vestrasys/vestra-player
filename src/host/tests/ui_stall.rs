@@ -1,4 +1,4 @@
-//! The UI stall test (doc/architecture/core-thread.md §8, core thread plan
+//! The UI stall test (core thread plan
 //! S1.2): the windowed host runs offscreen (`VESTRA_TEST_OFFSCREEN=1`) and
 //! `VESTRA_TEST_UI_STALL` holds its UI thread once, as Slint compiling a
 //! window, Windows' move/size loop or a GPU wait do. Meanwhile:
@@ -7,7 +7,7 @@
 //!   request's latency;
 //! - a built-in whose first run goes quiet just before the stall is due to
 //!   go to standby (park) during it (a lazy first run parks after 1 s
-//!   without use, supervisor.md §3);
+//!   without use);
 //! - a development plugin has a `time` trigger due during the stall.
 //!
 //! The same three are measured outside the stall as a control: polls after
@@ -52,7 +52,7 @@ const RUN_SECONDS: u64 = (STALL_AT_MS + STALL_MS) / 1000 + 5;
 
 /// The thresholds: the park on time; the trigger within one core turn
 /// (16 ms) plus its way to the plugin's handler (pipe, Node), on a debug
-/// build. Request latency p99: the design (core-thread.md §8) says 50 ms,
+/// build. Request latency p99: the design says 50 ms,
 /// but today's 16 ms cadence already gives 66 ms without a stall (a
 /// `source.state` request waits for a turn, the worker's reply for
 /// another; measured 2026-11-15, debug build, p99 66 ms over 133 and 68
@@ -62,7 +62,7 @@ const RUN_SECONDS: u64 = (STALL_AT_MS + STALL_MS) / 1000 + 5;
 const LATENCY_P99_MS: u64 = 100;
 const PARK_LATE_MS: i64 = 1_000;
 const TRIGGER_LATE_MS: i64 = 100;
-/// A lazy first run's quiet time before standby (supervisor.md §3).
+/// A lazy first run's quiet time before standby.
 const FIRST_RUN_QUIET_MS: i64 = 1_000;
 
 const POLLER: &str = "vestra.fixture-stall-poll";

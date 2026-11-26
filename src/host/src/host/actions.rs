@@ -13,7 +13,7 @@ impl Core {
         let execution = match self.commands.resolve_execution(owner, id) {
             Ok(execution) => execution,
             Err(error) => {
-                // A plugin held after a fault (supervisor.md §7): a click shows why,
+                // A plugin held after a fault: a click shows why,
                 // as a key does.
                 if let commands::CommandError::Disabled {
                     reason: Some(reason),
@@ -937,8 +937,8 @@ mod tests {
         assert!(state.enabled);
     }
 
-    /// The short menu (user ruling 2026-11-11): the player's items sit where
-    /// doc/product/menus.md puts them. Toggle Fullscreen and the two column
+    /// The short menu (user ruling 2026-11-11): the player's items sit in
+    /// their fixed menu orders. Toggle Fullscreen and the two column
     /// toggles left the menu (Esc, the bottom bar and the palette keep
     /// them); Command Palette… is in Tools ▸ (820); Quit closes the menu in
     /// the settings group with Tools ▸ and Options… (830), no separator

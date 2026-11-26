@@ -1,5 +1,4 @@
-// Triggers (SDK 1.10.0, player 0.10.0; doc/architecture/events-and-triggers.md
-// §4.3, §4.11): the SDK and the player evaluate the `when` language alike.
+// Triggers (SDK 1.10.0, player 0.10.0): the SDK and the player evaluate the `when` language alike.
 // Contract data: the agreement table "condition × facts → truth" is one table
 // in two copies, the player's src/host/condition-table.json (evaluated by
 // src/host/src/conditions_tests.rs) and the SDK's CONDITION_TABLE (evaluated

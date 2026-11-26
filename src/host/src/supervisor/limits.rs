@@ -1,11 +1,11 @@
-//! Per-class policy (supervisor.md §2, §6, §7) and the tunables. `Tunables::new`
+//! Per-class policy and the tunables. `Tunables::new`
 //! is the one preset, for this machine's cores and memory; tests change single
 //! values (short timers, small limits).
 #![forbid(unsafe_code)]
 
 use super::unit::{Class, Ms};
 
-/// The restart rule of a class (supervisor.md §7).
+/// The restart rule of a class.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RestartMode {
     /// Not restarted; registrations revoked; `Failed` (Development).

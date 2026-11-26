@@ -1,5 +1,5 @@
-//! Guest windows with the real host (doc/architecture/guest-windows.md
-//! §10, user ruling 2026-11-21): a guest leaves every file of the main
+//! Guest windows with the real host (user ruling
+//! 2026-11-21): a guest leaves every file of the main
 //! profile byte-identical, takes no instance lock, deletes its directory
 //! at exit, and a crashed guest's directory is swept by the next start; the
 //! main window can close while a guest runs, and the next launch becomes

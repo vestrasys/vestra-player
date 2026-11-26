@@ -1,6 +1,6 @@
 //! `app.windows` (built-in only): `app.openWindow` starts a guest window
-//! on files, the playlist's "Play in New Window" (user ruling 2026-11-21,
-//! doc/architecture/guest-windows.md §7). Built-in only: the ruling makes
+//! on files, the playlist's "Play in New Window" (user ruling 2026-11-21).
+//! Built-in only: the ruling makes
 //! the playlist's row menu the only entry, and starting player processes
 //! is for a plugin only once an SDK member says so. A wire method
 //! (`plugin.wire.request`), not an SDK member yet.
@@ -37,7 +37,7 @@ impl Capability for AppWindows {
         let paths = paths(params)?;
         if cfg!(target_os = "macos") {
             // A second instance of the bundle needs LaunchServices
-            // (`open -n`); a follow-up with a Mac (guest-windows.md §9).
+            // (`open -n`); a follow-up with a Mac.
             return Err(RpcError::new(
                 "unsupported",
                 "new windows are not available on macOS yet",

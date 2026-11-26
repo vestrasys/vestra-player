@@ -1,5 +1,5 @@
 //! Windows: libmpv draws with Direct3D 11 and Slint shows the frames through
-//! wgpu on Direct3D 12, without a copy (doc/architecture/README.md §4.3).
+//! wgpu on Direct3D 12, without a copy.
 //!
 //! - Every Slint window draws with one wgpu device on the Direct3D 12
 //!   backend ([`WindowDevice`], handed to Slint as
@@ -791,7 +791,7 @@ impl Drop for Completion {
 /// `VESTRA_GPU_CPU_WAIT=1`: the render thread waits on the CPU until each
 /// frame finished on the GPU before publishing it (up to host 0.5.18, for
 /// A/B measurements). Otherwise only the GPU-side fences order the frames
-/// (doc/architecture/README.md §4.3).
+///.
 fn cpu_wait_on() -> bool {
     std::env::var("VESTRA_GPU_CPU_WAIT").as_deref() == Ok("1")
 }

@@ -11,7 +11,7 @@ description = "Go/no-go probe for Windows GPU rendering: libmpv's D3D11 render A
 # standalone workspace of its own: it is NOT a member of src/host's workspace,
 # the player never builds or links it, and it has its own Cargo.lock.
 #
-#   . C:\vestra\env.ps1 -Target C:\vestra\target-gpu -Ffmpeg
+#   . <work dir>\env.ps1 -Target <work dir>\target-gpu -Ffmpeg
 #   cargo build --release --manifest-path src/host/unsafe/gpu-probe/Cargo.toml
 #   gpu-probe info | gpu-probe run [options]   (see src/lib.rs)
 #

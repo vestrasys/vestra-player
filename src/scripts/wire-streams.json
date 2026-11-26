@@ -1,6 +1,5 @@
 {
-  "source": "doc/architecture/core-thread.md §5.1, the method table (plan S0.2)",
-  "generatedBy": "node src/scripts/verify-wire.mjs streams",
+  "source": "the core thread design's method table (plan S0.2); kept by hand since that design was retired",
   "rows": 126,
   "uiBound": [
     "commands.run",

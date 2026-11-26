@@ -1,10 +1,10 @@
-//! The second batch of events (events-and-triggers.md §4.6, release B):
+//! The second batch of events (release B):
 //! facts that changed, each sent once per change, never as a stream. All
 //! eight are wake events (`api::events::FACT_EVENTS`): a listener
 //! of one keeps nothing running, and a plugin in standby is woken for one.
 //!
 //! Where each is decided, by the core thread's rules
-//! (doc/architecture/core-thread.md): the playback thread reads mpv, never
+//!: the playback thread reads mpv, never
 //! the core (no I/O on the core); the interface's facts are taken when
 //! they are settled (`UiReport::FactsSettled`), never in between; and each
 //! event follows what it derives from, so a listener of both reads the

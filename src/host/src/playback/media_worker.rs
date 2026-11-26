@@ -1510,12 +1510,14 @@ pub(super) mod real {
         )
     }
 
-    /// A clip of the test-media folder: `VESTRA_TEST_MEDIA`, else
-    /// `C:\vestra\testmedia` (the Windows test machine). `None` (the test is
-    /// skipped with a note) where the folder does not exist.
+    /// A clip of the test-media folder `VESTRA_TEST_MEDIA`. `None` (the test
+    /// is skipped with a note) where the variable is not set or the clip
+    /// does not exist.
     pub fn clip(name: &str) -> Option<PathBuf> {
-        let dir = std::env::var_os("VESTRA_TEST_MEDIA")
-            .map_or_else(|| PathBuf::from(r"C:\vestra\testmedia"), PathBuf::from);
+        let Some(dir) = std::env::var_os("VESTRA_TEST_MEDIA").map(PathBuf::from) else {
+            diag!("skipped: VESTRA_TEST_MEDIA is not set");
+            return None;
+        };
         let path = dir.join(name);
         if path.is_file() {
             Some(path)

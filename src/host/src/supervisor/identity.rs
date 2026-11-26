@@ -1,5 +1,5 @@
 //! The unit table's identity and what the adapter reads of it
-//! (doc/architecture/supervisor.md §2): owner
+//!: owner
 //! generations (`alloc_pid`, formerly `next_generation += 1`), the indexes
 //! by id and by pid, the process and standby holder of an id, and each
 //! run's activation (`activation.rs`, formerly `host/package_activation.rs`).
@@ -442,7 +442,7 @@ mod tests {
     }
 
     /// `packages.changed` builds `packages.list` again only once the unit
-    /// table's answers moved (`list_key`, supervisor.md): the key stays while
+    /// table's answers moved (`list_key`): the key stays while
     /// nothing happens, and moves with a start, with a start deadline passing
     /// (the clock alone turns `Starting` into `Failed`), with a ready, a
     /// standby (its holder) and a wake (`waking`).

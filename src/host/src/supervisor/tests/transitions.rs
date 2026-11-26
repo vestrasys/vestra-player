@@ -127,7 +127,7 @@ fn t05_verify_timeout_spawns_in_own_process() {
     );
 }
 
-// ANSWERED (supervisor.md), was a design question: says "verify done; or 3 s passed → Placement::Own". Does a
+// ANSWERED, was a design question: says "verify done; or 3 s passed → Placement::Own". Does a
 // *failed* verification also go on in an own process (today's `trust`), or does it fail the start? Best reading:
 // own process.
 #[test]
@@ -309,7 +309,7 @@ spec! {
     }
 }
 
-// detail: "process_ready = runtime.ready + UI activation finished". ANSWERED (supervisor.md), was a design
+// detail: "process_ready = runtime.ready + UI activation finished". ANSWERED, was a design
 // question: lists `ui_begin`/`ui_finish` and `process_ready` separately; best reading: a unit that began UI
 // activation stays Activating{Ready} until `ui_finish` even after `process_ready`.
 #[test]
@@ -415,7 +415,7 @@ fn t13_first_run_classified_resident_stays_active() {
     assert!(terminates(&acts).is_empty());
 }
 
-// sidebar-tabs.md (user ruling 2026-11-03): twenty plugins whose only panel
+// Sidebar tabs (user ruling 2026-11-03): twenty plugins whose only panel
 // is a sidebar tab. A sidebar tab is never live (`sidebar_tabs::live`), so
 // every run is classified Normal; the current tab's plugin is kept running
 // by the host's declared work (`Busy::ShownTab`) while its tab is shown, and
@@ -571,7 +571,7 @@ fn t18_stuck_stop_fails_waiting_reload_with_text() {
     sim.at(t + STOP_WAIT);
     assert!(sim.stuck(u));
     assert_eq!(sim.result(job), Some(R::Failed(TEXT_RELOAD_STUCK.into())));
-    // ANSWERED (supervisor.md), was a design question: says "`Failed` for a reload" while says the unit "stays where
+    // ANSWERED, was a design question: says "`Failed` for a reload" while says the unit "stays where
     // `then` put it". Best reading: a reload whose stop got stuck leaves the unit Failed.
     assert!(sim.st(u).is_failed(), "{:?}", sim.st(u));
 }
@@ -947,7 +947,7 @@ fn t31_shutdown_terminates_all_in_one_call() {
     assert!(same_set(&pids, &[pa, pb]), "{pids:?}");
 }
 
-// Inactive, disabled --set_enabled(true)--> Inactive, enabled + Start job ANSWERED (supervisor.md), was a design
+// Inactive, disabled --set_enabled(true)--> Inactive, enabled + Start job ANSWERED, was a design
 // question: says `set_enabled` "does not enqueue by itself", says `set_enabled(true)` → "enabled + Start job". Best
 // reading: the caller (package RPC) does `set_enabled(true)` then `start(u, Enable)`.
 #[test]

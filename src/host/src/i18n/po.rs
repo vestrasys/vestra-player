@@ -1,5 +1,5 @@
 //! Gettext `.po` files: the parser and the compiled JSON catalog
-//! (doc/architecture/i18n.md §3). Standard library only: `build.rs` includes
+//!. Standard library only: `build.rs` includes
 //! this file too, to compile `src/host/locales/<lang>.po` at build time.
 //!
 //! Supported: `msgctxt`, `msgid`, `msgid_plural`, `msgstr`, `msgstr[N]`,

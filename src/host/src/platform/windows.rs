@@ -1057,7 +1057,7 @@ fn same_file_name(name: &str, file_name: &str) -> bool {
 }
 
 /// How the adapter of a mode is chosen (user ruling 2026-10-31,
-/// doc/architecture/README.md §4.3, hybrid laptops).
+/// hybrid laptops).
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Policy {
     /// `VESTRA_GPU_ADAPTER` names one (its value).
@@ -1716,7 +1716,7 @@ pub const GPU_RENDER: bool = true;
 pub const GPU_WINDOWS_WGPU: bool = true;
 /// GPU rendering is off by default here: only the user's preference `gpu`
 /// (the Video menu's switch) or `VESTRA_RENDER=gpu` turns it on
-/// (`render_mode::Facts::gpu_opt_in`; doc/architecture/README.md §4.3).
+/// (`render_mode::Facts::gpu_opt_in`).
 pub const GPU_OPT_IN: bool = true;
 
 /// The host's contract with the GPU renderer, by delegation to
@@ -2095,7 +2095,7 @@ pub fn physical_memory() -> Option<u64> {
     vestra_win32::physical_memory().map(|memory| memory.total)
 }
 
-/// Memory pressure (supervisor.md §8, "Memory pressure"): thresholds on
+/// Memory pressure: thresholds on
 /// available physical memory (`GlobalMemoryStatusEx`), and
 /// critical while the system's low-memory notification is signaled
 /// (`CreateMemoryResourceNotification`), both through `vestra-win32`.
@@ -2185,7 +2185,7 @@ fn nvidia_driver_name(version: [u16; 4]) -> String {
     format!("{}.{:02}", release / 100, release % 100)
 }
 
-/// Where RTX Video Super Resolution works (doc/architecture/README.md §4.4):
+/// Where RTX Video Super Resolution works:
 /// every NVIDIA adapter (vendor `0x10DE`) with a driver of 530 or newer
 /// whose driver answers the PPE stream extension query on a test video
 /// processor (`vestra_win32::video_super_resolution`). Blocking, and it
@@ -2463,7 +2463,7 @@ pub fn motion_filter(
 /// layer other software registered (OBS's capture hook, Steam's overlay)
 /// inside the player, which only the converter uses Vulkan for. Measured
 /// 2026-11-22: with it, those DLLs are no longer loaded and the converter
-/// runs as before (doc/architecture/README.md §4.4a). Always, and never
+/// runs as before. Always, and never
 /// widened (user ruling, T8): there is no switch to turn it off, and a value
 /// already in the environment is only narrowed ([`scoped_value`]).
 ///
@@ -2535,8 +2535,7 @@ static VULKAN_BEFORE: std::sync::Mutex<Vec<(&str, Option<std::ffi::OsString>)>> 
 /// gets the scoping variables as the player's environment had them before
 /// [`scope_vulkan`], so the scope stays inside this process. (What Windows
 /// opens through the shell, `open_path` / `open_url`, is started by
-/// `ShellExecuteW` with this process's environment; see
-/// `doc/architecture/README.md` §4.4a.)
+/// `ShellExecuteW` with this process's environment.)
 pub fn unscoped_child_env(command: &mut std::process::Command) {
     for (name, old) in VULKAN_BEFORE
         .lock()
@@ -2578,8 +2577,7 @@ const VULKAN_SCOPE: [(&str, &str); 2] = [
 /// involved; without the option the graph would get no Vulkan device from
 /// Vestra's renderers.
 ///
-/// Settings (T8 measurements, RTX 4070 Laptop, doc/architecture/README.md
-/// §4.4a): `perf=slow:grid=4` by default (the quality of grid 1 within
+/// Settings (T8 measurements, RTX 4070 Laptop): `perf=slow:grid=4` by default (the quality of grid 1 within
 /// 0.1 dB, 2.5–3.5× faster); above 1440p `perf=fast:grid=4` (slow grid 4
 /// leaves 1.21× headroom at 4K30 → 60). The fallback step (`performance`):
 /// `perf=fast`; above 1440p it is already the fastest setting the device

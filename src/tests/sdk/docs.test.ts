@@ -1,6 +1,6 @@
 // Plugin-author documentation lives on the SDK's site only; see
-// scripts/check-docs.mjs for the rules (doc/plugins holds only README.md, no
-// copies of the site's capability, limits or platform tables in doc/).
+// scripts/check-docs.mjs for the rules (no copies of the site's limits or
+// platform tables in doc/).
 import assert from "node:assert/strict";
 import test from "node:test";
 import { fileURLToPath } from "node:url";

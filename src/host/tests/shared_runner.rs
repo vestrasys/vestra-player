@@ -1,5 +1,4 @@
-//! The shared runner with the real host, headless (doc/architecture/
-//! README.md §2, supervisor.md §7): built-ins from a `builtin.json`
+//! The shared runner with the real host, headless: built-ins from a `builtin.json`
 //! schema 3 under `VESTRA_BUILTIN_PLUGINS`, the development runner
 //! (`src/runtime/shared-runner.ts`), Node 26 on `PATH` (or `VESTRA_NODE`)
 //! and libmpv. Ignored by default; `npm run ci:local` runs it
@@ -40,7 +39,7 @@ fn builtin(root: &Path, id: &str, body: &str, tamper: bool) -> serde_json::Value
 ///
 /// On-demand start is everyone's, so a built-in that holds nothing
 /// live goes to standby at its first ready. These fixtures listen to the
-/// player's state (resident: never in standby, supervisor.md §2), so they keep running
+/// player's state (resident: never in standby), so they keep running
 /// in the shared runner as they did before on-demand start became the default.
 fn builtin_with(
     root: &Path,
@@ -230,7 +229,7 @@ fn plugin_console_lines_go_to_the_plugin_log() {
 
 /// Three restarts within a minute: own processes for the rest of the run.
 /// `VESTRA_SHARED=0`: own processes from the start. With backoff
-/// (supervisor.md §7) only the first restart in the window is immediate, the second
+/// only the first restart in the window is immediate, the second
 /// waits 3 s and the third 6 s, so the run is longer.
 #[test]
 #[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]

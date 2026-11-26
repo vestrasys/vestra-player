@@ -1,6 +1,6 @@
 //! The binding table and the command registry belong to the core; the
 //! interface reads read-only snapshots of them (rule R8 of
-//! doc/architecture/core-thread.md; plan step S2c(2)).
+//! the core thread design; plan step S2c(2)).
 //!
 //! **Who writes, who reads.** The core owns `Core::commands` and the binding
 //! table here, which it writes only through [`Core::bindings_mut`]: every

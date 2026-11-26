@@ -1,5 +1,5 @@
 //! `@tr(...)` in Slint source: find the translatable literals and put the
-//! translations in their place (doc/architecture/i18n.md §4). The player has
+//! translations in their place. The player has
 //! no Slint translator: it rewrites each `.slint` file as it is loaded, and
 //! Slint then only formats (`{}`, `{0}`, `{n}`) and picks the plural form
 //! (`n == 1`). The SDK's `vestra-plugin i18n extract` has the same scanner;

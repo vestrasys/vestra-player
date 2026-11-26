@@ -166,7 +166,7 @@ pub(crate) struct Mount {
     pub(crate) manifest: String,
     /// A built-in plugin's panel: its tab comes first.
     pub(crate) builtin: bool,
-    /// A sidebar tab no process holds (sidebar-tabs.md): replayed from its
+    /// A sidebar tab no process holds: replayed from its
     /// plugin's recording, or kept when its plugin stood by. Showing it
     /// wakes the plugin, whose `ui.mount` takes it over.
     pub(crate) recorded: bool,
@@ -193,7 +193,7 @@ impl Mount {
     }
 }
 /// What the host keeps of one column of tabs (the sidebar, the adjust
-/// column) between ticks and shells (sidebar-tabs.md, per column).
+/// column) between ticks and shells (per column).
 #[derive(Default)]
 pub(crate) struct ColumnState {
     /// The current tab at the last tick, and whether the user just clicked
@@ -257,7 +257,7 @@ pub(crate) enum MenuMode {
     Main,
     /// A panel menu (C11): owner and its command ids, `None` = separator.
     Panel(u64, Vec<Option<String>>),
-    /// A column's overflow menu (`»`, sidebar-tabs.md): every tab.
+    /// A column's overflow menu (`»`): every tab.
     Tabs(sidebar_tabs::Column),
     /// The command palette (`host/palette`), in the main window.
     Palette,
@@ -383,8 +383,8 @@ pub(crate) struct MountChange {
     pub(crate) announced: bool,
 }
 /// The host's core: the state that never touches a Slint object or a
-/// window (doc/architecture/core-thread.md, plan step S2b; the CORE rows
-/// of doc/process/research/core-loop-study.md §1.1). `Host` holds it in
+/// window (plan step S2b; the CORE rows
+/// of the core loop study). `Host` holds it in
 /// its `link`, reached only through the driver (`driver.rs`, plan step
 /// S3a(1)), still on the UI thread until plan step S3a(2).
 pub(crate) struct Core {
@@ -423,7 +423,7 @@ pub(crate) struct Core {
     pub(crate) rendering: Rendering,
     pub(crate) source_state_replies: std::collections::BTreeSet<(u64, u64)>,
     pub(crate) host_revision: u64,
-    /// The plugin process supervisor's core (doc/architecture/supervisor.md):
+    /// The plugin process supervisor's core:
     /// the unit table (identity: `by_id`, `by_pid`, owner
     /// generations) and each unit's activation; the Host adapter is
     /// `host/supervisor/`.
@@ -492,7 +492,7 @@ pub(crate) struct Core {
     pub(crate) warnings: revised::Revised<BTreeMap<u64, Vec<(Value, String)>>>,
     pub(crate) packages: package_manager::Manager,
     /// The `plugin-reaper` thread: every plugin the host stops is waited
-    /// for (and killed after its grace) there (supervisor.md §1).
+    /// for (and killed after its grace) there.
     pub(crate) reaper: process::reaper::Reaper,
     /// Core actions in flight that drop a repeated trigger.
     pub(crate) actions_busy: std::collections::BTreeSet<String>,
@@ -511,7 +511,7 @@ pub(crate) struct Core {
     /// the error of a spawn that failed while the RPC ran (`spawn_unit`).
     pub(crate) start_error: Option<(String, Option<RpcError>)>,
     /// An uninstall's data directories, resolved at each request, by unit:
-    /// deleted at the core's `RemoveData` (supervisor.md).
+    /// deleted at the core's `RemoveData`.
     pub(crate) data_removals: BTreeMap<crate::supervisor::UnitId, Vec<PathBuf>>,
     /// The directory of a development load being started (`load`), for its
     /// spawn (`load_development_as`).
@@ -560,7 +560,7 @@ pub(crate) struct Core {
     /// marked `confirm_failed`) clears both.
     pub(crate) confirm_open: bool,
     /// Where the user last acted for each plugin: the window its
-    /// `dialogs.confirm` belongs to (`origins`, palette-lead.md §2.3). The
+    /// `dialogs.confirm` belongs to (`origins`). The
     /// interface reports each act as `UiReport::Acted` (`Core::act`).
     pub(crate) origins: origins::Origins,
     /// The palette's first row and its holder (`palette.lead`; plan step
@@ -664,7 +664,7 @@ pub(crate) struct Core {
     pub(crate) quit_asked: Option<CoreQuit>,
     pub(crate) quitting: bool,
     /// On-demand start: the Host's side of standby, wake and
-    /// classification (`supervisor/`, supervisor.md §4). Moved from `Host`
+    /// classification (`supervisor/`). Moved from `Host`
     /// in plan step S2c as its last field, so it drops after every other
     /// core field (after the backend, the shared runner and the plugins, as
     /// before); like every core field it now drops before the UI fields,

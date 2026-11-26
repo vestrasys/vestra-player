@@ -24,8 +24,7 @@ impl Capability for WindowControl {
         METHODS
     }
     /// Always-on-top and the cursor setting are plain values the host keeps
-    /// through standby by the installed instance (events-and-triggers.md
-    /// §4.8): they hold nothing that keeps the plugin running.
+    /// through standby by the installed instance: they hold nothing that keeps the plugin running.
     /// Picture-in-picture and a video area being applied still do.
     fn record(&self, core: &Core, owner: u64, _: &Value) -> Recorded {
         // Picture-in-picture's holder is the interface's fact (plan step

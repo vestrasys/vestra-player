@@ -1,4 +1,4 @@
-# The player's own interface strings (doc/architecture/i18n.md §6).
+# The player's own interface strings.
 # English is the source; src/i18n/tests.rs checks this file lists exactly
 # the strings the code asks for, and that each <lang>.po has the same entries.
 msgid ""

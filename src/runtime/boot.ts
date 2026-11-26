@@ -2,7 +2,7 @@
  * One plugin's life inside a runner: the wire client (`request`, `on`), the
  * SDK instance, activation, `runtime.ready` / `runtime.failed`, and `stop`.
  *
- * Shared by the two runner entries (doc/architecture/README.md §2):
+ * Shared by the two runner entries:
  * `runner.ts` (one plugin, its own Node process: today's wire) and
  * `shared-runner.ts` (several trusted plugins in one process, one envelope
  * per line). Everything that belongs to the process is a parameter here:
@@ -233,7 +233,7 @@ export function boot(options: BootOptions): Instance {
       const module = (await import(
         pathToFileURL(resolve(directory, manifest.entry)).href
       )) as { default?: (plugin: Plugin) => void | Promise<void> };
-      // `export default async function activate(plugin)`; see doc/architecture/sdk-design.md.
+      // `export default async function activate(plugin)`.
       if (typeof module.default !== "function")
         throw new Error("plugin entry must default-export activate(plugin)");
       options.entryLoaded?.();

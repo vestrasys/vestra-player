@@ -32,7 +32,7 @@ pub const API: &str = "vestra/1";
 /// a longer one stops the plugin. A property value may be larger than one
 /// line (`ui_values`: 32 MiB of text): the SDK sends a large whole write as
 /// its first rows and `insert` patches of the rest, each line within this
-/// (player 0.6.0, SDK 1.5.46; doc/architecture/large-lists.md §4). The SDK
+/// (player 0.6.0, SDK 1.5.46). The SDK
 /// repeats it (`MESSAGE_LIMIT`); src/tests/sdk/host-agreement.test.ts checks
 /// they agree.
 pub const MAX_MESSAGE_BYTES: usize = 1024 * 1024;
@@ -73,7 +73,7 @@ impl DataKey {
     }
 }
 /// Why the player stops a plugin: `runtime.stop`'s `data.reason` (player
-/// 0.6.4, SDK 1.5.54 `StopReason`; doc/architecture/README.md "Stop reasons").
+/// 0.6.4, SDK 1.5.54 `StopReason`).
 /// The runner adds `host-lost` itself when its pipe to the player closes
 /// without a stop; the player never sends that one.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -140,8 +140,7 @@ pub fn set_app_info(info: &Value) {
 /// Where a plugin runs.
 pub enum Placement<'a> {
     /// Its own Node process, its JavaScript heap capped at `heap_mib` MiB
-    /// when set (`--max-old-space-size`, the supervisor's heap cap,
-    /// supervisor.md §8).
+    /// when set (`--max-old-space-size`, the supervisor's heap cap).
     Own { heap_mib: Option<u32> },
     /// A member of this shared runner.
     Shared(&'a mut SharedRunner),
@@ -164,8 +163,8 @@ enum Runner {
 /// What a plugin's stop leaves to wait for (`Plugin::begin_stop`): its own
 /// process until it exits, killed once its grace is over; or its
 /// shared-runner member until the runner reports it gone
-/// ([`MemberStop`]). Polled by the plugin reaper (`reaper.rs`,
-/// supervisor.md §1), or waited for where the plugin is dropped.
+/// ([`MemberStop`]). Polled by the plugin reaper (`reaper.rs`),
+/// or waited for where the plugin is dropped.
 pub enum Stop {
     Own {
         child: Child,
@@ -176,7 +175,7 @@ pub enum Stop {
         /// Killed at its deadline; waited for without blocking after that.
         killed: bool,
         /// Its exit code once it is gone (`Event::Reaped`: the supervisor
-        /// tells a heap abort by it, supervisor.md §7).
+        /// tells a heap abort by it).
         code: Option<i32>,
         /// When it was seen gone.
         exited: Option<Instant>,
@@ -236,7 +235,7 @@ impl Stop {
         }
     }
     /// Its deadline moves to `deadline` if that is sooner: a quit's one
-    /// deadline, or a kill now (supervisor.md §9).
+    /// deadline, or a kill now.
     pub fn hasten(&mut self, deadline: Instant) {
         if let Stop::Own { deadline: own, .. } = self
             && deadline < *own
@@ -397,7 +396,7 @@ impl Plugin {
                 // Its writer stopped: the pipe broke (the process is gone or
                 // going), and the writer reported that (`RuntimeFault`), as
                 // its reader reports the exit. Those drive the stop and the
-                // class's restart rule (supervisor.md §7); an error here
+                // class's restart rule; an error here
                 // would stop it for good before they arrive (as
                 // `shared_runner::Member::send` does for a member).
                 Err(mpsc::TrySendError::Disconnected(_)) => Ok(()),
@@ -501,7 +500,7 @@ impl Plugin {
 /// An own process: `node [--max-old-space-size=<heap_mib>] runner.js
 /// <directory>`, the plugin's data directory, `plugin.app` and the locale
 /// in its environment. A heap past the cap ends the process with V8's heap
-/// abort, which the supervisor reports as "ran out of memory" (supervisor.md §7).
+/// abort, which the supervisor reports as "ran out of memory".
 fn own_process(
     paths: &crate::process::runtime_paths::RuntimePaths,
     directory: &Path,
@@ -533,7 +532,7 @@ fn own_process(
         .with_context(|| paths.node_failure())?;
     // Its stderr goes on to the player's, as when inherited, and to the
     // plugin log with `[<id>]` in front; read here so V8's heap abort is
-    // seen (supervisor.md §7, §8).
+    // seen.
     let stderr_done = Arc::new(AtomicBool::new(false));
     if let Some(stderr) = child.stderr.take() {
         let done = stderr_done.clone();
@@ -737,7 +736,7 @@ impl Drop for Plugin {
 /// `$VESTRA_PLUGIN_DATA`, else `plugin-data` in the application data
 /// directory (`~/Library/Application Support/Vestra` on macOS,
 /// `%APPDATA%\Vestra` on Windows). A guest's starts empty in its own
-/// profile: the variable names the main player's (guest-windows.md §3).
+/// profile: the variable names the main player's.
 pub fn data_root() -> Option<PathBuf> {
     if let Some(profile) = crate::guest::profile() {
         return Some(profile.join("plugin-data"));

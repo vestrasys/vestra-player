@@ -487,7 +487,7 @@ mod tests {
                     r"C:\Users\Zoë\AppData\Local\Temp\vestra-subtitle-font-b2",
                 ),
                 (
-                    r"C:\vestra\guiprof-blind\Local\Temp\vestra-subtitle-x.srt",
+                    r"C:\profiles\guest\Local\Temp\vestra-subtitle-x.srt",
                     r"D:\Temp dir\[x],y;z'q\vestra-subtitle-font-c3",
                 ),
                 (r"\\server\share\Temp\cue.vtt", r"\\server\share\Temp\fonts"),

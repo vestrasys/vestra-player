@@ -1,4 +1,4 @@
-//! Command registry: the shared menu model (core-ui-design.md §4).
+//! Command registry: the shared menu model.
 //! Not a menu renderer or key-binding engine (see menu.rs and bindings.rs).
 //! Callers authenticate live owner generations before registration and route
 //! resolved execution to that exact instance.
@@ -69,7 +69,7 @@ pub struct Declaration {
     /// (api/commands_run.rs). Optional; absent is `false`.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub destructive: bool,
-    /// What the menu shows (doc/architecture/i18n.md §5), in the interface
+    /// What the menu shows, in the interface
     /// language; `title` and `path` stay as declared (English source text),
     /// the keys menus merge by. Filled by the player (`localize`), never by
     /// the plugin; empty = show the keys.
@@ -397,10 +397,10 @@ pub struct Registry {
     /// another declaration or manifest: what `bindings.list` shows of the
     /// registry. Not on a state update, nor when a woken plugin's commands
     /// move to its new owner generation (`rekey`) and it registers them
-    /// again as they were (supervisor.md).
+    /// again as they were.
     listed: u64,
     sequence: u64,
-    /// Standby (doc/architecture/supervisor.md §4):
+    /// Standby:
     /// entries kept for an owner without a process (parked, or replayed from
     /// its recording). A live registration of the same key replaces one.
     recorded: std::collections::BTreeSet<CommandKey>,
@@ -426,7 +426,7 @@ pub struct Registry {
     max_commands: Option<usize>,
     /// Owners whose commands show disabled with this reason, whatever
     /// their state: a plugin held in standby after a crash until its
-    /// restart hold is over (supervisor.md §7). Menus show
+    /// restart hold is over. Menus show
     /// them greyed out, and a key or click shows the reason.
     held: BTreeMap<OwnerGeneration, String>,
 }
@@ -475,8 +475,7 @@ fn local_id(value: &str) -> Result<()> {
 /// package; tests/sdk/host-agreement.test.ts checks the installed SDK agrees.
 ///
 /// A top-level submenu with one of these keys sits at this order, not at its
-/// first command: a plugin item inside cannot move the menu.
-/// doc/product/menus.md lists the orders. Reset (`@reset`) gathers every
+/// first command: a plugin item inside cannot move the menu. Reset (`@reset`) gathers every
 /// reset-to-default command, directly below Settings and in its separator
 /// group (`SHARES_GROUP_WITH`); like every built-in menu it shows only once
 /// a command is in it.
@@ -516,8 +515,7 @@ const SHARES_GROUP_WITH: [(&str, &str); 1] = [("Reset", "Settings")];
 /// to 0.4.2): a plugin that still declares one lands in the same menu.
 /// Parent path, old title, key. The last entries are submenus that a
 /// migrated built-in plugin shares with plugins not migrated yet (the need
-/// goes once every plugin declares English keys; doc/product/menus.md has
-/// them).
+/// goes once every plugin declares English keys).
 const LEGACY_MENUS: [(&[&str], &str, &str); 10] = [
     (&[], "打开", "Open"),
     (&[], "播放", "Playback"),
@@ -1073,7 +1071,7 @@ impl Registry {
 
     /// `owner`'s commands show disabled with `reason` (`None`: as their
     /// state says again), whatever their state: a crashed plugin held in
-    /// standby until its restart hold is over (supervisor.md §7).
+    /// standby until its restart hold is over.
     /// Whether anything changed.
     pub fn set_held(&mut self, owner: OwnerGeneration, reason: Option<String>) -> bool {
         let changed = match reason {
@@ -1185,7 +1183,7 @@ impl Registry {
     }
 
     /// The read-only copy of what the interface reads of the registry
-    /// (rule R8 of doc/architecture/core-thread.md): the commands, the
+    /// (rule R8 of the core thread design): the commands, the
     /// held owners and the revision. Its menu tree is built when first
     /// asked for ([`View::snapshot`]).
     pub fn view(&self) -> View {
@@ -1263,7 +1261,7 @@ impl Registry {
 }
 
 /// A read-only copy of what the interface reads of the [`Registry`]
-/// (rule R8 of doc/architecture/core-thread.md; plan step S2c): the core
+/// (rule R8 of the core thread design; plan step S2c): the core
 /// owns the registry and the interface holds the newest of these, replaced
 /// whole when the registry's revision moves (`Registry::view`). It answers
 /// as the registry did at that revision; its menu tree is built once, when
@@ -1592,7 +1590,7 @@ mod tests {
         Declaration::new(path.last().unwrap(), path)
     }
 
-    /// `bindings.list`'s gate (supervisor.md): the listed revision
+    /// `bindings.list`'s gate: the listed revision
     /// moves when a command comes, goes or changes its declaration, not
     /// when a woken plugin's commands move to their new owner and are
     /// registered again as they were, nor on a state update.
@@ -1685,7 +1683,7 @@ mod tests {
         }
     }
 
-    /// A plugin held after a fault (supervisor.md §7): its commands
+    /// A plugin held after a fault: its commands
     /// show disabled with the reason in the menu, and are refused with it,
     /// until the hold is released; a revoke ends it too.
     #[test]
@@ -2477,7 +2475,7 @@ mod tests {
         const { assert!(Registry::MAX_COMMANDS >= 3 * ALL_AT_IDLE) };
     }
 
-    /// core-ui-design.md §14: the migration orders reproduce the tree that the
+    /// The migration orders reproduce the tree that the
     /// old registry (fixed domain list, then UTF-8 byte order of path[1..])
     /// built from the same 46 commands (the old menu tree, recorded before
     /// the migration).
@@ -2596,7 +2594,7 @@ mod tests {
         assert_eq!(TABLE.len(), 46);
     }
 
-    /// i18n.md §5: the player's old Chinese titles of its own menus are
+    /// The player's old Chinese titles of its own menus are
     /// aliases of their English keys, so an unmigrated plugin's items land
     /// in the player's submenus (and `@id` still works).
     #[test]
@@ -2653,7 +2651,7 @@ mod tests {
         assert_eq!(path, ["Playback", "Speed", "x"]);
     }
 
-    /// i18n.md §7: a text value's key is its English rendering, its shown
+    /// A text value's key is its English rendering, its shown
     /// text the translation (set by `show_texts` after `localize_declared`).
     #[test]
     fn text_value_segments_show_their_rendering() {
@@ -2673,7 +2671,7 @@ mod tests {
         assert_eq!(track.shown_title(), "音轨 2 (opus)");
     }
 
-    /// i18n.md §5: menus merge by key and show labels: the player's words for
+    /// Menus merge by key and show labels: the player's words for
     /// its own submenus, the declaring plugin's catalog for the rest.
     #[test]
     fn groups_and_items_show_their_translations() {

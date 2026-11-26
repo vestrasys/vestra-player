@@ -3,7 +3,7 @@
 //! or a click on it sends that plugin the `palette.lead` event with the
 //! query and a one-time ticket for `commands.run` (api/
 //! commands_run.rs). Recorded, so the row stays while its plugin is in
-//! standby and the event wakes it (doc/architecture/palette-lead.md).
+//! standby and the event wakes it.
 use super::{Call, Capability, Handled, Info, Recorded};
 use crate::{
     commands::{BUTTON_ICONS, ButtonIcon},

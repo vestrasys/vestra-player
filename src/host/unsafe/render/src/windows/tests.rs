@@ -193,7 +193,7 @@ fn warp_a_failed_renderer_releases_its_fences_and_windows_stop_claiming() {
     drop(renderer);
 }
 
-/// The watchdog (doc/architecture/README.md §4.3): mpv's device waits on the GPU for a
+/// The watchdog: mpv's device waits on the GPU for a
 /// `done` value no window signals, so `ready` stops moving; after the limit
 /// the renderer stops as after a lost device, with both fences released.
 /// Without a stall (playing, then paused) it never fires.
@@ -417,13 +417,12 @@ fn the_adapter_choice_reads_the_environment_value() {
 /// GPU this process gets by default, with a real 4K60 clip: mpv publishes at
 /// the clip's rate through the shared ring, a simulated window takes the
 /// newest frame 60 times a second, and the last frame reads the same
-/// through both APIs. `VESTRA_GPU_CLIP` names the clip (default: the HEVC
-/// 4K60 10-bit test clip of the Windows test machine).
+/// through both APIs. `VESTRA_GPU_CLIP` names the clip (a 4K60 clip, such
+/// as an HEVC 10-bit one).
 #[test]
 #[ignore = "needs a GPU and a 4K60 clip; the coordinator runs it (one at a time, about 12 s)"]
 fn real_gpu_hands_4k60_frames_over_at_the_clip_rate() {
-    let clip = std::env::var("VESTRA_GPU_CLIP")
-        .unwrap_or_else(|_| r"C:\vestra\clips\hevc-2160p60-10bit.mp4".into());
+    let clip = std::env::var("VESTRA_GPU_CLIP").expect("VESTRA_GPU_CLIP names a 4K60 clip");
     let gpu = Arc::new(Gpu::open(Choice::Default).expect("Direct3D 12"));
     assert!(!gpu.facts.software, "{} is not a GPU", gpu.facts.name);
     let mpv = player("auto-safe");
@@ -508,14 +507,13 @@ fn warp_interpolation_off_restores_the_frame_rate() {
 }
 
 /// The same on the high-performance GPU (the one GPU rendering picks) with
-/// a 4K60 clip (`VESTRA_GPU_CLIP`, default the Big Buck Bunny 2160p60 test
+/// a 4K60 clip (`VESTRA_GPU_CLIP`, such as the Big Buck Bunny 2160p60
 /// clip), a simulated window taking frames 60 times a second: the rates
 /// and mpv's drop counters off, on and off again.
 #[test]
 #[ignore = "needs a GPU and a 4K60 clip; the coordinator runs it (one at a time, about 15 s)"]
 fn real_gpu_interpolation_on_and_off_at_4k60() {
-    let clip = std::env::var("VESTRA_GPU_CLIP")
-        .unwrap_or_else(|_| r"C:\vestra\testmedia\bbb_sunflower_2160p_60fps_normal.mp4".into());
+    let clip = std::env::var("VESTRA_GPU_CLIP").expect("VESTRA_GPU_CLIP names a 4K60 clip");
     let gpu = Arc::new(Gpu::open(Choice::HighPerformance).expect("Direct3D 12"));
     assert!(!gpu.facts.software, "{} is not a GPU", gpu.facts.name);
     let mpv = player("auto-safe");
@@ -579,8 +577,7 @@ fn real_gpu_interpolation_on_and_off_at_4k60() {
 #[test]
 #[ignore = "measurement: needs a GPU and a 4K60 clip (about 25 s)"]
 fn real_gpu_resize_latency() {
-    let clip = std::env::var("VESTRA_GPU_CLIP")
-        .unwrap_or_else(|_| r"C:\vestra\testmedia\bbb_sunflower_2160p_60fps_normal.mp4".into());
+    let clip = std::env::var("VESTRA_GPU_CLIP").expect("VESTRA_GPU_CLIP names a 4K60 clip");
     let gpu = Arc::new(Gpu::open(Choice::HighPerformance).expect("Direct3D 12"));
     let mpv = player("auto-safe");
     mpv.set_property("loop-file", "inf").unwrap();

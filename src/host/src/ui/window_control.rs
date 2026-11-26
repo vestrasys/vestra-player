@@ -27,7 +27,7 @@ impl<T: Copy + PartialEq> LastWrite<T> {
         self.writes.remove(&owner);
     }
     /// A parked owner woke as `to`: its write, kept through standby
-    /// (events-and-triggers.md §4.8), is the new run's, in its place in the
+    ///, is the new run's, in its place in the
     /// order of writes (a write by another plugin after it still wins).
     pub fn rekey(&mut self, from: u64, to: u64) {
         if from == to {

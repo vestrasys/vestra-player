@@ -174,7 +174,7 @@ struct Attachment {
     locks: Locks,
 }
 
-/// The sidebar: one or more panels as tabs (panel-slots.md step 1). Shown,
+/// The sidebar: one or more panels as tabs. Shown,
 /// hidden and detached as a whole; one tab is current.
 #[derive(Clone, Debug)]
 struct Tabs {
@@ -398,7 +398,7 @@ impl Policy {
         Ok(())
     }
 
-    /// A tab's plugin woke from standby as `to` (sidebar-tabs.md): the tab
+    /// A tab's plugin woke from standby as `to`: the tab
     /// keeps its place, locks and current state.
     pub fn rekey(&mut self, from: u64, to: u64) {
         for tabs in self.columns.iter_mut().flatten() {

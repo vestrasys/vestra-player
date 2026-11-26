@@ -11,7 +11,7 @@
 //! answer or skip; asked once, before the first step, for the whole plan a
 //! run names with `then`), and every run is named before it runs: in the
 //! status strip for the palette lead's holder, else on the OSD
-//! (doc/architecture/palette-lead.md). "Don't ask again" on the sheet
+//!. "Don't ask again" on the sheet
 //! (Ask Vestra UX step 4, H4) trusts plugins that are not built in, per
 //! caller, in the host's `ui-state.json`: their ordinary commands no longer
 //! ask that caller; their destructive ones still do.

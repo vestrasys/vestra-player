@@ -1,5 +1,5 @@
-//! Units (supervisor.md §2): one plugin each, its identities,
-//! its state (doc/architecture/supervisor.md) and the static facts `add_unit`
+//! Units: one plugin each, its identities,
+//! its state and the static facts `add_unit`
 //! is given.
 #![forbid(unsafe_code)]
 
@@ -29,7 +29,7 @@ pub struct Pid(pub u64);
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RunnerId(pub u64);
 
-/// A unit's class (supervisor.md §2). `Resident` is observed at a ready
+/// A unit's class. `Resident` is observed at a ready
 /// (`classified` at every ready of a recordable unit), never declared.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Class {

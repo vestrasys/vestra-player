@@ -120,7 +120,7 @@ fn p_no_retry_after_runtime_failed_any_class() {
     }
 }
 
-// the restart delay built-in own process: 3 s × 2ⁿ ANSWERED (supervisor.md), was a design question: says "first runner
+// the restart delay built-in own process: 3 s × 2ⁿ ANSWERED, was a design question: says "first runner
 // restart immediate"; says "+ 3 s ×2ⁿ after the first" for built-ins. Best reading: "immediate first" applies to
 // runner restarts only; an own-process built-in waits 3 s, 6 s, 12 s.
 #[test]
@@ -166,7 +166,7 @@ fn p_builtin_backoff_not_reset_before_60s_stable() {
     assert_eq!(delay(&s, now), 6_000);
 }
 
-// the restart delay / hold Normal: 1 s × 2ⁿ (cap 60 s) ANSWERED (supervisor.md), was a design question: the 60 s cap
+// the restart delay / hold Normal: 1 s × 2ⁿ (cap 60 s) ANSWERED, was a design question: the 60 s cap
 // cannot be reached within the 5-in-10-min start limit (1+2+4+8 s) unless crashes are spread over more than 10
 // minutes, and states the "reset after 60 s stable" rule only for Builtin. Does the Normal/Resident backoff reset
 // after a stable run? Not tested here beyond the first four steps.

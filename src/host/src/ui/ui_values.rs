@@ -24,7 +24,7 @@ use crate::ui::ui_rows::{self, Rows};
 use slint_interpreter::{Struct, Value};
 
 // The limits of one property value, in both directions (plugin writes and
-// callback arguments). Player 0.6.0 (doc/architecture/large-lists.md §4)
+// callback arguments). Player 0.6.0
 // raised them from 4,096 rows, 16,384 values and 1 MiB of text so that a
 // plugin hands a whole list to the player (the playlist: up to 20,000
 // items; 50,000 playlist rows of 14 values and about 330 bytes of text

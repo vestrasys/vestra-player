@@ -10,7 +10,7 @@ import { Resume } from "./resume.ts";
  * positions.json), written after each change and on deactivation.
  *
  * The state is followed with `player.stream` while a media source is open
- * (events-and-triggers.md §6, M5), so the playing position is saved every few
+ * (M5), so the playing position is saved every few
  * seconds and little is lost at a quit or a crash. The "open" trigger opens the
  * stream when a source opens (and at a start while one is open: its `enter` is
  * delivered after the plugin is ready, so the stream is not something held at

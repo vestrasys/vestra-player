@@ -40,7 +40,7 @@ const EVENTS: &[&str] = &[
 /// the event. `source.state` (every 100 ms while playing), `window.state`
 /// (every resize step, menu and focus change), `playback.backend` (every
 /// mpv event) and `timeline.changed` (every source and mark) keep it.
-/// The discrete source events wake too (events-and-triggers.md §4.6): each
+/// The discrete source events wake too: each
 /// is sent once per thing that happened to a source; and so do the facts
 /// of the second batch ([`FACT_EVENTS`]), each sent once per change.
 pub(crate) const WAKE_EVENTS: &[&str] = &[
@@ -63,7 +63,7 @@ pub(crate) const WAKE_EVENTS: &[&str] = &[
     "audio.devices.changed",
     "app.started",
 ];
-/// The second batch of events (events-and-triggers.md §4.6, release B): a
+/// The second batch of events (release B): a
 /// fact that changed, sent once per change (`crate::fact_events`). For the
 /// start-up mute they are states, compared as the other wake events are
 /// (`OnDemand::announced`).

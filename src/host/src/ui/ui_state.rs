@@ -1,4 +1,4 @@
-//! Interface state kept across launches (core-ui-design.md §8): window frame
+//! Interface state kept across launches: window frame
 //! and whether it was maximized, sidebar width, the sidebar slot (shown, floating, current tab, tab order,
 //! floating frame), the user's binding overlay, and the plugins whose
 //! commands a `commands.run` caller runs without asking (Ask Vestra UX step
@@ -50,10 +50,10 @@ pub struct Sidebar {
 }
 
 /// At most this many plugin ids are kept in [`SidebarSlot::order`] (sidebar
-/// tabs have no cap, sidebar-tabs.md; the oldest go first past it).
+/// tabs have no cap; the oldest go first past it).
 pub const ORDER_LIMIT: usize = 512;
 
-/// The sidebar slot, whichever panels it holds (panel-slots.md step 1):
+/// The sidebar slot, whichever panels it holds:
 /// shown and floating as a whole, its current tab and the tab order (plugin
 /// manifest ids, including plugins not running now), and the floating frame.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -255,14 +255,14 @@ pub struct UiState {
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub trusted_plugins: BTreeMap<String, Vec<String>>,
     /// The player version of the run that last started with this file
-    /// (`app.started`'s `previous`, events-and-triggers.md §4.6): written
+    /// (`app.started`'s `previous`): written
     /// once per run whose version differs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub player_version: Option<String>,
 }
 
 /// The interface's part of [`UiState`] (plan step S2c(7) of
-/// doc/process/core-thread-plan.md; design K8): what the interface writes
+/// the core thread plan; design K8): what the interface writes
 /// and reads itself. The core writes the file and owns the rest (the
 /// binding overlay and its migrations, the appearance, the trusted
 /// plugins); the interface keeps this part and gives it to the core whole

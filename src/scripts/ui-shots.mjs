@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Offscreen screenshots of a plugin's windows and settings pages
- * (doc/architecture/ui-shots.md):
+ *:
  *
  *   npm run ui:shots -- <plugin...> [--lang en,zh-Hans,de] [--out <dir>]
  *       [--state <text>] [--max <n>] [--theme vestra|vestra-light]
@@ -408,7 +408,7 @@ const variantText = {
 const md = [
   `# UI screenshots: ${names.join(", ")}`,
   "",
-  `Languages ${langs.join(", ")}; theme ${theme}; scale ${scale}. Rendered offscreen with the player's Slint pipeline (doc/architecture/ui-shots.md); look at a PNG with the Read tool.`,
+  `Languages ${langs.join(", ")}; theme ${theme}; scale ${scale}. Rendered offscreen with the player's Slint pipeline; look at a PNG with the Read tool.`,
   "",
 ];
 for (const r of results) {

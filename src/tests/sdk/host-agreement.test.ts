@@ -358,7 +358,7 @@ test("the built-in-only requests are TestHost's (api/commands_run.rs, palette_le
       "palette.lead.set",
       "palette.lead.clear",
       "palette.lead.done",
-      // Player 0.10.3, guest windows (doc/architecture/guest-windows.md §7): `App.openWindow`
+      // Player 0.10.3, guest windows: `App.openWindow`
       // (SDK 1.10.1).
       "app.openWindow",
     ],

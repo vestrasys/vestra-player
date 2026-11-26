@@ -3,8 +3,7 @@
 //! before success; terminal outcomes never reopen. Callers supply monotonic
 //! milliseconds.
 //!
-//! Formerly `host/package_activation.rs` (doc/architecture/supervisor.md
-//! §11, `activation.rs`): an `Activation` is the old `Book` entry,
+//! Formerly `host/package_activation.rs`: an `Activation` is the old `Book` entry,
 //! now held by its `Unit` (one per unit, for the run being activated)
 //! instead of a global map keyed by owner. The old `LIMIT` of 64
 //! activations at once is gone: how many plugins start

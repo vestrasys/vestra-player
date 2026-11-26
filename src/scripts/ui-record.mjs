@@ -17,7 +17,7 @@
  *
  * VESTRA_UI_STATES (the screenshot tool, scripts/ui-shots.mjs): every view
  * event in order, without removing repeats, so the tool can rebuild the
- * state each view had (doc/architecture/ui-shots.md). One line:
+ * state each view had. One line:
  * {plugin, test, case, host, view, kind, event, file, component?, global?,
  * title?, category?, property?, value?}: `host` numbers the test hosts of the
  * process, `view` the views of one host (a reopened window is a new view),

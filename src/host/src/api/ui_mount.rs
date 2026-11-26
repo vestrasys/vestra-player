@@ -41,7 +41,7 @@ impl Capability for UiMount {
     }
     /// A panel in the bottom bar or the backdrop keeps its plugin running
     /// (Resident). A tab (the sidebar, the adjust column) is recorded,
-    /// current or not (sidebar-tabs.md, user ruling 2026-11-03): its plugin
+    /// current or not (user ruling 2026-11-03): its plugin
     /// is Normal, the current tab keeps it running as declared work
     /// (`Busy::ShownTab`), and a background tab stays as a placeholder while
     /// the plugin stands by. A plugin may hold one panel per slot (SDK
@@ -117,7 +117,7 @@ impl Capability for UiMount {
         }
     }
     /// A recorded tab: a placeholder in its column, compiled into nothing
-    /// (sidebar-tabs.md).
+    ///.
     fn replay(&self, core: &mut Core, owner: u64, origin: &Origin, call: &Call) -> Handled {
         if call.method != "ui.mount" {
             return Err(RpcError::new("unsupported", "not a recorded method"));
@@ -459,7 +459,7 @@ fn mount(
         return Err(RpcError::new("busy", "UI preparation queue full"));
     }
     // One panel per slot and plugin; a placeholder tab of this plugin
-    // (sidebar-tabs.md) is taken over by its woken run's mount, a panel
+    // is taken over by its woken run's mount, a panel
     // kept over its restart by its restarted run's (`panel_restart.rs`).
     if core.mounts.get(&key).is_some_and(|m| !m.recorded) && !core.restarts.waiting(key) {
         return Err(RpcError::new(
@@ -469,7 +469,7 @@ fn mount(
     }
     // One component in the bottom bar and the backdrop (R-U3), whoever
     // mounted it: refused here, not when the shell compiles. The sidebar
-    // and the adjust column take any number of tabs (sidebar-tabs.md).
+    // and the adjust column take any number of tabs.
     if !slot.tabbed() {
         let pending = core
             .mount_queue

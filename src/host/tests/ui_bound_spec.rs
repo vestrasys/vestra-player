@@ -1,5 +1,5 @@
 //! Spec tests of the core thread's handoff rules, written from the design
-//! (doc/architecture/core-thread.md §5, rules R5, R6, R12 and R13; core
+//! (rules R5, R6, R12 and R13; core
 //! thread plan S2d: "spec tests written from rules R5, R6, R12 and R13
 //! pass") by a separate author, without reading the implementation. They
 //! pin what a plugin can observe, so they hold on today's code (the core
@@ -658,7 +658,7 @@ const WOKEN_OPEN: &str = "vestra.fixture-spec-woken-open";
 
 /// A built-in whose activation logs its start and sets a `time` trigger due
 /// at `due` (epoch ms). Its first run does nothing else, so it goes quiet
-/// and is parked (a lazy first run, supervisor.md §3). The run its trigger
+/// and is parked (a lazy first run). The run its trigger
 /// wakes sends `ui` (an initial interface request, not awaited, so that
 /// `runtime.ready` comes before its reply), and logs when it was answered.
 fn woken(due: i64, ui: &str) -> String {

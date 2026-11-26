@@ -820,7 +820,7 @@ impl Host {
             );
         }
     }
-    /// Make `next` the mounted panels (sidebar-tabs.md); `batch`: the panels
+    /// Make `next` the mounted panels; `batch`: the panels
     /// whose mount or unmount this applies. The shell is never compiled
     /// again: each panel is compiled on its own, when it is first shown
     /// (`ui/panels.rs`). A panel of the batch that shows at once (the

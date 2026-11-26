@@ -1,5 +1,5 @@
 //! The process budget's input and the memory pressure source
-//! (doc/architecture/supervisor.md). The budget is the core's
+//!. The budget is the core's
 //! (`Tunables::new` from the physical memory read once at start-up); the pressure level is read from the system every
 //! `POLL_MS` (Windows: thresholds on available physical memory and
 //! the system's low-memory notification; Linux: PSI; macOS: none yet,

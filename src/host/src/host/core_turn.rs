@@ -928,7 +928,7 @@ fn a_held_request_keeps_its_plugin_busy_until_it_is_taken() {
     );
 }
 
-/// Guest windows (doc/architecture/guest-windows.md §4): a core on a
+/// Guest windows: a core on a
 /// read-only library refuses the three changes to the plugins with
 /// `unavailable` and still answers the reads.
 #[test]
@@ -960,7 +960,7 @@ fn a_guest_core_refuses_plugin_changes() {
     assert!(!root.path().join("main-packages").exists(), "nothing made");
 }
 
-/// Guest windows (guest-windows.md §4): the forced removal of versions a
+/// Guest windows: the forced removal of versions a
 /// record set aside no longer keeps (`hold_freed`) leaves a version a
 /// running guest leases where it is; the others leave the library.
 #[test]

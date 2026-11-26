@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Static gates for a change that must only add (doc/process/verify-additions.md):
+ * Static gates for a change that must only add:
  * compares a branch, or the working tree, of one repository with a base ref
  * and fails when something that existed was changed.
  *

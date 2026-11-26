@@ -1,4 +1,4 @@
-// Playlist sidebar (ui-spec §5): 31px tab strip, single-line 20px rows (62px rows with a thumbnail, 0.1.11) on
+// Playlist sidebar: 31px tab strip, single-line 20px rows (62px rows with a thumbnail, 0.1.11) on
 // the list background, 35px bottom bar. Icons come from @vestra/icons.slint.
 import { ListView, Palette } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
@@ -216,7 +216,7 @@ export component PlaylistSidebar inherits Rectangle {
     preferred-width: 317px;
     background: Theme.bg-list;
     private property <length> row-height: PlaylistBridge.thumbnails ? 62px : 20px;
-    // The selected-row background (ui-spec §5.2); the theme has no token for it.
+    // The selected-row background; the theme has no token for it.
     private property <color> selected-bg: Theme.selected-bg;
     private property <int> row-count: PlaylistBridge.rows.length;
     // PgUp/PgDn move the cursor by the rows the list shows (at least one).

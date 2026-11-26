@@ -146,7 +146,7 @@ fn g_low_pressure_standby_for_all_idle_normal_units() {
     }
 }
 
-// Importance: recently used −100 → go to standby later ANSWERED (supervisor.md), was a design question:
+// Importance: recently used −100 → go to standby later ANSWERED, was a design question:
 // "recently used" has no window in the design. This only checks the order (older first), which holds under any
 // window.
 #[test]

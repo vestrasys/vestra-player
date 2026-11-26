@@ -60,7 +60,7 @@ impl Capability for UiOsd {
 
 fn show(core: &mut Core, reply: &Reply, params: &Value) -> std::result::Result<(), RpcError> {
     // A template in the plugin's language: translated with its
-    // catalog, then formatted with `args` (i18n.md §5).
+    // catalog, then formatted with `args`.
     i18n::valid_args(&params["args"]).map_err(RpcError::invalid)?;
     let text = core
         .plugin_sentence(reply.owner, &params["text"], &params["args"])?
