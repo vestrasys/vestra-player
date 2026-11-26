@@ -1368,19 +1368,107 @@ fn fullscreen_match(value: Option<&str>) -> (Option<i32>, Option<String>) {
 /// its display exactly is made one pixel taller (or shorter, see
 /// `fullscreen_extra`). winit keeps a full-screen window on its display but
 /// does not reset its size while it stays on the same display.
+/// A full-screen window that is not minimized also gets its composition
+/// guard (`keep_composed`); any other window loses it.
 pub fn fullscreen_resized(window: &slint::Window) {
     use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
-    let Some(extra) = fullscreen_extra() else {
-        return;
-    };
     window.with_winit_window(|window| {
-        if window.fullscreen().is_none() {
+        let Ok(handle) = window.window_handle() else {
             return;
+        };
+        let RawWindowHandle::Win32(handle) = handle.as_raw() else {
+            return;
+        };
+        let hwnd = handle.hwnd.get();
+        let fullscreen = window.fullscreen().is_some();
+        if fullscreen && let Some(extra) = fullscreen_extra() {
+            vestra_win32::unmatch_display(hwnd, extra);
         }
-        if let Ok(handle) = window.window_handle()
-            && let RawWindowHandle::Win32(handle) = handle.as_raw()
-        {
-            vestra_win32::unmatch_display(handle.hwnd.get(), extra);
+        keep_composed(hwnd, fullscreen && window.is_minimized() != Some(true));
+    });
+}
+
+/// The opacity (of 255) of the one-pixel window that keeps a full-screen
+/// window composed by DWM (`vestra_win32::ComposeGuard`), `None` for none
+/// (`VESTRA_FULLSCREEN_COMPOSE`: unset, the default, 1; `0` turns the guard
+/// off; `2`-`255` for testing).
+fn compose_alpha() -> Option<u8> {
+    static ALPHA: std::sync::OnceLock<Option<u8>> = std::sync::OnceLock::new();
+    *ALPHA.get_or_init(|| {
+        let value = std::env::var("VESTRA_FULLSCREEN_COMPOSE").ok();
+        let (alpha, line) = fullscreen_compose(value.as_deref());
+        if let Some(line) = line {
+            diag!("{line}");
+        }
+        alpha
+    })
+}
+
+/// `VESTRA_FULLSCREEN_COMPOSE`: the guard's opacity (`None`: no guard), and a
+/// line to log when the value is not the default.
+fn fullscreen_compose(value: Option<&str>) -> (Option<u8>, Option<String>) {
+    const DEFAULT: u8 = 1;
+    match value.map(str::trim) {
+        None | Some("") => (Some(DEFAULT), None),
+        Some("0") => (
+            None,
+            Some("ui: VESTRA_FULLSCREEN_COMPOSE=0: a full-screen window may be put in independent flip (on the AMD-driven panel the pointer then freezes for seconds at entry)".into()),
+        ),
+        Some(other) => match other.parse::<u8>() {
+            Ok(alpha) => (Some(alpha), None),
+            Err(_) => (
+                Some(DEFAULT),
+                Some(format!(
+                    "ui: VESTRA_FULLSCREEN_COMPOSE={other} is not 0-255; the default {DEFAULT} applies"
+                )),
+            ),
+        },
+    }
+}
+
+thread_local! {
+    /// The composition guards of the thread's full-screen windows, by the
+    /// window's HWND (UI thread).
+    static COMPOSE_GUARDS: std::cell::RefCell<Vec<(isize, vestra_win32::ComposeGuard)>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// While window `hwnd` is full screen (`fullscreen`), a one-pixel, almost
+/// transparent, click-through window over its display's top-left pixel
+/// keeps DWM composing that display, so the window's swapchain is never
+/// promoted to independent flip or an overlay plane: on the test laptop's
+/// AMD-driven panel that promotion froze the visible pointer for seconds
+/// after entering full screen (input kept working). The cost is DWM's
+/// composition pass (one copy of the window per refresh) instead of
+/// scanning the swapchain out directly. Moved along when the window changes
+/// display; destroyed when it leaves full screen (and by Windows with its
+/// owner).
+fn keep_composed(hwnd: isize, fullscreen: bool) {
+    COMPOSE_GUARDS.with_borrow_mut(|guards| {
+        guards.retain(|(_, guard)| guard.alive());
+        let at = guards.iter().position(|(owner, _)| *owner == hwnd);
+        match (fullscreen, at) {
+            (false, Some(at)) => drop(guards.swap_remove(at)),
+            (false, None) => {}
+            (true, Some(at)) => {
+                guards[at].1.place();
+            }
+            (true, None) => {
+                let Some(alpha) = compose_alpha() else {
+                    return;
+                };
+                match vestra_win32::ComposeGuard::open(hwnd, alpha) {
+                    Some(guard) => {
+                        diag!(
+                            "ui: full screen: a 1x1 px window at opacity {alpha}/255 over the display's top-left pixel keeps DWM composing (no independent flip; VESTRA_FULLSCREEN_COMPOSE=0 turns it off)"
+                        );
+                        guards.push((hwnd, guard));
+                    }
+                    None => diag!(
+                        "ui: full screen: the window that keeps DWM composing could not be created; the window may be put in independent flip"
+                    ),
+                }
+            }
         }
     });
 }
@@ -2861,6 +2949,21 @@ mod tests {
         let (extra, line) = fullscreen_match(Some("off"));
         assert_eq!(extra, Some(1));
         assert!(line.unwrap().contains("ignored"));
+    }
+
+    /// `VESTRA_FULLSCREEN_COMPOSE`: on at opacity 1 by default, `0` turns
+    /// the guard off, a number is its opacity, anything else is the default.
+    #[test]
+    fn the_fullscreen_compose_switch_reads_its_values() {
+        assert_eq!(fullscreen_compose(None), (Some(1), None));
+        assert_eq!(fullscreen_compose(Some("")), (Some(1), None));
+        assert_eq!(fullscreen_compose(Some("5")), (Some(5), None));
+        let (alpha, line) = fullscreen_compose(Some(" 0 "));
+        assert_eq!(alpha, None);
+        assert!(line.unwrap().starts_with("ui: "));
+        let (alpha, line) = fullscreen_compose(Some("off"));
+        assert_eq!(alpha, Some(1));
+        assert!(line.unwrap().contains("not 0-255"));
     }
 
     /// A failed reopen of
