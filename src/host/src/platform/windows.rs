@@ -1370,8 +1370,8 @@ fn fullscreen_match(value: Option<&str>) -> (Option<i32>, Option<String>) {
 /// does not reset its size while it stays on the same display; moved to a
 /// display of the same size and scale it gets only a move.
 /// A full-screen window that is not minimized also gets its composition
-/// guard, on its current display (`keep_composed`); any other window loses
-/// it.
+/// guard where the display needs one (`keep_composed`), decided again when
+/// it changes display; any other window loses it.
 pub fn fullscreen_resized(window: &slint::Window) {
     use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
     window.with_winit_window(|window| {
@@ -1390,112 +1390,230 @@ pub fn fullscreen_resized(window: &slint::Window) {
     });
 }
 
-/// The opacity (of 255) of the one-pixel window that keeps a full-screen
-/// window composed by DWM (`vestra_win32::ComposeGuard`), `None` for none
-/// (`VESTRA_FULLSCREEN_COMPOSE`: unset, the default, 1; `0` turns the guard
-/// off; `2`-`255` for testing).
-fn compose_alpha() -> Option<u8> {
-    static ALPHA: std::sync::OnceLock<Option<u8>> = std::sync::OnceLock::new();
-    *ALPHA.get_or_init(|| {
+/// `VESTRA_FULLSCREEN_COMPOSE`: when a full-screen window gets its
+/// composition guard (`keep_composed`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ComposeSetting {
+    /// Unset, the default: only on a built-in panel scanned out by an AMD
+    /// adapter (`compose_decision`).
+    Auto,
+    /// `1`-`255`: on every display, at this opacity (of 255).
+    Always(u8),
+    /// `0`: never.
+    Never,
+}
+
+/// The guard's opacity (of 255) when `Auto` or `1` turns it on.
+const COMPOSE_ALPHA: u8 = 1;
+
+/// PCI vendor id of AMD (ATI) adapters.
+const AMD_VENDOR: u32 = 0x1002;
+
+/// The process's `VESTRA_FULLSCREEN_COMPOSE`, read once.
+fn compose_setting() -> ComposeSetting {
+    static SETTING: std::sync::OnceLock<ComposeSetting> = std::sync::OnceLock::new();
+    *SETTING.get_or_init(|| {
         let value = std::env::var("VESTRA_FULLSCREEN_COMPOSE").ok();
-        let (alpha, line) = fullscreen_compose(value.as_deref());
+        let (setting, line) = fullscreen_compose(value.as_deref());
         if let Some(line) = line {
             diag!("{line}");
         }
-        alpha
+        setting
     })
 }
 
-/// `VESTRA_FULLSCREEN_COMPOSE`: the guard's opacity (`None`: no guard), and a
-/// line to log when the value is not the default.
-fn fullscreen_compose(value: Option<&str>) -> (Option<u8>, Option<String>) {
-    const DEFAULT: u8 = 1;
+/// `VESTRA_FULLSCREEN_COMPOSE`: the setting, and a line to log when the
+/// value is not understood.
+fn fullscreen_compose(value: Option<&str>) -> (ComposeSetting, Option<String>) {
     match value.map(str::trim) {
-        None | Some("") => (Some(DEFAULT), None),
-        Some("0") => (
-            None,
-            Some("ui: VESTRA_FULLSCREEN_COMPOSE=0: a full-screen window may be put in independent flip (on the AMD-driven panel the pointer then freezes for seconds at entry)".into()),
-        ),
+        None | Some("") => (ComposeSetting::Auto, None),
         Some(other) => match other.parse::<u8>() {
-            Ok(alpha) => (Some(alpha), None),
+            Ok(0) => (ComposeSetting::Never, None),
+            Ok(alpha) => (ComposeSetting::Always(alpha), None),
             Err(_) => (
-                Some(DEFAULT),
+                ComposeSetting::Auto,
                 Some(format!(
-                    "ui: VESTRA_FULLSCREEN_COMPOSE={other} is not 0-255; the default {DEFAULT} applies"
+                    "ui: VESTRA_FULLSCREEN_COMPOSE={other} is not 0-255; the default applies (built-in AMD panels only)"
                 )),
             ),
         },
     }
 }
 
+/// What the display configuration says about the display of a full-screen
+/// window (`scanout`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct Scanout {
+    /// The GDI device name (`\\.\DISPLAY1`).
+    device: String,
+    /// A built-in panel connector (`vestra_win32::internal_output`).
+    internal: bool,
+    /// The scan-out adapter's PCI vendor id and name.
+    vendor: u32,
+    adapter: String,
+}
+
+/// The guard's opacity for a full-screen window, `None` for no guard:
+/// `Auto` turns it on only for a built-in panel scanned out by an AMD
+/// adapter, and off when the display could not be identified (`scanout`
+/// is an error).
+fn compose_decision(
+    setting: ComposeSetting,
+    scanout: std::result::Result<&Scanout, &str>,
+) -> Option<u8> {
+    match setting {
+        ComposeSetting::Never => None,
+        ComposeSetting::Always(alpha) => Some(alpha),
+        ComposeSetting::Auto => scanout
+            .ok()
+            .filter(|scanout| scanout.internal && scanout.vendor == AMD_VENDOR)
+            .map(|_| COMPOSE_ALPHA),
+    }
+}
+
+/// The `ui:` line of a decision (`compose_decision`), once per entry into
+/// full screen, restore from minimized, or change of display.
+fn compose_line(
+    setting: ComposeSetting,
+    scanout: std::result::Result<&Scanout, &str>,
+    alpha: Option<u8>,
+) -> String {
+    let display = match scanout {
+        Ok(scanout) => format!(
+            "{}, internal {}, adapter {} (vendor {:#06x})",
+            scanout.device,
+            if scanout.internal { "yes" } else { "no" },
+            scanout.adapter,
+            scanout.vendor
+        ),
+        Err(error) => format!("display not identified ({error})"),
+    };
+    let why = match setting {
+        ComposeSetting::Auto => "built-in AMD panels only",
+        ComposeSetting::Always(_) => "VESTRA_FULLSCREEN_COMPOSE: every display",
+        ComposeSetting::Never => "VESTRA_FULLSCREEN_COMPOSE=0",
+    };
+    let guard = match alpha {
+        Some(alpha) => format!(
+            "on: a 1x1 px window at opacity {alpha}/255 over the display's top-left pixel keeps DWM composing (no independent flip)"
+        ),
+        None => "off".into(),
+    };
+    format!("ui: full screen: {display}; composition guard {guard} ({why})")
+}
+
+/// The display (HMONITOR value) `display`'s connector and scan-out adapter.
+fn scanout(display: isize) -> std::result::Result<Scanout, String> {
+    let output = vestra_win32::display_output(display)?;
+    let adapters = vestra_win32::dxgi_adapters()?;
+    let adapter = adapters
+        .into_iter()
+        .find(|adapter| adapter.luid == output.adapter_luid)
+        .ok_or_else(|| format!("no DXGI adapter for {}", output.device))?;
+    Ok(Scanout {
+        device: output.device,
+        internal: output.internal,
+        vendor: adapter.vendor_id,
+        adapter: adapter.name,
+    })
+}
+
+/// A full-screen window `keep_composed` has decided for.
+struct Composed {
+    hwnd: isize,
+    /// The display (HMONITOR value) the decision was made for.
+    display: isize,
+    guard: Option<vestra_win32::ComposeGuard>,
+}
+
 thread_local! {
-    /// The composition guards of the thread's full-screen windows, by the
-    /// window's HWND (UI thread).
-    static COMPOSE_GUARDS: std::cell::RefCell<Vec<(isize, vestra_win32::ComposeGuard)>> =
+    /// The thread's full-screen windows and their composition guards (UI
+    /// thread).
+    static COMPOSED: std::cell::RefCell<Vec<Composed>> =
         const { std::cell::RefCell::new(Vec::new()) };
 }
 
-/// While window `hwnd` is full screen (`fullscreen`), a one-pixel, almost
-/// transparent, click-through window over its display's top-left pixel
-/// keeps DWM composing that display, so the window's swapchain is never
-/// promoted to independent flip or an overlay plane: on the test laptop's
-/// AMD-driven panel that promotion froze the visible pointer for seconds
-/// after entering full screen (input kept working). The cost is DWM's
-/// composition pass (one copy of the window per refresh) instead of
-/// scanning the swapchain out directly. Moved along when the window changes
-/// display; destroyed when it leaves full screen (and by Windows with its
-/// owner).
+/// While window `hwnd` is full screen (`fullscreen`) on a display that
+/// needs it (`compose_decision`: by default a built-in panel scanned out by
+/// an AMD adapter), a one-pixel, almost transparent, click-through window
+/// over its display's top-left pixel keeps DWM composing that display, so
+/// the window's swapchain is never promoted to independent flip or an
+/// overlay plane: on the test laptop's AMD-driven panel that promotion
+/// froze the visible pointer for seconds after entering full screen (input
+/// kept working). The cost is DWM's composition pass (one copy of the
+/// window per refresh) instead of scanning the swapchain out directly.
+/// Decided again when the window changes display; destroyed when it leaves
+/// full screen (and by Windows with its owner).
 fn keep_composed(hwnd: isize, fullscreen: bool) {
-    COMPOSE_GUARDS.with_borrow_mut(|guards| {
-        guards.retain(|(_, guard)| guard.alive());
-        let at = guards.iter().position(|(owner, _)| *owner == hwnd);
-        match (guard_step(fullscreen, at.is_some()), at) {
-            (GuardStep::Close, Some(at)) => drop(guards.swap_remove(at)),
+    COMPOSED.with_borrow_mut(|windows| {
+        windows.retain(|window| {
+            vestra_win32::window_exists(window.hwnd)
+                && window.guard.as_ref().is_none_or(|guard| guard.alive())
+        });
+        let at = windows.iter().position(|window| window.hwnd == hwnd);
+        let display = vestra_win32::window_display(hwnd);
+        let same_display = at.map(|at| windows[at].display == display);
+        match (guard_step(fullscreen, same_display), at) {
+            (GuardStep::Close, Some(at)) => drop(windows.swap_remove(at)),
             (GuardStep::Place, Some(at)) => {
-                guards[at].1.place();
-            }
-            (GuardStep::Open, _) => {
-                let Some(alpha) = compose_alpha() else {
-                    return;
-                };
-                match vestra_win32::ComposeGuard::open(hwnd, alpha) {
-                    Some(guard) => {
-                        diag!(
-                            "ui: full screen: a 1x1 px window at opacity {alpha}/255 over the display's top-left pixel keeps DWM composing (no independent flip; VESTRA_FULLSCREEN_COMPOSE=0 turns it off)"
-                        );
-                        guards.push((hwnd, guard));
-                    }
-                    None => diag!(
-                        "ui: full screen: the window that keeps DWM composing could not be created; the window may be put in independent flip"
-                    ),
+                if let Some(guard) = &windows[at].guard {
+                    guard.place();
                 }
+            }
+            (GuardStep::Decide, _) => {
+                if let Some(at) = at {
+                    // Off the old display first.
+                    drop(windows.swap_remove(at));
+                }
+                let setting = compose_setting();
+                let found = scanout(display);
+                let found = found.as_ref().map_err(String::as_str);
+                let alpha = compose_decision(setting, found);
+                diag!("{}", compose_line(setting, found, alpha));
+                let guard = alpha.and_then(|alpha| {
+                    let guard = vestra_win32::ComposeGuard::open(hwnd, alpha);
+                    if guard.is_none() {
+                        diag!(
+                            "ui: full screen: the window that keeps DWM composing could not be created; the window may be put in independent flip"
+                        );
+                    }
+                    guard
+                });
+                windows.push(Composed {
+                    hwnd,
+                    display,
+                    guard,
+                });
             }
             _ => {}
         }
     });
 }
 
-/// What `keep_composed` does with a window's composition guard.
+/// What `keep_composed` does for a window.
 #[derive(Debug, PartialEq, Eq)]
 enum GuardStep {
-    /// Create one (on entering full screen, or restored from minimized).
-    Open,
-    /// Move the existing one to the window's current display (after a
-    /// resize or move in full screen; nothing when it is there already).
+    /// Decide whether it gets a guard, and create it (on entering full
+    /// screen, restored from minimized, or on another display).
+    Decide,
+    /// Move its guard, if any, to the window's display (after a resize or
+    /// move in full screen on the same display).
     Place,
-    /// Destroy it (left full screen, or minimized).
+    /// Destroy its guard and forget the decision (left full screen, or
+    /// minimized).
     Close,
     Nothing,
 }
 
 /// `keep_composed`'s choice for a window that is full screen and not
-/// minimized (`fullscreen`) and has a guard or not (`guarded`).
-fn guard_step(fullscreen: bool, guarded: bool) -> GuardStep {
-    match (fullscreen, guarded) {
-        (true, false) => GuardStep::Open,
-        (true, true) => GuardStep::Place,
-        (false, true) => GuardStep::Close,
-        (false, false) => GuardStep::Nothing,
+/// minimized (`fullscreen`), decided for before (`decided`: on the display
+/// it is on now, or not) or not (`None`).
+fn guard_step(fullscreen: bool, decided: Option<bool>) -> GuardStep {
+    match (fullscreen, decided) {
+        (true, None | Some(false)) => GuardStep::Decide,
+        (true, Some(true)) => GuardStep::Place,
+        (false, Some(_)) => GuardStep::Close,
+        (false, None) => GuardStep::Nothing,
     }
 }
 
@@ -2977,31 +3095,97 @@ mod tests {
         assert!(line.unwrap().contains("ignored"));
     }
 
-    /// `VESTRA_FULLSCREEN_COMPOSE`: on at opacity 1 by default, `0` turns
-    /// the guard off, a number is its opacity, anything else is the default.
+    /// `VESTRA_FULLSCREEN_COMPOSE`: unset is the automatic rule, `0` never,
+    /// `1`-`255` always at that opacity, anything else the automatic rule.
     #[test]
     fn the_fullscreen_compose_switch_reads_its_values() {
-        assert_eq!(fullscreen_compose(None), (Some(1), None));
-        assert_eq!(fullscreen_compose(Some("")), (Some(1), None));
-        assert_eq!(fullscreen_compose(Some("5")), (Some(5), None));
-        let (alpha, line) = fullscreen_compose(Some(" 0 "));
-        assert_eq!(alpha, None);
-        assert!(line.unwrap().starts_with("ui: "));
-        let (alpha, line) = fullscreen_compose(Some("off"));
-        assert_eq!(alpha, Some(1));
-        assert!(line.unwrap().contains("not 0-255"));
+        assert_eq!(fullscreen_compose(None), (ComposeSetting::Auto, None));
+        assert_eq!(fullscreen_compose(Some("")), (ComposeSetting::Auto, None));
+        assert_eq!(
+            fullscreen_compose(Some(" 0 ")),
+            (ComposeSetting::Never, None)
+        );
+        assert_eq!(
+            fullscreen_compose(Some("1")),
+            (ComposeSetting::Always(1), None)
+        );
+        assert_eq!(
+            fullscreen_compose(Some("5")),
+            (ComposeSetting::Always(5), None)
+        );
+        assert_eq!(
+            fullscreen_compose(Some("255")),
+            (ComposeSetting::Always(255), None)
+        );
+        for odd in ["off", "256", "-1"] {
+            let (setting, line) = fullscreen_compose(Some(odd));
+            assert_eq!(setting, ComposeSetting::Auto, "{odd}");
+            assert!(line.unwrap().contains("not 0-255"), "{odd}");
+        }
     }
 
-    /// Every resize or move in full screen places the existing guard on
-    /// the window's current display (a move to a display of the same size
-    /// and scale is only a move); one is opened only when there is none,
-    /// and closed only when the window left full screen or was minimized.
+    /// The guard: by default only on a built-in panel scanned out by an
+    /// AMD adapter, never on an unidentified display; `0` never; a number
+    /// on every display, identified or not, at that opacity.
     #[test]
-    fn the_compose_guard_follows_the_window_and_full_screen() {
-        assert_eq!(guard_step(true, false), GuardStep::Open);
-        assert_eq!(guard_step(true, true), GuardStep::Place);
-        assert_eq!(guard_step(false, true), GuardStep::Close);
-        assert_eq!(guard_step(false, false), GuardStep::Nothing);
+    fn the_compose_guard_is_for_built_in_amd_panels_unless_set() {
+        let display = |internal, vendor| Scanout {
+            device: r"\\.\DISPLAY1".into(),
+            internal,
+            vendor,
+            adapter: "test".into(),
+        };
+        let nvidia = 0x10de;
+        let intel = 0x8086;
+        let cases = [
+            (true, AMD_VENDOR, Some(1), None, Some(1), Some(7)),
+            (false, AMD_VENDOR, None, None, Some(1), Some(7)),
+            (true, nvidia, None, None, Some(1), Some(7)),
+            (false, nvidia, None, None, Some(1), Some(7)),
+            (true, intel, None, None, Some(1), Some(7)),
+        ];
+        for (internal, vendor, auto, never, one, seven) in cases {
+            let found = display(internal, vendor);
+            let decide = |setting| compose_decision(setting, Ok(&found));
+            let case = format!("internal {internal}, vendor {vendor:#x}");
+            assert_eq!(decide(ComposeSetting::Auto), auto, "{case}");
+            assert_eq!(decide(ComposeSetting::Never), never, "{case}");
+            assert_eq!(decide(ComposeSetting::Always(1)), one, "{case}");
+            assert_eq!(decide(ComposeSetting::Always(7)), seven, "{case}");
+        }
+        // Detection failed: off by default, as set otherwise.
+        assert_eq!(compose_decision(ComposeSetting::Auto, Err("x")), None);
+        assert_eq!(compose_decision(ComposeSetting::Never, Err("x")), None);
+        assert_eq!(
+            compose_decision(ComposeSetting::Always(3), Err("x")),
+            Some(3)
+        );
+        // The log line names the display, internal, vendor and the decision.
+        let found = display(true, AMD_VENDOR);
+        let line = compose_line(ComposeSetting::Auto, Ok(&found), Some(1));
+        assert!(line.starts_with("ui: full screen: "), "{line}");
+        for part in [r"\\.\DISPLAY1", "internal yes", "0x1002", "guard on"] {
+            assert!(line.contains(part), "{part}: {line}");
+        }
+        let line = compose_line(ComposeSetting::Auto, Err("no path"), None);
+        assert!(
+            line.contains("not identified (no path)") && line.contains("guard off"),
+            "{line}"
+        );
+    }
+
+    /// The decision is made on entering full screen (or a restore from
+    /// minimized) and again on another display; a resize or move on the
+    /// same display only places the guard; leaving full screen or
+    /// minimizing forgets it.
+    #[test]
+    fn the_compose_guard_is_decided_per_entry_and_display() {
+        assert_eq!(guard_step(true, None), GuardStep::Decide);
+        assert_eq!(guard_step(true, Some(false)), GuardStep::Decide);
+        assert_eq!(guard_step(true, Some(true)), GuardStep::Place);
+        assert_eq!(guard_step(false, Some(true)), GuardStep::Close);
+        assert_eq!(guard_step(false, Some(false)), GuardStep::Close);
+        assert_eq!(guard_step(false, None), GuardStep::Nothing);
     }
 
     /// A failed reopen of

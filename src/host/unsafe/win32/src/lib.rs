@@ -1246,6 +1246,151 @@ impl Drop for ComposeGuard {
     }
 }
 
+/// Whether `hwnd` names a live window.
+pub fn window_exists(hwnd: isize) -> bool {
+    use windows_sys::Win32::UI::WindowsAndMessaging::IsWindow;
+    // SAFETY: IsWindow takes the handle by value and rejects an invalid one.
+    unsafe { IsWindow(hwnd as HWND) != 0 }
+}
+
+/// The display (HMONITOR value) that holds most of window `hwnd`; the
+/// primary one for a window that no longer exists. Only compared, never
+/// dereferenced.
+pub fn window_display(hwnd: isize) -> isize {
+    monitor_of(hwnd)
+}
+
+/// The display that holds most of a window, as the display configuration
+/// sees it (`display_output`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DisplayOutput {
+    /// The GDI device name (`\\.\DISPLAY1`).
+    pub device: String,
+    /// The connector is built in (`internal_output`): a laptop's own panel.
+    pub internal: bool,
+    /// The LUID of the adapter that scans the display out (the display
+    /// configuration path's source adapter), as `DxgiAdapter::luid`.
+    pub adapter_luid: u64,
+}
+
+/// Whether a display configuration output technology is a built-in panel
+/// connector: `INTERNAL` (what Windows reports for a laptop's own panel on
+/// most drivers), embedded DisplayPort, embedded UDI, or LVDS (used only
+/// for built-in panels).
+pub fn internal_output(technology: i32) -> bool {
+    use windows_sys::Win32::Devices::Display::{
+        DISPLAYCONFIG_OUTPUT_TECHNOLOGY_DISPLAYPORT_EMBEDDED,
+        DISPLAYCONFIG_OUTPUT_TECHNOLOGY_INTERNAL, DISPLAYCONFIG_OUTPUT_TECHNOLOGY_LVDS,
+        DISPLAYCONFIG_OUTPUT_TECHNOLOGY_UDI_EMBEDDED,
+    };
+    matches!(
+        technology,
+        DISPLAYCONFIG_OUTPUT_TECHNOLOGY_INTERNAL
+            | DISPLAYCONFIG_OUTPUT_TECHNOLOGY_DISPLAYPORT_EMBEDDED
+            | DISPLAYCONFIG_OUTPUT_TECHNOLOGY_UDI_EMBEDDED
+            | DISPLAYCONFIG_OUTPUT_TECHNOLOGY_LVDS
+    )
+}
+
+/// The display configuration's view of the display (HMONITOR value from
+/// [`window_display`]): its connector and the adapter that scans it out,
+/// through `QueryDisplayConfig` (active paths), the path whose source has
+/// the display's GDI device name. A display cloned to several targets
+/// counts as internal when any of them is. An error when the display or
+/// its path cannot be found.
+pub fn display_output(display: isize) -> Result<DisplayOutput, String> {
+    use windows_sys::Win32::Devices::Display::{
+        DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME, DISPLAYCONFIG_MODE_INFO,
+        DISPLAYCONFIG_PATH_INFO, DISPLAYCONFIG_SOURCE_DEVICE_NAME, DisplayConfigGetDeviceInfo,
+        GetDisplayConfigBufferSizes, QDC_ONLY_ACTIVE_PATHS, QueryDisplayConfig,
+    };
+    // SAFETY: MONITORINFOEXW is plain data; all zeroes is a valid value.
+    let mut info: MONITORINFOEXW = unsafe { std::mem::zeroed() };
+    info.monitorInfo.cbSize = size_of::<MONITORINFOEXW>() as u32;
+    // SAFETY: `info` is a writable MONITORINFOEXW whose cbSize says so; a
+    // stale HMONITOR makes the call fail without touching memory through it.
+    if unsafe { GetMonitorInfoW(display as HMONITOR, (&raw mut info).cast()) } == 0 {
+        return Err("GetMonitorInfoW failed".into());
+    }
+    let device = utf16_until_nul(&info.szDevice);
+    let (paths, _modes) = loop {
+        let (mut path_count, mut mode_count) = (0u32, 0u32);
+        // SAFETY: two writable counts for the call.
+        let status = unsafe {
+            GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &mut path_count, &mut mode_count)
+        };
+        if status != 0 {
+            return Err(format!("GetDisplayConfigBufferSizes: error {status}"));
+        }
+        // SAFETY: both are plain data; all zeroes is a valid value.
+        let mut paths: Vec<DISPLAYCONFIG_PATH_INFO> =
+            vec![unsafe { std::mem::zeroed() }; path_count as usize];
+        // SAFETY: as above.
+        let mut modes: Vec<DISPLAYCONFIG_MODE_INFO> =
+            vec![unsafe { std::mem::zeroed() }; mode_count as usize];
+        // SAFETY: the arrays hold the counts given with them and are
+        // writable; the call writes at most that many entries and the
+        // counts it wrote. No topology id is asked for (null).
+        let status = unsafe {
+            QueryDisplayConfig(
+                QDC_ONLY_ACTIVE_PATHS,
+                &mut path_count,
+                paths.as_mut_ptr(),
+                &mut mode_count,
+                modes.as_mut_ptr(),
+                std::ptr::null_mut(),
+            )
+        };
+        // ERROR_INSUFFICIENT_BUFFER: the configuration changed in between.
+        if status == 122 {
+            continue;
+        }
+        if status != 0 {
+            return Err(format!("QueryDisplayConfig: error {status}"));
+        }
+        paths.truncate(path_count as usize);
+        modes.truncate(mode_count as usize);
+        break (paths, modes);
+    };
+    let mut found: Option<DisplayOutput> = None;
+    for path in &paths {
+        // SAFETY: plain data; all zeroes is a valid value.
+        let mut name: DISPLAYCONFIG_SOURCE_DEVICE_NAME = unsafe { std::mem::zeroed() };
+        name.header.r#type = DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME;
+        name.header.size = size_of::<DISPLAYCONFIG_SOURCE_DEVICE_NAME>() as u32;
+        name.header.adapterId = path.sourceInfo.adapterId;
+        name.header.id = path.sourceInfo.id;
+        // SAFETY: `name` is a writable request whose header gives its type
+        // and size; the call fills in the source's GDI device name.
+        if unsafe { DisplayConfigGetDeviceInfo(&mut name.header) } != 0 {
+            continue;
+        }
+        if utf16_until_nul(&name.viewGdiDeviceName) != device {
+            continue;
+        }
+        let internal = internal_output(path.targetInfo.outputTechnology);
+        let luid = path.sourceInfo.adapterId;
+        let adapter_luid = (u64::from(luid.HighPart as u32) << 32) | u64::from(luid.LowPart);
+        match &mut found {
+            Some(output) => output.internal |= internal,
+            None => {
+                found = Some(DisplayOutput {
+                    device: device.clone(),
+                    internal,
+                    adapter_luid,
+                });
+            }
+        }
+    }
+    found.ok_or_else(|| format!("no active display path for {device}"))
+}
+
+/// A NUL-terminated UTF-16 array as a string.
+fn utf16_until_nul(chars: &[u16]) -> String {
+    let end = chars.iter().position(|&c| c == 0).unwrap_or(chars.len());
+    String::from_utf16_lossy(&chars[..end])
+}
+
 /// The vertical blanks of one display, the clock that paces the host's
 /// redraws on Windows (`platform::windows`; Slint's winit backend paces them
 /// with a timer that is not tied to the display). Waits with
@@ -2030,6 +2175,80 @@ mod tests {
         Edges, SuperResolution, VBlank, display_areas, dxgi_adapters, file_is_remote,
         hidden_top_level, is_own_show, minimize, unmatched, version_parts, video_super_resolution,
     };
+
+    /// Built-in panel connectors count as internal; external ones do not.
+    #[test]
+    fn built_in_connectors_are_internal() {
+        use super::internal_output;
+        use windows_sys::Win32::Devices::Display::{
+            DISPLAYCONFIG_OUTPUT_TECHNOLOGY_DISPLAYPORT_EMBEDDED,
+            DISPLAYCONFIG_OUTPUT_TECHNOLOGY_DISPLAYPORT_EXTERNAL,
+            DISPLAYCONFIG_OUTPUT_TECHNOLOGY_HDMI, DISPLAYCONFIG_OUTPUT_TECHNOLOGY_INTERNAL,
+            DISPLAYCONFIG_OUTPUT_TECHNOLOGY_LVDS, DISPLAYCONFIG_OUTPUT_TECHNOLOGY_MIRACAST,
+            DISPLAYCONFIG_OUTPUT_TECHNOLOGY_OTHER, DISPLAYCONFIG_OUTPUT_TECHNOLOGY_UDI_EMBEDDED,
+        };
+        for internal in [
+            DISPLAYCONFIG_OUTPUT_TECHNOLOGY_INTERNAL,
+            DISPLAYCONFIG_OUTPUT_TECHNOLOGY_DISPLAYPORT_EMBEDDED,
+            DISPLAYCONFIG_OUTPUT_TECHNOLOGY_UDI_EMBEDDED,
+            DISPLAYCONFIG_OUTPUT_TECHNOLOGY_LVDS,
+        ] {
+            assert!(internal_output(internal), "{internal}");
+        }
+        for external in [
+            DISPLAYCONFIG_OUTPUT_TECHNOLOGY_HDMI,
+            DISPLAYCONFIG_OUTPUT_TECHNOLOGY_DISPLAYPORT_EXTERNAL,
+            DISPLAYCONFIG_OUTPUT_TECHNOLOGY_MIRACAST,
+            DISPLAYCONFIG_OUTPUT_TECHNOLOGY_OTHER,
+        ] {
+            assert!(!internal_output(external), "{external}");
+        }
+    }
+
+    /// Real machine, no window: every display's connector and scan-out
+    /// adapter (run with `--ignored --nocapture` to see them).
+    #[test]
+    #[ignore = "real displays"]
+    #[allow(clippy::disallowed_macros)] // a report for the terminal
+    fn every_display_has_an_output() {
+        use windows_sys::Win32::Foundation::{LPARAM, RECT};
+        use windows_sys::Win32::Graphics::Gdi::{EnumDisplayMonitors, HDC, HMONITOR};
+        unsafe extern "system" fn collect(
+            monitor: HMONITOR,
+            _: HDC,
+            _: *mut RECT,
+            list: LPARAM,
+        ) -> windows_sys::core::BOOL {
+            // SAFETY: `list` is the Vec passed below, alive for the call.
+            unsafe { (*(list as *mut Vec<isize>)).push(monitor as isize) };
+            1
+        }
+        let mut displays: Vec<isize> = Vec::new();
+        // SAFETY: no device context or clip rectangle; the callback only
+        // pushes onto `displays`, alive for the call.
+        unsafe {
+            EnumDisplayMonitors(
+                std::ptr::null_mut(),
+                std::ptr::null(),
+                Some(collect),
+                (&raw mut displays) as LPARAM,
+            )
+        };
+        let adapters = dxgi_adapters().unwrap();
+        assert!(!displays.is_empty());
+        for display in displays {
+            let output = super::display_output(display).unwrap();
+            let adapter = adapters.iter().find(|a| a.luid == output.adapter_luid);
+            eprintln!(
+                "{} internal={} adapter={:?} vendor={:#06x}",
+                output.device,
+                output.internal,
+                adapter.map(|a| &a.name),
+                adapter.map_or(0, |a| a.vendor_id)
+            );
+            assert!(adapter.is_some(), "{output:?}");
+        }
+    }
     use std::time::{Duration, Instant};
 
     #[test]
