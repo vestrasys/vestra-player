@@ -42,6 +42,13 @@
  *
  * Output: <out>/Vestra Player.app, <out>/VestraPlayer-<version>-macos-arm64.dmg
  * (and .app.zip with --zip).
+ *
+ * The DMG (volume "Vestra Player", ULMO, HFS+) opens on the install window:
+ * dmgbuild (python3 -m dmgbuild, pinned in macos/dmg/requirements.txt) with
+ * macos/dmg/settings.py lays out the app and an Applications link on
+ * macos/dmg/background.png (and its @2x). Without dmgbuild the script
+ * fails; VESTRA_DMG_PLAIN=1 makes the plain DMG instead (hdiutil, the same
+ * two items, no background), so a broken dmgbuild never blocks a release.
  */
 import { chmod, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -246,12 +253,61 @@ if (options.zip) {
   run("ditto", ["-c", "-k", "--sequesterRsrc", "--keepParent", app, zip]);
 }
 if (!options["no-dmg"]) {
+  const dmg = join(out, `${base}.dmg`);
+  await rm(dmg, { force: true });
+  if (process.env.VESTRA_DMG_PLAIN === "1") await plainDmg(dmg);
+  else brandedDmg(dmg);
+  if (signed) sign(dmg);
+}
+for (const file of await readdir(out))
+  if (file.startsWith(base)) console.log(`artifact ${join(out, file)}`);
+
+// ------------------------------------------------------------ helpers
+
+/**
+ * The install window: dmgbuild with macos/dmg/settings.py (background with
+ * its @2x, the app and the Applications link placed on it, no toolbar,
+ * sidebar or status bar). dmgbuild comes from macos/dmg/requirements.txt.
+ */
+function brandedDmg(dmg) {
+  const dir = join(packaging, "macos", "dmg");
+  let installed;
+  try {
+    installed =
+      run("python3", ["-c", "import dmgbuild"], {
+        quiet: true,
+        stdio: "ignore",
+        allowFailure: true,
+      }).status === 0;
+  } catch {
+    installed = false; // no python3 at all (spawn error)
+  }
+  if (!installed)
+    fail(
+      "dmgbuild is not installed for python3: python3 -m pip install " +
+        `--require-hashes --only-binary :all: -r ${join(dir, "requirements.txt")} ` +
+        "(in a venv), or set VESTRA_DMG_PLAIN=1 for a DMG without the install window",
+    );
+  run("python3", [
+    "-m",
+    "dmgbuild",
+    "-s",
+    join(dir, "settings.py"),
+    "-D",
+    `app=${app}`,
+    "-D",
+    `background=${join(dir, "background.png")}`,
+    DISPLAY_NAME,
+    dmg,
+  ]);
+}
+
+/** VESTRA_DMG_PLAIN=1: the app and an Applications link, plain hdiutil. */
+async function plainDmg(dmg) {
   const stage = join(out, ".dmg-stage");
   await clean(stage);
   run("ditto", [app, join(stage, `${DISPLAY_NAME}.app`)]);
   await symlink("/Applications", join(stage, "Applications"));
-  const dmg = join(out, `${base}.dmg`);
-  await rm(dmg, { force: true });
   run("hdiutil", [
     "create",
     "-volname",
@@ -266,12 +322,7 @@ if (!options["no-dmg"]) {
     dmg,
   ]);
   await rm(stage, { recursive: true, force: true });
-  if (signed) sign(dmg);
 }
-for (const file of await readdir(out))
-  if (file.startsWith(base)) console.log(`artifact ${join(out, file)}`);
-
-// ------------------------------------------------------------ helpers
 
 function references(file) {
   const lines = capture("otool", ["-L", file]).split("\n").slice(1);

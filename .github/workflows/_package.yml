@@ -84,10 +84,24 @@ jobs:
         if: steps.reuse.outputs.found != 'true'
         working-directory: src/host
         run: cargo build --release --locked
+      # The DMG's install window (bundle-macos.mjs): dmgbuild pinned by hash
+      # in a venv (Homebrew's python3 is externally managed, PEP 668). The
+      # repository variable VESTRA_DMG_PLAIN=1 skips it and makes the plain
+      # hdiutil DMG, should dmgbuild ever break a release.
+      - name: dmgbuild (macOS)
+        if: inputs.os == 'macos' && vars.VESTRA_DMG_PLAIN != '1'
+        timeout-minutes: 5
+        run: |
+          venv="$RUNNER_TEMP/dmgbuild"
+          python3 -m venv "$venv"
+          "$venv/bin/python3" -m pip install --quiet --disable-pip-version-check \
+            --require-hashes --only-binary :all: -r src/packaging/macos/dmg/requirements.txt
+          echo "$venv/bin" >> "$GITHUB_PATH"
       - name: Bundle
         timeout-minutes: 30
         env:
           OS: ${{ inputs.os }}
+          VESTRA_DMG_PLAIN: ${{ vars.VESTRA_DMG_PLAIN }}
           FOUND: ${{ steps.reuse.outputs.found }}
           REUSED_BINARY: ${{ steps.reuse.outputs.binary }}
           REUSED_LICENSES: ${{ steps.reuse.outputs.licenses }}

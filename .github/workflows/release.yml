@@ -318,7 +318,9 @@ jobs:
   # artifact vestra-signed-macos (same file names as vestra-unsigned-macos)
   # and host-vestra-signed-macos (the host.json entry with the signed host
   # binary's SHA-256, which a later release checks before it reuses it).
-  # Runs no repository code: the entitlements files are the only checkout.
+  # Checks out src/packaging/macos only: the entitlements files and the
+  # DMG's install window (dmg/settings.py, the one piece of repository code
+  # it runs, through the dmgbuild pinned by hash in dmg/requirements.txt).
   #
   # Missing secrets: a tag release (or a dispatch with dry_run off) fails
   # here; a dry run with sign_macos warns and ships the unsigned packages on
@@ -392,6 +394,17 @@ jobs:
         with:
           name: host-vestra-unsigned-macos
           path: ${{ runner.temp }}/host-record
+      # As in _package.yml: the DMG's install window, unless the repository
+      # variable VESTRA_DMG_PLAIN=1 asks for the plain hdiutil DMG.
+      - name: dmgbuild
+        if: steps.secrets.outputs.signed == 'true' && vars.VESTRA_DMG_PLAIN != '1'
+        timeout-minutes: 5
+        run: |
+          venv="$RUNNER_TEMP/dmgbuild"
+          python3 -m venv "$venv"
+          "$venv/bin/python3" -m pip install --quiet --disable-pip-version-check \
+            --require-hashes --only-binary :all: -r src/packaging/macos/dmg/requirements.txt
+          echo "$venv/bin" >> "$GITHUB_PATH"
       # A keychain of its own with a random password (never stored), holding
       # only the Developer ID Application identity; deleted at the end.
       - name: Keychain with the Developer ID certificate
@@ -536,6 +549,7 @@ jobs:
           APP: ${{ steps.sign.outputs.app }}
           ZIP: ${{ steps.sign.outputs.zip }}
           DMG: ${{ steps.sign.outputs.dmg }}
+          VESTRA_DMG_PLAIN: ${{ vars.VESTRA_DMG_PLAIN }}
           APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
@@ -595,16 +609,27 @@ jobs:
           xcrun stapler validate "$APP"
           # The released .app.zip: the stapled app.
           ditto -c -k --sequesterRsrc --keepParent "$APP" "$out/$ZIP"
-          # The DMG as bundle-macos.mjs makes it: the app and an
-          # Applications link, ULMO, HFS+. hdiutil sometimes reports the
-          # device busy on CI runners: three tries.
-          stage="$RUNNER_TEMP/dmg-stage"
-          rm -rf "$stage" && mkdir -p "$stage"
+          # The DMG as bundle-macos.mjs makes it: the install window
+          # (dmgbuild, macos/dmg/settings.py) with the app and an
+          # Applications link, ULMO, HFS+; VESTRA_DMG_PLAIN=1: the same two
+          # items with plain hdiutil. hdiutil sometimes reports the device
+          # busy on CI runners: three tries.
           name=$(basename "$APP" .app)
-          ditto "$APP" "$stage/$name.app"
-          ln -s /Applications "$stage/Applications"
+          dmgdir="$GITHUB_WORKSPACE/src/packaging/macos/dmg"
+          if [ "$VESTRA_DMG_PLAIN" = 1 ]; then
+            stage="$RUNNER_TEMP/dmg-stage"
+            rm -rf "$stage" && mkdir -p "$stage"
+            ditto "$APP" "$stage/$name.app"
+            ln -s /Applications "$stage/Applications"
+          fi
           for try in 1 2 3; do
-            hdiutil create -volname "$name" -srcfolder "$stage" -format ULMO -fs HFS+ -ov "$out/$DMG" && break
+            if [ "$VESTRA_DMG_PLAIN" = 1 ]; then
+              hdiutil create -volname "$name" -srcfolder "$stage" -format ULMO -fs HFS+ -ov "$out/$DMG"
+            else
+              rm -f "$out/$DMG"
+              python3 -m dmgbuild -s "$dmgdir/settings.py" -D "app=$APP" \
+                -D "background=$dmgdir/background.png" "$name" "$out/$DMG"
+            fi && break
             [ "$try" = 3 ] && exit 1
             sleep 10
           done
