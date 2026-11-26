@@ -1364,25 +1364,87 @@ fn fullscreen_match(value: Option<&str>) -> (Option<i32>, Option<String>) {
     }
 }
 
+/// The main window's native window, once it exists: from then on a move
+/// that would put it, caption-less (full screen), exactly on its display's
+/// rectangle gets the one-pixel-off rectangle instead, in that same move
+/// (`vestra_win32::guard_display_match`; see `fullscreen_extra`), so the
+/// exact rectangle never shows, not even until the `Resized` that
+/// [`fullscreen_resized`] handles. Returns true once there is nothing more
+/// to do (installed, refused, or `VESTRA_FULLSCREEN_MATCH=exact`); false
+/// while the native window does not exist yet.
+pub fn guard_fullscreen(window: &slint::Window) -> bool {
+    let Some(extra) = fullscreen_extra() else {
+        return true;
+    };
+    let Some(hwnd) = hwnd_of(window) else {
+        return false;
+    };
+    if !vestra_win32::guard_display_match(hwnd, extra) {
+        diag!("ui: the full-screen guard could not be installed; full screen is fixed after it");
+    }
+    true
+}
+
+thread_local! {
+    /// The main window and whether it was in full screen at its last
+    /// resize (`fullscreen_resized`'s log line).
+    static FULLSCREEN_SEEN: Cell<Option<(isize, bool)>> = const { Cell::new(None) };
+}
+
 /// After a resize of `window`: a borderless full-screen window that covers
 /// its display exactly is made one pixel taller (or shorter, see
 /// `fullscreen_extra`). winit keeps a full-screen window on its display but
-/// does not reset its size while it stays on the same display.
+/// does not reset its size while it stays on the same display. Each entry
+/// into full screen and each exit is one `ui:` line: the display, its
+/// current mode and the window's rectangle after the change.
 pub fn fullscreen_resized(window: &slint::Window) {
-    use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
-    let Some(extra) = fullscreen_extra() else {
+    let (Some(hwnd), Some(fullscreen)) = (
+        hwnd_of(window),
+        window.with_winit_window(|window| window.fullscreen().is_some()),
+    ) else {
         return;
     };
-    window.with_winit_window(|window| {
-        if window.fullscreen().is_none() {
-            return;
-        }
-        if let Ok(handle) = window.window_handle()
-            && let RawWindowHandle::Win32(handle) = handle.as_raw()
-        {
-            vestra_win32::unmatch_display(handle.hwnd.get(), extra);
-        }
-    });
+    if fullscreen && let Some(extra) = fullscreen_extra() {
+        vestra_win32::unmatch_display(hwnd, extra);
+    }
+    let before = FULLSCREEN_SEEN.replace(Some((hwnd, fullscreen)));
+    let was = before
+        .filter(|(seen, _)| *seen == hwnd)
+        .is_some_and(|(_, on)| on);
+    if was != fullscreen {
+        diag!(
+            "{}",
+            fullscreen_line(fullscreen, vestra_win32::window_display(hwnd).as_ref())
+        );
+    }
+}
+
+/// The host log's line for an entry into full screen (`entered`) or an
+/// exit, on `display`.
+fn fullscreen_line(entered: bool, display: Option<&vestra_win32::WindowDisplay>) -> String {
+    let what = if entered { "entered" } else { "left" };
+    let Some(display) = display else {
+        return format!("ui: full screen {what} (display unknown)");
+    };
+    let (left, top, right, bottom) = display.monitor;
+    let mode = display
+        .mode
+        .map_or("unknown".into(), |(width, height, hz)| {
+            format!("{width}x{height} @ {hz} Hz")
+        });
+    let window = display.window;
+    format!(
+        "ui: full screen {what} on {} at ({left}, {top}) {}x{}, mode {mode}; window ({}, {})-({}, {}) {}x{}",
+        display.device,
+        right - left,
+        bottom - top,
+        window.0,
+        window.1,
+        window.2,
+        window.3,
+        window.2 - window.0,
+        window.3 - window.1,
+    )
 }
 
 // ------------------------------------------------------------ redraw pacing
@@ -2861,6 +2923,31 @@ mod tests {
         let (extra, line) = fullscreen_match(Some("off"));
         assert_eq!(extra, Some(1));
         assert!(line.unwrap().contains("ignored"));
+    }
+
+    /// The host log's line for each full-screen entry and exit.
+    #[test]
+    fn the_fullscreen_line_names_the_display_mode_and_window() {
+        let display = vestra_win32::WindowDisplay {
+            device: r"\\.\DISPLAY1".into(),
+            monitor: (-2560, 0, 0, 1600),
+            mode: Some((2560, 1600, 165)),
+            window: (-2560, 0, 0, 1601),
+        };
+        assert_eq!(
+            fullscreen_line(true, Some(&display)),
+            r"ui: full screen entered on \\.\DISPLAY1 at (-2560, 0) 2560x1600, mode 2560x1600 @ 165 Hz; window (-2560, 0)-(0, 1601) 2560x1601"
+        );
+        let unknown = vestra_win32::WindowDisplay {
+            mode: None,
+            ..display
+        };
+        assert!(fullscreen_line(false, Some(&unknown)).starts_with("ui: full screen left on"));
+        assert!(fullscreen_line(false, Some(&unknown)).contains("mode unknown"));
+        assert_eq!(
+            fullscreen_line(false, None),
+            "ui: full screen left (display unknown)"
+        );
     }
 
     /// A failed reopen of

@@ -28,7 +28,7 @@
 //! | the tick | `keep_ticking` (Windows: the host's tick also runs inside the system's modal move/size loop, posted from a thread timer of `vestra-win32`; elsewhere the tick as it is) |
 //! | offline media | `HELD_FILE_INPUT` (how FFmpeg names its stdin, the held source file), `disk_space` (free bytes and volume of a path: Windows through `vestra-win32`; elsewhere `df -Pk`), `process_start` → `ProcessStart` (whether the owner of an export's intermediate parts still runs: Windows through `vestra-win32`; Linux `/proc`; macOS `ps`) |
 //! | opening windows | `cloak_until_drawn`, `window_drawing` (Windows: each window is cloaked from its show to its first draw, so it never opens white, through `vestra-win32`; elsewhere nothing) |
-//! | full screen | `fullscreen_resized` (Windows: a full-screen window is kept one pixel off its display's rectangle; elsewhere nothing) |
+//! | full screen | `guard_fullscreen`, `fullscreen_resized` (Windows: a full-screen window is kept one pixel off its display's rectangle from the move that enters full screen on, and each entry and exit is logged; elsewhere nothing) |
 //! | video texture | `VIDEO_TEXTURE` (Windows: software-rendered pictures through one reused texture, OpenGL or wgpu, `vestra-video-texture`; elsewhere a new image per frame), `same_video_image` (Windows: also compares wgpu textures; elsewhere `Image` equality) |
 //! | redraw pacing | `VBLANK_CLOCK`, `vblank_waiter` → `VBlankWaiter` (Windows: vertical blanks through `vestra-win32`; elsewhere `no_vblank` below: Slint paces, with a display link on macOS) |
 //! | rendering | `window_refresh` (here, through winit on every system), `select_wgpu_windows`, `GPU_RENDER`, `GPU_WINDOWS_WGPU`, `GPU_OPT_IN`, `gpu_start` → `GpuRenderer` / `GpuHandle` (implements `playback::renderer::GpuBackend`) / `GpuFrame` / `GpuDraw`, `gpu_started`, `gpu_failed`, `window_device_lost` (macOS: OpenGL windows, `vestra-gpu-render` with OpenGL; Windows: wgpu/Direct3D 12 windows, `vestra-gpu-render` with Direct3D 11 into shared textures; elsewhere `no_gpu` below refuses, so the host renders in software) |
@@ -1008,6 +1008,13 @@ pub const VIDEO_TEXTURE: bool = false;
 /// is in `windows.rs`.
 #[cfg(not(target_os = "windows"))]
 pub fn fullscreen_resized(_window: &slint::Window) {}
+
+/// Guard the main window's full-screen rectangle from its entry on:
+/// nothing to do here (Windows: `windows.rs`).
+#[cfg(not(target_os = "windows"))]
+pub fn guard_fullscreen(_window: &slint::Window) -> bool {
+    true
+}
 
 /// The host's tick as it is. Windows keeps it running inside the system's
 /// modal move/size loop, where winit serves no timers (`windows.rs`,

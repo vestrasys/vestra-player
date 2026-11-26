@@ -29,7 +29,12 @@ impl Host {
         // Software windows: this hook also counts the window's draws.
         let winit_draws = self.winit_draws.clone();
         let render = self.playback.render.clone();
+        // Set at the first event once the native window exists.
+        let guarded = std::cell::Cell::new(false);
         window.window().on_winit_window_event(move |slint_window, event| {
+                if !guarded.get() {
+                    guarded.set(platform::guard_fullscreen(slint_window));
+                }
                 video::count_winit_draw(winit_draws.get(), event, &render.presentation);
                 if debug_menu()
                     && weak.upgrade().is_some_and(|shell| {

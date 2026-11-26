@@ -15,7 +15,9 @@
 //! `set_normal_placement`: the main window restored across launches),
 //! waiting for a display's vertical blank
 //! (`VBlank`, the redraw clock) and keeping a full-screen window from
-//! matching its display exactly (`unmatch_display`), whether an open
+//! matching its display exactly (`unmatch_display`, and from the move that
+//! would match it, `guard_display_match`: a window subclass), the display
+//! a window is on with its current mode (`window_display`), whether an open
 //! file is on a network file system (`file_is_remote`), the free space of
 //! the volume holding a path (`disk_space`), waiting for a
 //! process to end (`wait_for_process_exit`), whether a process runs and
@@ -64,8 +66,8 @@ use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
     GetDoubleClickTime, GetKeyState, VK_CONTROL, VK_MENU, VK_SHIFT,
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    ASFW_ANY, AllowSetForegroundWindow, GetCursorPos, GetWindowRect, SWP_NOACTIVATE,
-    SWP_NOOWNERZORDER, SWP_NOZORDER, SetWindowPos, WINDOWPLACEMENT,
+    ASFW_ANY, AllowSetForegroundWindow, GetCursorPos, GetWindowRect, SWP_NOACTIVATE, SWP_NOMOVE,
+    SWP_NOOWNERZORDER, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos, WINDOWPLACEMENT,
 };
 
 /// The pointer in screen coordinates (physical pixels), `None` when the
@@ -1017,20 +1019,8 @@ pub fn unmatch_display(hwnd: isize, extra: i32) -> bool {
     if unsafe { GetWindowRect(hwnd as HWND, &mut window) } == 0 {
         return false;
     }
-    let edges = |rect: RECT| (rect.left, rect.top, rect.right, rect.bottom);
-    let another_display = |(left, top, right, bottom): Edges| {
-        let strip = RECT {
-            left,
-            top,
-            right,
-            bottom,
-        };
-        // SAFETY: `strip` is a valid RECT read for the call; MonitorFromRect
-        // keeps no pointer to it and answers null when no display meets it.
-        !unsafe { MonitorFromRect(&strip, MONITOR_DEFAULTTONULL) }.is_null()
-    };
     let Some((left, top, right, bottom)) =
-        unmatched(edges(window), edges(info.rcMonitor), extra, another_display)
+        unmatched(edges(window), edges(info.rcMonitor), extra, on_a_display)
     else {
         return false;
     };
@@ -1047,6 +1037,198 @@ pub fn unmatch_display(hwnd: isize, extra: i32) -> bool {
             SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE,
         ) != 0
     }
+}
+
+/// Whether the pixels of `strip` would show on a display.
+fn on_a_display((left, top, right, bottom): Edges) -> bool {
+    let strip = RECT {
+        left,
+        top,
+        right,
+        bottom,
+    };
+    // SAFETY: `strip` is a valid RECT read for the call; MonitorFromRect
+    // keeps no pointer to it and answers null when no display meets it.
+    !unsafe { MonitorFromRect(&strip, MONITOR_DEFAULTTONULL) }.is_null()
+}
+
+/// The subclass id of [`guard_display_match`] (any value unique to it).
+const DISPLAY_GUARD_ID: usize = 0x5645_4653; // "VEFS"
+
+/// Keep window `hwnd` (a top-level window of the calling thread) from ever
+/// covering its display exactly: while it has no caption (a borderless
+/// full-screen window), each move or resize that would put it exactly on
+/// its display's rectangle is changed, in that same `WM_WINDOWPOSCHANGING`,
+/// to the rectangle [`unmatch_display`] makes (`extra` pixels taller, or
+/// shorter when negative), so the exact rectangle is never applied, not
+/// even between the entry and the first `WM_SIZE`. A window subclass
+/// (`SetWindowSubclass`) that runs after the window's own procedure for
+/// that message; it removes itself when the window is destroyed. Calling it
+/// again for the same window only replaces `extra`. Returns false when the
+/// system refused (`hwnd` is not a window of this thread).
+pub fn guard_display_match(hwnd: isize, extra: i32) -> bool {
+    use windows_sys::Win32::UI::Shell::SetWindowSubclass;
+    // SAFETY: SetWindowSubclass takes the HWND, a plain function of this
+    // crate and two integers by value; it fails for a window of another
+    // thread or no window at all, without touching memory through them.
+    unsafe {
+        SetWindowSubclass(
+            hwnd as HWND,
+            Some(display_guard),
+            DISPLAY_GUARD_ID,
+            extra as isize as usize,
+        ) != 0
+    }
+}
+
+/// The window subclass of [`guard_display_match`]; `data` is its `extra`.
+unsafe extern "system" fn display_guard(
+    hwnd: HWND,
+    message: u32,
+    wparam: usize,
+    lparam: isize,
+    _id: usize,
+    data: usize,
+) -> isize {
+    use windows_sys::Win32::UI::Shell::{DefSubclassProc, RemoveWindowSubclass};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GWL_STYLE, GetWindowLongPtrW, WINDOWPOS, WM_NCDESTROY, WM_WINDOWPOSCHANGING,
+    };
+    // SAFETY: the message as the system delivered it, passed on unchanged
+    // to the next procedure in the window's chain.
+    let result = unsafe { DefSubclassProc(hwnd, message, wparam, lparam) };
+    if message == WM_WINDOWPOSCHANGING && lparam != 0 {
+        // SAFETY: GetWindowLongPtrW reads the style of `hwnd`, the window
+        // this procedure runs for; no memory is touched through it.
+        let style = unsafe { GetWindowLongPtrW(hwnd, GWL_STYLE) } as u32;
+        // SAFETY: WM_WINDOWPOSCHANGING's lParam points at the WINDOWPOS of
+        // the move, owned by the sender and writable by the window's
+        // procedures until they return (the window's own procedure, which
+        // ran above, holds no reference to it any more).
+        let position = unsafe { &mut *(lparam as *mut WINDOWPOS) };
+        let mut current = EMPTY_RECT;
+        // SAFETY: `current` is a writable RECT for the call.
+        let current = (unsafe { GetWindowRect(hwnd, &mut current) } != 0).then(|| edges(current));
+        let proposed = (position.x, position.y, position.cx, position.cy);
+        if let Some(rect) = current
+            .map(|current| moved_to(proposed, position.flags, current))
+            .filter(|_| borderless(style))
+            .and_then(|rect| guarded_entry(rect, data as isize as i32))
+        {
+            position.x = rect.0;
+            position.y = rect.1;
+            position.cx = rect.2 - rect.0;
+            position.cy = rect.3 - rect.1;
+            position.flags &= !(SWP_NOMOVE | SWP_NOSIZE);
+        }
+    }
+    if message == WM_NCDESTROY {
+        // SAFETY: removes this crate's own subclass from `hwnd`, on the
+        // window's thread, as the subclass documentation asks at
+        // WM_NCDESTROY.
+        unsafe { RemoveWindowSubclass(hwnd, Some(display_guard), DISPLAY_GUARD_ID) };
+    }
+    result
+}
+
+/// A window with neither a caption nor a sizing border, neither minimized
+/// nor maximized: how winit styles a borderless full-screen window (the
+/// host's windows have a caption otherwise).
+fn borderless(style: u32) -> bool {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        WS_CAPTION, WS_MAXIMIZE, WS_MINIMIZE, WS_THICKFRAME,
+    };
+    style & (WS_CAPTION | WS_THICKFRAME | WS_MINIMIZE | WS_MAXIMIZE) == 0
+}
+
+/// Where a `WINDOWPOS` (x, y, cx, cy, `flags`) puts a window that is at
+/// `current` now: `SWP_NOMOVE` keeps its corner, `SWP_NOSIZE` its size.
+fn moved_to((x, y, cx, cy): Edges, flags: u32, current: Edges) -> Edges {
+    let (left, top) = if flags & SWP_NOMOVE != 0 {
+        (current.0, current.1)
+    } else {
+        (x, y)
+    };
+    let (width, height) = if flags & SWP_NOSIZE != 0 {
+        (current.2 - current.0, current.3 - current.1)
+    } else {
+        (cx, cy)
+    };
+    (left, top, left + width, top + height)
+}
+
+/// The rectangle a borderless window about to be at `rect` gets instead:
+/// [`unmatched`] against the display that holds most of `rect`, with the
+/// real displays as neighbours.
+fn guarded_entry(rect: Edges, extra: i32) -> Option<Edges> {
+    let target = RECT {
+        left: rect.0,
+        top: rect.1,
+        right: rect.2,
+        bottom: rect.3,
+    };
+    // SAFETY: `target` is a valid RECT read for the call; the nearest
+    // display is always answered.
+    let monitor = unsafe { MonitorFromRect(&target, MONITOR_DEFAULTTONEAREST) };
+    let display = monitor_area(monitor)?.monitor;
+    unmatched(rect, display, extra, on_a_display)
+}
+
+/// The display window `hwnd` is on, for the host log: its device name
+/// (`\\.\DISPLAY1`), its rectangle and its current display mode.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct WindowDisplay {
+    pub device: String,
+    pub monitor: ScreenRect,
+    /// Width, height and refresh rate (Hz) of the display's current mode
+    /// (`EnumDisplaySettingsW`), `None` when the system does not answer.
+    pub mode: Option<(u32, u32, u32)>,
+    /// The window's own rectangle (`GetWindowRect`).
+    pub window: ScreenRect,
+}
+
+/// [`WindowDisplay`] of window `hwnd`; `None` when it is no window.
+pub fn window_display(hwnd: isize) -> Option<WindowDisplay> {
+    use windows_sys::Win32::Graphics::Gdi::{
+        DEVMODEW, ENUM_CURRENT_SETTINGS, EnumDisplaySettingsW,
+    };
+    let mut window = EMPTY_RECT;
+    // SAFETY: `window` is a writable RECT for the call; an invalid HWND
+    // makes it fail without touching memory through it.
+    if unsafe { GetWindowRect(hwnd as HWND, &mut window) } == 0 {
+        return None;
+    }
+    // SAFETY: MonitorFromWindow takes the HWND by value and answers the
+    // nearest display for any window.
+    let monitor = unsafe { MonitorFromWindow(hwnd as HWND, MONITOR_DEFAULTTONEAREST) };
+    // SAFETY: MONITORINFOEXW is plain data (integers and a UTF-16 array);
+    // all zeroes is a valid value.
+    let mut info: MONITORINFOEXW = unsafe { std::mem::zeroed() };
+    info.monitorInfo.cbSize = size_of::<MONITORINFOEXW>() as u32;
+    // SAFETY: `info` is a writable MONITORINFOEXW whose cbSize says so.
+    if unsafe { GetMonitorInfoW(monitor, (&raw mut info).cast()) } == 0 {
+        return None;
+    }
+    let length = info
+        .szDevice
+        .iter()
+        .position(|c| *c == 0)
+        .unwrap_or(info.szDevice.len());
+    // SAFETY: DEVMODEW is plain data; all zeroes is a valid value.
+    let mut mode: DEVMODEW = unsafe { std::mem::zeroed() };
+    mode.dmSize = size_of::<DEVMODEW>() as u16;
+    // SAFETY: `szDevice` is NUL-terminated (the system wrote it, zeroed
+    // before), alive for the call; `mode` is a writable DEVMODEW whose dmSize
+    // says so.
+    let read =
+        unsafe { EnumDisplaySettingsW(info.szDevice.as_ptr(), ENUM_CURRENT_SETTINGS, &mut mode) }
+            != 0;
+    Some(WindowDisplay {
+        device: String::from_utf16_lossy(&info.szDevice[..length]),
+        monitor: edges(info.monitorInfo.rcMonitor),
+        mode: read.then_some((mode.dmPelsWidth, mode.dmPelsHeight, mode.dmDisplayFrequency)),
+        window: edges(window),
+    })
 }
 
 /// A rectangle as (left, top, right, bottom), in screen pixels.
@@ -1947,6 +2129,169 @@ mod tests {
         ] {
             assert_eq!(unmatched(window, display, 1, |_| false), None, "{window:?}");
         }
+    }
+
+    /// The rectangle a `WINDOWPOS` asks for, with SWP_NOMOVE / SWP_NOSIZE
+    /// taken from where the window is.
+    #[test]
+    fn a_window_position_keeps_what_its_flags_keep() {
+        use super::{SWP_NOMOVE, SWP_NOSIZE, moved_to};
+        let current = (10, 20, 810, 620);
+        let asked = (0, 0, 1920, 1080);
+        assert_eq!(moved_to(asked, 0, current), (0, 0, 1920, 1080));
+        assert_eq!(moved_to(asked, SWP_NOMOVE, current), (10, 20, 1930, 1100));
+        assert_eq!(moved_to(asked, SWP_NOSIZE, current), (0, 0, 800, 600));
+        assert_eq!(moved_to(asked, SWP_NOMOVE | SWP_NOSIZE, current), current);
+    }
+
+    /// Only a window without caption and sizing border, neither minimized
+    /// nor maximized, is guarded (winit's borderless full screen).
+    #[test]
+    fn only_a_borderless_window_is_guarded() {
+        use super::borderless;
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            WS_CAPTION, WS_CLIPCHILDREN, WS_MAXIMIZE, WS_MINIMIZE, WS_OVERLAPPEDWINDOW, WS_POPUP,
+            WS_SYSMENU, WS_VISIBLE,
+        };
+        assert!(borderless(WS_VISIBLE | WS_CLIPCHILDREN | WS_SYSMENU));
+        assert!(borderless(WS_POPUP | WS_VISIBLE));
+        assert!(!borderless(WS_OVERLAPPEDWINDOW | WS_VISIBLE));
+        assert!(!borderless(WS_CAPTION));
+        assert!(!borderless(WS_POPUP | WS_MAXIMIZE));
+        assert!(!borderless(WS_POPUP | WS_MINIMIZE));
+    }
+
+    /// The entry rectangle for several display layouts: the display's own
+    /// rectangle becomes the guarded one at once; any other rectangle (the
+    /// window's normal frame on the way out, a rectangle already guarded)
+    /// passes unchanged. Exact mode (`VESTRA_FULLSCREEN_MATCH=exact`)
+    /// installs no guard at all; `extra` 0 is the same: nothing changes.
+    #[test]
+    fn the_entry_rectangle_for_several_layouts() {
+        use super::moved_to;
+        // (display, the other displays)
+        let layouts: [(Edges, Vec<Edges>); 5] = [
+            ((0, 0, 2560, 1600), vec![]),
+            ((0, 0, 2560, 1600), vec![(0, 1600, 3840, 3760)]),
+            ((0, 0, 1920, 1080), vec![(1920, 0, 5760, 2160)]),
+            ((-3840, -500, 0, 1660), vec![(0, 0, 2560, 1600)]),
+            (
+                (0, 0, 1920, 1080),
+                vec![(0, -1080, 1920, 0), (0, 1080, 1920, 2160)],
+            ),
+        ];
+        let expected = [
+            (0, 0, 2560, 1601),
+            (0, -1, 2560, 1600),
+            (0, 0, 1920, 1081),
+            (-3840, -500, 0, 1661),
+            (0, 0, 1921, 1080),
+        ];
+        for ((display, others), want) in layouts.into_iter().zip(expected) {
+            let taken = |strip: Edges| {
+                others.iter().any(|other| {
+                    strip.0 < other.2 && other.0 < strip.2 && strip.1 < other.3 && other.1 < strip.3
+                })
+            };
+            let size = (
+                display.0,
+                display.1,
+                display.2 - display.0,
+                display.3 - display.1,
+            );
+            let entry = moved_to(size, 0, (100, 100, 900, 700));
+            assert_eq!(
+                unmatched(entry, display, 1, taken),
+                Some(want),
+                "{display:?}"
+            );
+            assert_eq!(
+                unmatched(entry, display, 0, taken),
+                None,
+                "exact: {display:?}"
+            );
+            assert_eq!(unmatched(want, display, 1, taken), None, "guarded already");
+            let normal = (
+                display.0 + 100,
+                display.1 + 80,
+                display.0 + 900,
+                display.1 + 680,
+            );
+            assert_eq!(unmatched(normal, display, 1, taken), None, "the way out");
+            assert!(unmatched(entry, display, -1, taken).is_some_and(|r| r.3 == display.3 - 1));
+        }
+    }
+
+    /// A real (hidden) caption-less window of this thread moved onto its
+    /// display's exact rectangle lands on the guarded one in that same
+    /// SetWindowPos; with a caption it lands where it was asked to.
+    #[test]
+    fn the_guard_changes_the_move_itself() {
+        use super::{guard_display_match, window_display};
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            CreateWindowExW, DestroyWindow, GWL_STYLE, SetWindowLongPtrW, WS_OVERLAPPEDWINDOW,
+            WS_POPUP,
+        };
+        let class: Vec<u16> = "STATIC\0".encode_utf16().collect();
+        // SAFETY: a hidden pop-up window of the system's STATIC class; the
+        // class name is a live NUL-terminated local, the other pointers null.
+        let window = unsafe {
+            CreateWindowExW(
+                0,
+                class.as_ptr(),
+                std::ptr::null(),
+                WS_POPUP,
+                100,
+                100,
+                800,
+                600,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null(),
+            )
+        };
+        assert!(!window.is_null());
+        let hwnd = window as isize;
+        assert!(guard_display_match(hwnd, 1));
+        let display = window_display(hwnd).expect("a display").monitor;
+        let place = |rect: Edges| {
+            // SAFETY: the test's own window and plain integers.
+            unsafe {
+                super::SetWindowPos(
+                    window,
+                    std::ptr::null_mut(),
+                    rect.0,
+                    rect.1,
+                    rect.2 - rect.0,
+                    rect.3 - rect.1,
+                    super::SWP_NOZORDER | super::SWP_NOACTIVATE,
+                )
+            };
+            window_display(hwnd).expect("a window").window
+        };
+        let guarded = place(display);
+        assert_ne!(guarded, display);
+        assert_eq!(
+            (guarded.2 - guarded.0 - (display.2 - display.0)).abs()
+                + (guarded.3 - guarded.1 - (display.3 - display.1)).abs(),
+            1,
+            "one pixel off: {guarded:?} on {display:?}"
+        );
+        let normal = (
+            display.0 + 50,
+            display.1 + 50,
+            display.0 + 650,
+            display.1 + 450,
+        );
+        assert_eq!(place(normal), normal);
+        // With a caption (the window out of full screen) nothing changes.
+        // SAFETY: the test's own window; a style is a plain integer.
+        unsafe { SetWindowLongPtrW(window, GWL_STYLE, WS_OVERLAPPEDWINDOW as isize) };
+        assert_eq!(place(display), display);
+        // SAFETY: the test's own window, destroyed once (the guard removes
+        // itself at WM_NCDESTROY).
+        assert_ne!(unsafe { DestroyWindow(window) }, 0);
     }
 
     #[test]
