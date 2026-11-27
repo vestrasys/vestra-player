@@ -217,12 +217,17 @@ const rows = (host: TestHost) =>
     c.declaration.bindings.join(","),
   ]);
 
-test("palette only (menu sweep B5): no menu paths; titles, orders, groups and bindings as in the window chapter; no conflicts", async () => {
+test("menus: Picture-in-Picture at the top level below Play/Pause, the rest palette only (menu sweep B5); titles, orders, groups and bindings; no conflicts", async () => {
   const { host } = await start();
-  for (const [id, c] of host.commands) assert.deepEqual([c.declaration.path, c.display.path], [[], []], `${id} has no menu path`);
+  // User ruling 2026-11-27: Picture-in-Picture right after the player's
+  // Play/Pause (order 201, group "domain"), with no separator between them.
+  for (const [id, c] of host.commands) {
+    const path = id === "pip" ? ["Picture-in-Picture"] : [];
+    assert.deepEqual([c.declaration.path, c.display.path], [path, path], `${id} menu path`);
+  }
   assert.deepEqual(rows(host), [
     ["mini", "Mini Size", 710, "screen", "`"],
-    ["pip", "Picture-in-Picture", 709, "screen", ""],
+    ["pip", "Picture-in-Picture", 202, "domain", ""],
     ["size.0.5", "0.5×", 711, "screen-size", "1"],
     ["size.1", "1×", 712, "screen-size", "2"],
     ["size.1.5", "1.5×", 713, "screen-size", "3"],
@@ -1029,7 +1034,10 @@ test("H07: 画中画 appears once the main window reports support, and goes away
   host.setMainWindow({ pictureInPicture: { supported: true, active: false } });
   await host.settle();
   const pip = host.command("pip");
-  assert.deepEqual([pip.display.title, pip.declaration.order, pip.declaration.group, pip.declaration.bindings], ["Picture-in-Picture", 709, "screen", []]);
+  assert.deepEqual(
+    [pip.display.title, pip.declaration.path, pip.declaration.order, pip.declaration.group, pip.declaration.bindings],
+    ["Picture-in-Picture", ["Picture-in-Picture"], 202, "domain", []],
+  );
   assert.equal(host.command("mini").display.title, "Mini Size");
   assert.deepEqual(host.conflicts, []);
   await play(host);
@@ -1163,6 +1171,8 @@ test("zh-Hans: the menus, the settings page and the OSD texts are the Chinese on
       ["hide-cursor", "播放时隐藏鼠标指针"],
     ],
   );
+  // The one menu item (user ruling 2026-11-27): 画中画 at the top level.
+  assert.deepEqual(host.command("pip").display.path, ["画中画"]);
   assert.equal(host.settingsPage(PAGE_ID).title, "窗口");
   // The palette categories: the page's and the submenu's words, and the two new ones.
   assert.deepEqual(

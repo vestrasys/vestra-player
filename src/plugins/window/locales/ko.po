@@ -6,178 +6,178 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: main.ts:49 main.ts:238 ui/page.slint:34
+#: main.ts:57 main.ts:248 ui/page.slint:34
 #, x-machine
 msgid "Window"
 msgstr "창"
 
-#: main.ts:50
+#: main.ts:58
 #, x-machine
 msgid "Window Size"
 msgstr "창 크기"
 
-#: main.ts:51
+#: main.ts:59
 #, x-machine
 msgid "Size on Open"
 msgstr "재생 시작 시 크기"
 
-#: main.ts:52
+#: main.ts:60
 #, x-machine
 msgid "Always on Top"
 msgstr "항상 위에 표시"
 
-#: main.ts:75
+#: main.ts:80
 #, x-machine
 msgid "Mini Size"
 msgstr "미니 크기"
 
-#: main.ts:83 main.ts:111
+#: main.ts:88 main.ts:120
 #, x-machine
 msgid "Switching picture-in-picture"
 msgstr "PIP 모드 전환 중"
 
-#: main.ts:83 main.ts:111 main.ts:141 main.ts:154
+#: main.ts:88 main.ts:120 main.ts:151 main.ts:164
 #, x-machine
 msgid "Resizing the window"
 msgstr "창 크기 조정 중"
 
-#: main.ts:83 main.ts:141 main.ts:154
+#: main.ts:88 main.ts:151 main.ts:164
 #, x-machine
 msgid "Not available in fullscreen"
 msgstr "전체 화면에서는 사용할 수 없습니다"
 
-#: main.ts:83 main.ts:111 main.ts:141 main.ts:154 pip.ts:42 size.ts:124
+#: main.ts:88 main.ts:120 main.ts:151 main.ts:164 pip.ts:42 size.ts:125
 #, x-machine
 msgid "No video"
 msgstr "비디오가 없습니다"
 
-#: main.ts:104
+#: main.ts:112 main.ts:113
 #, x-machine
 msgid "Picture-in-Picture"
 msgstr "PIP 모드"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:132 main.ts:173 ui/page.slint:44
+#: main.ts:142 main.ts:183 ui/page.slint:44
 #, x-machine
 msgid "0.5×"
 msgstr "0.5×"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:132 main.ts:173 ui/page.slint:44
+#: main.ts:142 main.ts:183 ui/page.slint:44
 #, x-machine
 msgid "1×"
 msgstr "1×"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:132 main.ts:173 ui/page.slint:44
+#: main.ts:142 main.ts:183 ui/page.slint:44
 #, x-machine
 msgid "1.5×"
 msgstr "1.5×"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:132 main.ts:173 ui/page.slint:44
+#: main.ts:142 main.ts:183 ui/page.slint:44
 #, x-machine
 msgid "2×"
 msgstr "2×"
 
-#: main.ts:147 main.ts:173
+#: main.ts:157 main.ts:183
 #, x-machine
 msgid "Fit to Video Aspect Ratio"
 msgstr "비디오 화면비에 맞추기"
 
-#: main.ts:162
+#: main.ts:172
 #, x-machine
 msgid "When playback starts: Don't resize the window"
 msgstr "재생 시작 시: 창 크기 조정 안 함"
 
-#: main.ts:163
+#: main.ts:173
 #, x-machine
 msgid "When playback starts: Fit to video aspect ratio"
 msgstr "재생 시작 시: 비디오 화면비에 맞추기"
 
-#: main.ts:164
+#: main.ts:174
 #, x-machine
 msgid "When playback starts: {}×"
 msgstr "재생 시작 시: {}×"
 
-#: main.ts:168
+#: main.ts:178
 #, x-machine
 msgid "Resize only once when playback starts: On"
 msgstr "재생 시작 시 한 번만 크기 조정: 켬"
 
-#: main.ts:168
+#: main.ts:178
 #, x-machine
 msgid "Resize only once when playback starts: Off"
 msgstr "재생 시작 시 한 번만 크기 조정: 끔"
 
-#: main.ts:173
+#: main.ts:183
 #, x-machine
 msgid "Don't Resize"
 msgstr "크기 조정 안 함"
 
-#: main.ts:184
+#: main.ts:194
 #, x-machine
 msgid "Only Once"
 msgstr "한 번만"
 
-#: main.ts:196
+#: main.ts:206
 #, x-machine
 msgid "Always on top: Off"
 msgstr "항상 위에 표시: 끔"
 
-#: main.ts:196
+#: main.ts:206
 #, x-machine
 msgid "Always on top: Always"
 msgstr "항상 위에 표시: 항상"
 
-#: main.ts:196
+#: main.ts:206
 #, x-machine
 msgid "Always on top: While playing"
 msgstr "항상 위에 표시: 재생 중"
 
-#: main.ts:196
+#: main.ts:206
 #, x-machine
 msgid "Always on top: While playing in fullscreen"
 msgstr "항상 위에 표시: 전체 화면 재생 중"
 
-#: main.ts:200
+#: main.ts:210
 #, x-machine
 msgid "Cycle Mode"
 msgstr "모드 순환"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:210 ui/page.slint:66
+#: main.ts:220 ui/page.slint:66
 #, x-machine
 msgid "Never"
 msgstr "안 함"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:210 ui/page.slint:66
+#: main.ts:220 ui/page.slint:66
 #, x-machine
 msgid "Always"
 msgstr "항상"
 
-#: main.ts:210
+#: main.ts:220
 #, x-machine
 msgid "While Playing"
 msgstr "재생 중"
 
-#: main.ts:210
+#: main.ts:220
 #, x-machine
 msgid "While Playing in Fullscreen"
 msgstr "전체 화면 재생 중"
 
-#: main.ts:224
+#: main.ts:234
 #, x-machine
 msgid "Hide pointer while playing: On"
 msgstr "재생 중 포인터 숨기기: 켬"
 
-#: main.ts:224
+#: main.ts:234
 #, x-machine
 msgid "Hide pointer while playing: Off"
 msgstr "재생 중 포인터 숨기기: 끔"
 
-#: main.ts:229
+#: main.ts:239
 #, x-machine
 msgid "Hide Pointer While Playing"
 msgstr "재생 중 포인터 숨기기"
@@ -221,7 +221,7 @@ msgstr "항상 위에 표시"
 msgid "Picture-in-picture: On"
 msgstr "PIP 모드: 켬"
 
-#: pip.ts:49 pip.ts:68
+#: pip.ts:49 pip.ts:67
 #, x-machine
 msgid "Picture-in-picture: Off"
 msgstr "PIP 모드: 끔"
@@ -236,57 +236,57 @@ msgstr "PIP 모드로 전환할 수 없습니다: {}"
 msgid "Cannot exit picture-in-picture: {}"
 msgstr "PIP 모드를 종료할 수 없습니다: {}"
 
-#: pip.ts:68
+#: pip.ts:67
 #, x-machine
 msgid "Picture-in-picture: Off (no video)"
 msgstr "PIP 모드: 끔 (비디오 없음)"
 
-#: size.ts:47
+#: size.ts:48
 #, x-machine
 msgid "Window: {}× (shrunk to fit the screen)"
 msgstr "창: {}× (화면에 맞게 줄임)"
 
-#: size.ts:47
+#: size.ts:48
 #, x-machine
 msgid "Window: {}× (enlarged to the minimum size)"
 msgstr "창: {}× (최소 크기로 늘림)"
 
-#: size.ts:47
+#: size.ts:48
 #, x-machine
 msgid "Window: {}×"
 msgstr "창: {}×"
 
-#: size.ts:64
+#: size.ts:65
 #, x-machine
 msgid "The window already fits the video aspect ratio"
 msgstr "창이 이미 비디오 화면비에 맞습니다"
 
-#: size.ts:72
+#: size.ts:73
 #, x-machine
 msgid "Window: Fit to video aspect ratio (shrunk to fit the screen)"
 msgstr "창: 비디오 화면비에 맞춤 (화면에 맞게 줄임)"
 
-#: size.ts:72
+#: size.ts:73
 #, x-machine
 msgid "Window: Fit to video aspect ratio (enlarged to the minimum size)"
 msgstr "창: 비디오 화면비에 맞춤 (최소 크기로 늘림)"
 
-#: size.ts:72
+#: size.ts:73
 #, x-machine
 msgid "Window: Fit to video aspect ratio"
 msgstr "창: 비디오 화면비에 맞춤"
 
-#: size.ts:87
+#: size.ts:88
 #, x-machine
 msgid "Mini size: Off"
 msgstr "미니 크기: 끔"
 
-#: size.ts:97
+#: size.ts:98
 #, x-machine
 msgid "Mini size: On"
 msgstr "미니 크기: 켬"
 
-#: size.ts:137
+#: size.ts:138
 #, x-machine
 msgid "Cannot resize the window: {}"
 msgstr "창 크기를 조정할 수 없습니다: {}"

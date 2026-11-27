@@ -6,178 +6,178 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: main.ts:49 main.ts:238 ui/page.slint:34
+#: main.ts:57 main.ts:248 ui/page.slint:34
 #, x-machine
 msgid "Window"
 msgstr "ウインドウ"
 
-#: main.ts:50
+#: main.ts:58
 #, x-machine
 msgid "Window Size"
 msgstr "ウインドウサイズ"
 
-#: main.ts:51
+#: main.ts:59
 #, x-machine
 msgid "Size on Open"
 msgstr "再生開始時のサイズ"
 
-#: main.ts:52
+#: main.ts:60
 #, x-machine
 msgid "Always on Top"
 msgstr "常に手前に表示"
 
-#: main.ts:75
+#: main.ts:80
 #, x-machine
 msgid "Mini Size"
 msgstr "ミニサイズ"
 
-#: main.ts:83 main.ts:111
+#: main.ts:88 main.ts:120
 #, x-machine
 msgid "Switching picture-in-picture"
 msgstr "ピクチャ・イン・ピクチャを切り替え中"
 
-#: main.ts:83 main.ts:111 main.ts:141 main.ts:154
+#: main.ts:88 main.ts:120 main.ts:151 main.ts:164
 #, x-machine
 msgid "Resizing the window"
 msgstr "ウインドウのサイズを変更中"
 
-#: main.ts:83 main.ts:141 main.ts:154
+#: main.ts:88 main.ts:151 main.ts:164
 #, x-machine
 msgid "Not available in fullscreen"
 msgstr "フルスクリーンでは使用できません"
 
-#: main.ts:83 main.ts:111 main.ts:141 main.ts:154 pip.ts:42 size.ts:124
+#: main.ts:88 main.ts:120 main.ts:151 main.ts:164 pip.ts:42 size.ts:125
 #, x-machine
 msgid "No video"
 msgstr "ビデオがありません"
 
-#: main.ts:104
+#: main.ts:112 main.ts:113
 #, x-machine
 msgid "Picture-in-Picture"
 msgstr "ピクチャ・イン・ピクチャ"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:132 main.ts:173 ui/page.slint:44
+#: main.ts:142 main.ts:183 ui/page.slint:44
 #, x-machine
 msgid "0.5×"
 msgstr "0.5×"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:132 main.ts:173 ui/page.slint:44
+#: main.ts:142 main.ts:183 ui/page.slint:44
 #, x-machine
 msgid "1×"
 msgstr "1×"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:132 main.ts:173 ui/page.slint:44
+#: main.ts:142 main.ts:183 ui/page.slint:44
 #, x-machine
 msgid "1.5×"
 msgstr "1.5×"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:132 main.ts:173 ui/page.slint:44
+#: main.ts:142 main.ts:183 ui/page.slint:44
 #, x-machine
 msgid "2×"
 msgstr "2×"
 
-#: main.ts:147 main.ts:173
+#: main.ts:157 main.ts:183
 #, x-machine
 msgid "Fit to Video Aspect Ratio"
 msgstr "ビデオのアスペクト比に合わせる"
 
-#: main.ts:162
+#: main.ts:172
 #, x-machine
 msgid "When playback starts: Don't resize the window"
 msgstr "再生開始時：ウインドウのサイズを変更しない"
 
-#: main.ts:163
+#: main.ts:173
 #, x-machine
 msgid "When playback starts: Fit to video aspect ratio"
 msgstr "再生開始時：ビデオのアスペクト比に合わせる"
 
-#: main.ts:164
+#: main.ts:174
 #, x-machine
 msgid "When playback starts: {}×"
 msgstr "再生開始時：{}×"
 
-#: main.ts:168
+#: main.ts:178
 #, x-machine
 msgid "Resize only once when playback starts: On"
 msgstr "再生開始時に一度だけサイズを変更：オン"
 
-#: main.ts:168
+#: main.ts:178
 #, x-machine
 msgid "Resize only once when playback starts: Off"
 msgstr "再生開始時に一度だけサイズを変更：オフ"
 
-#: main.ts:173
+#: main.ts:183
 #, x-machine
 msgid "Don't Resize"
 msgstr "サイズを変更しない"
 
-#: main.ts:184
+#: main.ts:194
 #, x-machine
 msgid "Only Once"
 msgstr "一度だけ"
 
-#: main.ts:196
+#: main.ts:206
 #, x-machine
 msgid "Always on top: Off"
 msgstr "常に手前に表示：オフ"
 
-#: main.ts:196
+#: main.ts:206
 #, x-machine
 msgid "Always on top: Always"
 msgstr "常に手前に表示：常に"
 
-#: main.ts:196
+#: main.ts:206
 #, x-machine
 msgid "Always on top: While playing"
 msgstr "常に手前に表示：再生中"
 
-#: main.ts:196
+#: main.ts:206
 #, x-machine
 msgid "Always on top: While playing in fullscreen"
 msgstr "常に手前に表示：フルスクリーン再生中"
 
-#: main.ts:200
+#: main.ts:210
 #, x-machine
 msgid "Cycle Mode"
 msgstr "モードを順に切り替え"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:210 ui/page.slint:66
+#: main.ts:220 ui/page.slint:66
 #, x-machine
 msgid "Never"
 msgstr "しない"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:210 ui/page.slint:66
+#: main.ts:220 ui/page.slint:66
 #, x-machine
 msgid "Always"
 msgstr "常に"
 
-#: main.ts:210
+#: main.ts:220
 #, x-machine
 msgid "While Playing"
 msgstr "再生中"
 
-#: main.ts:210
+#: main.ts:220
 #, x-machine
 msgid "While Playing in Fullscreen"
 msgstr "フルスクリーン再生中"
 
-#: main.ts:224
+#: main.ts:234
 #, x-machine
 msgid "Hide pointer while playing: On"
 msgstr "再生中はポインタを隠す：オン"
 
-#: main.ts:224
+#: main.ts:234
 #, x-machine
 msgid "Hide pointer while playing: Off"
 msgstr "再生中はポインタを隠す：オフ"
 
-#: main.ts:229
+#: main.ts:239
 #, x-machine
 msgid "Hide Pointer While Playing"
 msgstr "再生中はポインタを隠す"
@@ -221,7 +221,7 @@ msgstr "常に手前に表示"
 msgid "Picture-in-picture: On"
 msgstr "ピクチャ・イン・ピクチャ：オン"
 
-#: pip.ts:49 pip.ts:68
+#: pip.ts:49 pip.ts:67
 #, x-machine
 msgid "Picture-in-picture: Off"
 msgstr "ピクチャ・イン・ピクチャ：オフ"
@@ -236,57 +236,57 @@ msgstr "ピクチャ・イン・ピクチャを開始できません：{}"
 msgid "Cannot exit picture-in-picture: {}"
 msgstr "ピクチャ・イン・ピクチャを終了できません：{}"
 
-#: pip.ts:68
+#: pip.ts:67
 #, x-machine
 msgid "Picture-in-picture: Off (no video)"
 msgstr "ピクチャ・イン・ピクチャ：オフ（ビデオがありません）"
 
-#: size.ts:47
+#: size.ts:48
 #, x-machine
 msgid "Window: {}× (shrunk to fit the screen)"
 msgstr "ウインドウ：{}×（画面に収まるよう縮小しました）"
 
-#: size.ts:47
+#: size.ts:48
 #, x-machine
 msgid "Window: {}× (enlarged to the minimum size)"
 msgstr "ウインドウ：{}×（最小サイズまで拡大しました）"
 
-#: size.ts:47
+#: size.ts:48
 #, x-machine
 msgid "Window: {}×"
 msgstr "ウインドウ：{}×"
 
-#: size.ts:64
+#: size.ts:65
 #, x-machine
 msgid "The window already fits the video aspect ratio"
 msgstr "ウインドウはすでにビデオのアスペクト比に合っています"
 
-#: size.ts:72
+#: size.ts:73
 #, x-machine
 msgid "Window: Fit to video aspect ratio (shrunk to fit the screen)"
 msgstr "ウインドウ：ビデオのアスペクト比に合わせる（画面に収まるよう縮小しました）"
 
-#: size.ts:72
+#: size.ts:73
 #, x-machine
 msgid "Window: Fit to video aspect ratio (enlarged to the minimum size)"
 msgstr "ウインドウ：ビデオのアスペクト比に合わせる（最小サイズまで拡大しました）"
 
-#: size.ts:72
+#: size.ts:73
 #, x-machine
 msgid "Window: Fit to video aspect ratio"
 msgstr "ウインドウ：ビデオのアスペクト比に合わせる"
 
-#: size.ts:87
+#: size.ts:88
 #, x-machine
 msgid "Mini size: Off"
 msgstr "ミニサイズ：オフ"
 
-#: size.ts:97
+#: size.ts:98
 #, x-machine
 msgid "Mini size: On"
 msgstr "ミニサイズ：オン"
 
-#: size.ts:137
+#: size.ts:138
 #, x-machine
 msgid "Cannot resize the window: {}"
 msgstr "ウインドウのサイズを変更できません：{}"

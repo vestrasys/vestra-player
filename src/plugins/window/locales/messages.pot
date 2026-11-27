@@ -1,148 +1,148 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: vestra.window 0.1.7\n"
+"Project-Id-Version: vestra.window 0.1.10\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: main.ts:49 main.ts:238 ui/page.slint:34
+#: main.ts:57 main.ts:248 ui/page.slint:34
 msgid "Window"
 msgstr ""
 
-#: main.ts:50
+#: main.ts:58
 msgid "Window Size"
 msgstr ""
 
-#: main.ts:51
+#: main.ts:59
 msgid "Size on Open"
 msgstr ""
 
-#: main.ts:52
+#: main.ts:60
 msgid "Always on Top"
 msgstr ""
 
-#: main.ts:75
+#: main.ts:80
 msgid "Mini Size"
 msgstr ""
 
-#: main.ts:83 main.ts:111
+#: main.ts:88 main.ts:120
 msgid "Switching picture-in-picture"
 msgstr ""
 
-#: main.ts:83 main.ts:111 main.ts:141 main.ts:154
+#: main.ts:88 main.ts:120 main.ts:151 main.ts:164
 msgid "Resizing the window"
 msgstr ""
 
-#: main.ts:83 main.ts:141 main.ts:154
+#: main.ts:88 main.ts:151 main.ts:164
 msgid "Not available in fullscreen"
 msgstr ""
 
-#: main.ts:83 main.ts:111 main.ts:141 main.ts:154 pip.ts:42 size.ts:124
+#: main.ts:88 main.ts:120 main.ts:151 main.ts:164 pip.ts:42 size.ts:125
 msgid "No video"
 msgstr ""
 
-#: main.ts:104
+#: main.ts:112 main.ts:113
 msgid "Picture-in-Picture"
 msgstr ""
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:132 main.ts:173 ui/page.slint:44
+#: main.ts:142 main.ts:183 ui/page.slint:44
 msgid "0.5×"
 msgstr ""
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:132 main.ts:173 ui/page.slint:44
+#: main.ts:142 main.ts:183 ui/page.slint:44
 msgid "1×"
 msgstr ""
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:132 main.ts:173 ui/page.slint:44
+#: main.ts:142 main.ts:183 ui/page.slint:44
 msgid "1.5×"
 msgstr ""
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:132 main.ts:173 ui/page.slint:44
+#: main.ts:142 main.ts:183 ui/page.slint:44
 msgid "2×"
 msgstr ""
 
-#: main.ts:147 main.ts:173
+#: main.ts:157 main.ts:183
 msgid "Fit to Video Aspect Ratio"
 msgstr ""
 
-#: main.ts:162
+#: main.ts:172
 msgid "When playback starts: Don't resize the window"
 msgstr ""
 
-#: main.ts:163
+#: main.ts:173
 msgid "When playback starts: Fit to video aspect ratio"
 msgstr ""
 
-#: main.ts:164
+#: main.ts:174
 msgid "When playback starts: {}×"
 msgstr ""
 
-#: main.ts:168
+#: main.ts:178
 msgid "Resize only once when playback starts: On"
 msgstr ""
 
-#: main.ts:168
+#: main.ts:178
 msgid "Resize only once when playback starts: Off"
 msgstr ""
 
-#: main.ts:173
+#: main.ts:183
 msgid "Don't Resize"
 msgstr ""
 
-#: main.ts:184
+#: main.ts:194
 msgid "Only Once"
 msgstr ""
 
-#: main.ts:196
+#: main.ts:206
 msgid "Always on top: Off"
 msgstr ""
 
-#: main.ts:196
+#: main.ts:206
 msgid "Always on top: Always"
 msgstr ""
 
-#: main.ts:196
+#: main.ts:206
 msgid "Always on top: While playing"
 msgstr ""
 
-#: main.ts:196
+#: main.ts:206
 msgid "Always on top: While playing in fullscreen"
 msgstr ""
 
-#: main.ts:200
+#: main.ts:210
 msgid "Cycle Mode"
 msgstr ""
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:210 ui/page.slint:66
+#: main.ts:220 ui/page.slint:66
 msgid "Never"
 msgstr ""
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:210 ui/page.slint:66
+#: main.ts:220 ui/page.slint:66
 msgid "Always"
 msgstr ""
 
-#: main.ts:210
+#: main.ts:220
 msgid "While Playing"
 msgstr ""
 
-#: main.ts:210
+#: main.ts:220
 msgid "While Playing in Fullscreen"
 msgstr ""
 
-#: main.ts:224
+#: main.ts:234
 msgid "Hide pointer while playing: On"
 msgstr ""
 
-#: main.ts:224
+#: main.ts:234
 msgid "Hide pointer while playing: Off"
 msgstr ""
 
-#: main.ts:229
+#: main.ts:239
 msgid "Hide Pointer While Playing"
 msgstr ""
 
@@ -176,7 +176,7 @@ msgstr ""
 msgid "Picture-in-picture: On"
 msgstr ""
 
-#: pip.ts:49 pip.ts:68
+#: pip.ts:49 pip.ts:67
 msgid "Picture-in-picture: Off"
 msgstr ""
 
@@ -188,47 +188,47 @@ msgstr ""
 msgid "Cannot exit picture-in-picture: {}"
 msgstr ""
 
-#: pip.ts:68
+#: pip.ts:67
 msgid "Picture-in-picture: Off (no video)"
 msgstr ""
 
-#: size.ts:47
+#: size.ts:48
 msgid "Window: {}× (shrunk to fit the screen)"
 msgstr ""
 
-#: size.ts:47
+#: size.ts:48
 msgid "Window: {}× (enlarged to the minimum size)"
 msgstr ""
 
-#: size.ts:47
+#: size.ts:48
 msgid "Window: {}×"
 msgstr ""
 
-#: size.ts:64
+#: size.ts:65
 msgid "The window already fits the video aspect ratio"
 msgstr ""
 
-#: size.ts:72
+#: size.ts:73
 msgid "Window: Fit to video aspect ratio (shrunk to fit the screen)"
 msgstr ""
 
-#: size.ts:72
+#: size.ts:73
 msgid "Window: Fit to video aspect ratio (enlarged to the minimum size)"
 msgstr ""
 
-#: size.ts:72
+#: size.ts:73
 msgid "Window: Fit to video aspect ratio"
 msgstr ""
 
-#: size.ts:87
+#: size.ts:88
 msgid "Mini size: Off"
 msgstr ""
 
-#: size.ts:97
+#: size.ts:98
 msgid "Mini size: On"
 msgstr ""
 
-#: size.ts:137
+#: size.ts:138
 msgid "Cannot resize the window: {}"
 msgstr ""
 

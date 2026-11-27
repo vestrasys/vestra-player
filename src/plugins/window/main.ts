@@ -31,8 +31,10 @@ export const PAGE_ID = "window";
  * Mini Size (IA-WIN-01) / 0.5× … 2× (H03) / Fit to Video Aspect Ratio (H04) /
  * When Playback Starts (G-02) / Always on Top (H05, IA-WIN-03),
  * Hide Pointer While Playing (B30, G-06), and the Window settings
- * page. Menu sweep (B5): every command is in the command palette only
- * ("Category: Title", with its key); none has a menu path.
+ * page. Every command is in the command palette ("Category: Title", with
+ * its key). Menu sweep (B5) took them out of the right-click menu, except
+ * Picture-in-Picture: a top-level item directly below Play/Pause (user
+ * ruling 2026-11-27).
  * The window itself belongs to the core (`plugin.window`); this plugin
  * keeps the preferences in settings.json and applies them on activation. The
  * core undoes its effects on deactivation.
@@ -101,13 +103,17 @@ export default async function activate(plugin: Plugin) {
   });
   // `supported` needs the main window, which may not exist yet at activation,
   // so Picture-in-Picture follows `window.changed`: added while supported (macOS 14+).
+  // Right-click menu (user ruling 2026-11-27): top level, directly below the
+  // player's Play/Pause (order 201, group "domain"): order 202 sorts right
+  // after it, and the same group draws no separator between the two.
   const pipCommand = () =>
     plugin.commands.add({
       id: "pip",
       title: "Picture-in-Picture",
+      path: ["Picture-in-Picture"],
       category: category.window,
-      order: 709,
-      group: "screen",
+      order: 202,
+      group: "domain",
       checked: () => pip.active,
       enabled: () => pip.active || video.size !== null,
       busy: () => pip.switching || sizer.resizing,
