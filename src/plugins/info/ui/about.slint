@@ -7,7 +7,7 @@
 //   updates     4 + status (18, or its wrapped height + 4) + [downloading: 4 + bar 3] + 4 + action row 18 (J10);
 //               the window grows by exactly that height
 // Widths (content 360 − 28 = 332):
-//   header      logo 96 + 12 + name / version text (elided)
+//   header      logo 96 + 12 + name / version / copyright text (elided)
 //   components  label 100 + 8 + value 224 (elided; the rendering value wraps)
 //   plugin list 1 + 6 + id ≥ 100 + 6 + version 56 + 6 + origin 56 + 6 + state 48 + 6 + scroll bar 12 + 1 ≤ 332
 //   buttons     status ≥ 50 + 4 + Copy Info 66 + 4 + Close 66 = 190 of 332
@@ -73,6 +73,8 @@ export component AboutWindow inherits Window {
     in property <string> version;
     // "" without a build hash.
     in property <string> build;
+    // "© <year> <author>" (about.ts COPYRIGHT): a name, not translated.
+    in property <string> copyright;
     // Component versions; "" = not known.
     in property <string> api;
     in property <string> mpv;
@@ -237,6 +239,7 @@ export component AboutWindow inherits Window {
                 // i18n-ignore: the product's name
                 Text { text: "Vestra Player"; color: Theme.text; font-size: Theme.font-title; font-weight: 700; }
                 Text { max-width: 200px; text: root.build != "" ? @tr("Version {} (build {})", root.version, root.build) : @tr("Version {}", root.version); color: Theme.text-dim; font-size: Theme.font-body; overflow: elide; }
+                Text { max-width: 200px; text: root.copyright; color: Theme.text-dim; font-size: Theme.font-body; overflow: elide; }
             }
         }
         VerticalLayout {
