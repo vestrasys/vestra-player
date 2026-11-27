@@ -17,6 +17,7 @@ impl Host {
         // are still open (set again with each shell, like the hook below).
         let events = self.events.clone();
         view::on_main_close(window.window(), move || {
+            crate::packages::package_manager::quit_requested();
             let _ = events.send(Event::MainClosed);
         });
         let events = self.events.clone();

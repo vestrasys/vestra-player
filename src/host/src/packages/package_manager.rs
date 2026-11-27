@@ -22,6 +22,17 @@ use std::{
     path::{Path, PathBuf},
 };
 
+/// The player was asked to quit (its main window's close, or the system's
+/// quit request: Restart Manager's `WM_ENDSESSION` or `WM_CLOSE`), set where
+/// the request is sent, before the core takes its `quit`: a runner that
+/// Restart Manager ends meanwhile stays down (`Core::runners_may_start`).
+static QUIT_REQUESTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// The player quits from now on (see [`QUIT_REQUESTED`]); any thread.
+pub(crate) fn quit_requested() {
+    QUIT_REQUESTED.store(true, std::sync::atomic::Ordering::Release);
+}
+
 /// A guest window's library: the
 /// main one read-only, with the package versions it refers to leased
 /// (`guest::lease`) before any of them runs. The catalog is read again
@@ -484,6 +495,17 @@ impl Core {
             format!("uncaught exception: {text}"),
         ));
     }
+    /// Whether a shared runner may start or restart: not once the quit has
+    /// begun (asked for, [`quit_requested`]; the `quit` command; the
+    /// plugins' shutdown), when an exited runner stays down and the quit
+    /// stops what is left of it. Restart Manager ending a runner while the
+    /// player quits would otherwise start a new one the installer then
+    /// finds holding `node.exe`.
+    pub(crate) fn runners_may_start(&self) -> bool {
+        !(QUIT_REQUESTED.load(std::sync::atomic::Ordering::Acquire)
+            || self.quitting
+            || self.on_demand.quitting)
+    }
     /// The shared runner exited, faulted without attribution or hung:
     /// every member stops (its registrations revoked as for any exit) and
     /// starts again in a new runner, its digest checked again. The third
@@ -492,6 +514,13 @@ impl Core {
     /// Session storage is keyed by the plugin's data key, not by process,
     /// so the restarted plugins find their values (`session_storage.rs`).
     pub(crate) fn restart_shared(&mut self, reason: &str) {
+        if !self.runners_may_start() {
+            // The quit stops the runner and its members (`shutdown_plugins`).
+            if self.shared.is_some() {
+                diag!("shared runner: {reason}; not restarted, the player is quitting");
+            }
+            return;
+        }
         let Some(runner) = self.shared.take() else {
             return;
         };
@@ -575,6 +604,8 @@ impl Core {
         Ok(Some(match self.trust(id, directory) {
             Trust::Shared => {
                 if self.shared.is_none() {
+                    // No runner starts once the quit has begun.
+                    anyhow::ensure!(self.runners_may_start(), "the player is quitting");
                     let runner = self.shared_policy.next_id();
                     let now = self.now_ms();
                     self.shared = Some(shared_runner::SharedRunner::spawn(

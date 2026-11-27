@@ -1061,6 +1061,7 @@ fn player() -> Result<()> {
         // does (`host/shell.rs`).
         let quit = host.events.sender();
         platform::on_quit_request(move || {
+            package_manager::quit_requested();
             let _ = quit.send(Event::MainClosed);
         });
         frame_pacing::follow(&window);
