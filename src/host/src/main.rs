@@ -1056,6 +1056,13 @@ fn player() -> Result<()> {
         platform::shown(&window);
         // The windows created from here on are its tool windows.
         platform::set_main_window(&window);
+        // The system's quit without the main window's close (Windows: an
+        // installer's Restart Manager, an ended session) quits as its close
+        // does (`host/shell.rs`).
+        let quit = host.events.sender();
+        platform::on_quit_request(move || {
+            let _ = quit.send(Event::MainClosed);
+        });
         frame_pacing::follow(&window);
         // Interpolation (`video.render()`) resamples to the main display's rate.
         let displays = platform::displays();

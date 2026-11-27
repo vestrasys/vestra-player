@@ -1972,12 +1972,78 @@ pub fn thread_cycles() -> u64 {
 /// keep it short.
 pub fn on_session_end(ended: impl Fn(super::SessionEvent) + 'static) {
     vestra_win32::on_session_end(move |what| {
-        ended(match what {
+        let event = match what {
             vestra_win32::SessionEnd::Query => super::SessionEvent::Query,
             vestra_win32::SessionEnd::Ending => super::SessionEvent::Ending,
             vestra_win32::SessionEnd::Cancelled => super::SessionEvent::Cancelled,
-        });
+        };
+        ended(event);
+        if event == super::SessionEvent::Ending {
+            // Restart Manager (an installer's "close the applications")
+            // sends WM_ENDSESSION with ENDSESSION_CLOSEAPP and waits for
+            // the process to end: the player quits as from its title bar,
+            // and ends for good if that quit has not within the limit.
+            quit_requested();
+            end_after(SESSION_EXIT_LIMIT);
+        }
     });
+}
+
+/// winit's hidden thread window (one per event loop, on the UI thread): its
+/// event loop's wakes and Slint's quit are posted to it.
+const WINIT_THREAD_CLASS: &str = "Winit Thread Event Target";
+
+/// How long the player may take to end after the session ended
+/// (`WM_ENDSESSION` TRUE) before it is ended anyway: the normal quit's
+/// bounds (the interface's quit, the plugins' shutdown and the bounded join
+/// of the core) end it well inside, and Restart Manager waits longer.
+const SESSION_EXIT_LIMIT: std::time::Duration = std::time::Duration::from_secs(10);
+
+thread_local! {
+    /// [`on_quit_request`]'s callback (UI thread).
+    static QUIT_REQUEST: RefCell<Option<Box<dyn Fn()>>> = const { RefCell::new(None) };
+}
+
+fn quit_requested() {
+    QUIT_REQUEST.with_borrow(|asked| {
+        if let Some(asked) = asked {
+            asked();
+        }
+    });
+}
+
+/// Ends the process `limit` from now unless it has ended (once).
+fn end_after(limit: std::time::Duration) {
+    static ARMED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    if ARMED.swap(true, std::sync::atomic::Ordering::AcqRel) {
+        return;
+    }
+    let _ = std::thread::Builder::new()
+        .name("session-end-exit".into())
+        .spawn(move || {
+            std::thread::sleep(limit);
+            logged!(
+                "exit: the player had not ended {} s after the session ended; ending it",
+                limit.as_secs()
+            );
+            exit_now(0);
+        });
+}
+
+/// The system asks the player to quit without its main window's close:
+/// `WM_CLOSE` to winit's hidden thread window (Restart Manager closing an
+/// application before an update, `taskkill` without `/F`: they close every
+/// top-level window of the process), or the session ends
+/// (`WM_ENDSESSION` TRUE). `asked` runs on the UI thread, inside the
+/// message. The hidden window stays: passed on, winit lets
+/// `DefWindowProc` destroy it, and every wake and quit posted to the event
+/// loop after that is lost (a window without its plugins that does not
+/// close). Call once on the UI thread, after the event loop exists.
+pub fn on_quit_request(asked: impl Fn() + 'static) {
+    QUIT_REQUEST.set(Some(Box::new(asked)));
+    if !vestra_win32::on_close_of(WINIT_THREAD_CLASS, quit_requested) {
+        logged!("ui: winit's thread window was not found; a WM_CLOSE to it would end its wakes");
+    }
 }
 
 thread_local! {
