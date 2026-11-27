@@ -868,7 +868,8 @@ impl Sources {
         // still false can be keep-open's, and the next read took that end for
         // one reached while paused (a seek from it then stayed paused). Read
         // first, a pause beside a false `eof-reached` is from before the end.
-        let paused: bool = mpv.get_property("pause").unwrap_or(false);
+        // At the end it is read again below, so the state shows keep-open's.
+        let mut paused: bool = mpv.get_property("pause").unwrap_or(false);
         // keep-open preserves the final frame and does not emit EndFile at
         // natural EOF. Read the EOF fact only against the actual playing entry.
         if let Some((entry, _)) = self.active {
@@ -881,7 +882,9 @@ impl Sources {
                         .ok()
                 });
             let eof = mpv.get_property::<bool>("eof-reached").unwrap_or(false);
-            if !eof {
+            if eof {
+                paused = mpv.get_property("pause").unwrap_or(paused);
+            } else {
                 self.eof_rearm = false;
             }
             if playing == Some(entry)

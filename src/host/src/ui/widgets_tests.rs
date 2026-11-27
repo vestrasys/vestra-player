@@ -1457,6 +1457,8 @@ fn the_review_sheet_offers_dont_ask_again_by_click_or_ctrl_enter() {
     assert!(!boolean(&w, "remember-checked"));
     let one_line = number(&w, "ph");
     let one_check = number(&w, "remember-h");
+    // One line fits the 44px footer (its 24px room).
+    assert!(one_check <= 24., "{one_check}");
     let (x, y) = (number(&w, "px"), number(&w, "py"));
     let (bx, by) = (number(&w, "remember-x"), number(&w, "remember-y"));
     // At the footer's left, level with the buttons.
@@ -2248,6 +2250,10 @@ fn the_lead_strip_wraps_the_longest_end_state_text_to_two_lines() {
         assert_eq!((number(&w, "h"), number(&w, "w")), (48., 520.), "{kind}");
         set_strip(&w, strip_value(kind, "Stopped", 0., true));
         assert_eq!((number(&w, "h"), number(&w, "w")), (32., 168.), "{kind}");
+        // A short Chinese text (a taller fallback font) stays on one line.
+        set_strip(&w, strip_value(kind, "已完成：Vestra 播放器：静音", 0., true));
+        let one = number(&w, "w");
+        assert!(number(&w, "h") == 32. && one < 520., "{kind} {one}");
     }
     for kind in ["working", "running"] {
         set_strip(&w, strip_value(kind, longest, 0., true));
