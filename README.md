@@ -14,7 +14,6 @@
   <a href="https://github.com/vestrasys/vestra-player-plugins">Plugins</a> ·
   <a href="agentic-workflow/">Agentic Workflow</a>
 </p>
-<p align="center"><sub>Agentic Workflow: how a team of AI agents builds this repository.</sub></p>
 
 Vestra Player is an open-source video player for Windows and macOS; Linux is not supported yet. It is a Rust player built on [libmpv](https://mpv.io) for playback and [Slint](https://slint.dev) for its windows, and every feature is a TypeScript plugin running in Node. Its AI features are AI Upscaling (RTX Video Super Resolution), Motion Smoothing (AMD and NVIDIA) and Vestra Player AI, which writes plugins from a description.
 

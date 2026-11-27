@@ -3,6 +3,13 @@ import type { Updater } from "./updates.ts";
 
 /** The protocol version in manifest.json (the Plugin API rows of I05 and I09). */
 export const API_VERSION = "vestra/1";
+/**
+ * The author's copyright line under the version (user ruling 2026-11-27, as
+ * IINA shows its own). A name, not translated. The year is fixed here, where
+ * the packaging scripts stamp their build year: a plugin ships as its source,
+ * with no build step to stamp it.
+ */
+export const COPYRIGHT = "© 2026 Ziyang Song";
 /** `0.1.0 (build 289b26b)`, or the bare version without a build hash. */
 export const vestraVersion = (i18n: I18n, app: AppInfo): TextArg => (app.build ? i18n.text("{} (build {})", [app.version, app.build]) : app.version);
 
@@ -98,7 +105,7 @@ const STATE_WORDS = { starting: "Starting", running: "Running", disabled: "Disab
 /** The whole window as plain text in the interface language, for Copy Info (it leaves the player: resolved here). */
 export function aboutText(i18n: I18n, app: AppInfo, node: string | null, plugins: PluginRow[] | null, rendering: RenderingRow = NO_RENDERING) {
   const { text, list, resolve } = i18n;
-  const lines: TextArg[] = ["Vestra Player", app.build ? text("Version {} (build {})", [app.version, app.build]) : text("Version {}", [app.version]), ""];
+  const lines: TextArg[] = ["Vestra Player", app.build ? text("Version {} (build {})", [app.version, app.build]) : text("Version {}", [app.version]), COPYRIGHT, ""];
   for (const [label, value] of components(i18n, app, node)) lines.push(text("{}: {}", [label, value]));
   if (rendering.mode) lines.push(text("{}: {}", [text("Rendering"), renderingValue(i18n, rendering)]));
   lines.push("", text("Loaded plugins"));
@@ -152,6 +159,7 @@ export function aboutWindow(plugin: Plugin, updater: Updater) {
   aboutToolWindow.bind(() => ({
     version: plugin.app.version,
     build: plugin.app.build ?? "",
+    copyright: COPYRIGHT,
     ...versions(plugin.app, node),
     plugins: st.plugins ?? [],
     pluginsUnknown: !st.plugins,

@@ -23,7 +23,7 @@ export function infoPlistEntries(version, minimum) {
     LSApplicationCategoryType: "public.app-category.video",
     LSMinimumSystemVersion: minimum,
     NSHighResolutionCapable: true,
-    NSHumanReadableCopyright: `© ${new Date().getUTCFullYear()} Vestra Player contributors · GPL-3.0-or-later`,
+    NSHumanReadableCopyright: `© ${new Date().getUTCFullYear()} Ziyang Song · GPL-3.0-or-later`,
     NSSupportsAutomaticGraphicsSwitching: true,
     // Finder "Open With" (file-types.mjs); the host takes the open-documents
     // events (src/host/unsafe/open).
