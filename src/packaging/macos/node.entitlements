@@ -1,11 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!--
-  Contents/MacOS/node under the Hardened Runtime (release.yml sign-macos,
-  bundle-macos.mjs --identity). V8 needs JIT pages; the other entitlements of the official
-  node binary are left out: disable-library-validation (native addons only),
-  disable-executable-page-protection, get-task-allow (notarization refuses it).
--->
 <plist version="1.0">
 <dict>
   <key>com.apple.security.cs.allow-jit</key>

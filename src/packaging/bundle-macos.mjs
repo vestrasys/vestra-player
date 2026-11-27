@@ -207,6 +207,16 @@ await stageLicenses(join(contents, "Resources/licenses"), {
 await rm(nodeDir, { recursive: true, force: true });
 
 // ------------------------------------------------------------ signing
+//
+// The entitlements files hold no XML comments: codesign on macOS 15
+// (AMFIUnserializeXML) rejects them. host.entitlements is empty on purpose:
+// every dylib in Frameworks/ is signed with the same identity, so no
+// disable-library-validation; mpv's Lua scripts are off, so no allow-jit.
+// node.entitlements gives V8 its JIT pages (allow-jit,
+// allow-unsigned-executable-memory) and leaves out the official node
+// binary's disable-library-validation (native addons only),
+// disable-executable-page-protection and get-task-allow (notarization
+// refuses it).
 
 const identity = options.identity ?? "-";
 const signed = identity !== "-";
