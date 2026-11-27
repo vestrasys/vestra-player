@@ -437,7 +437,10 @@ jobs:
           ca="$RUNNER_TEMP/DeveloperIDG2CA.cer"
           curl -sSfL --retry 3 -o "$ca" https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer
           echo "$DEVELOPER_ID_G2_SHA256  $ca" | shasum -a 256 -c -
-          security import "$ca" -k "$keychain" > /dev/null
+          # A .p12 exported with its chain already brought the intermediate.
+          if ! out=$(security import "$ca" -k "$keychain" 2>&1); then
+            grep -qF "already exists" <<< "$out" || { echo "$out" >&2; exit 1; }
+          fi
           # Searched first, after it the user keychains already listed.
           old=()
           while IFS= read -r line; do
