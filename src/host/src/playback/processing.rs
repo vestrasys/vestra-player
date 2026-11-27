@@ -1954,8 +1954,11 @@ mod tests {
 
     /// Loads a generated 1920x1080 clip and waits until mpv decodes it.
     fn playing(mpv: &Mpv) {
-        mpv.command(&["loadfile", "av://lavfi:testsrc2=s=1920x1080:r=30:d=60"])
-            .unwrap();
+        play(mpv, "av://lavfi:testsrc2=s=1920x1080:r=30:d=60");
+    }
+    /// Loads `url` and waits until mpv decodes it.
+    fn play(mpv: &Mpv, url: &str) {
+        mpv.command(&["loadfile", url]).unwrap();
         let start = Instant::now();
         while start.elapsed() < Duration::from_secs(10)
             && mpv.get_property::<f64>("time-pos").unwrap_or(0.) < 0.3
@@ -1964,6 +1967,24 @@ mod tests {
             std::thread::sleep(Duration::from_millis(10));
         }
         assert!(mpv.get_property::<i64>("video-params/dw").unwrap_or(0) > 0);
+    }
+    /// A 10 s 30 fps clip that seeks in libavformat, written without
+    /// `ffmpeg`: YUV4MPEG (raw frames, each one a keyframe), 64x64 grey,
+    /// a step brighter each frame.
+    fn seekable_clip(dir: &std::path::Path) -> std::path::PathBuf {
+        let (width, height, frames) = (64, 64, 300);
+        let mut data = b"YUV4MPEG2 W64 H64 F30:1 Ip A1:1 C420jpeg\n".to_vec();
+        for frame in 0..frames {
+            data.extend_from_slice(b"FRAME\n");
+            data.extend(std::iter::repeat_n(
+                (16 + frame % 220) as u8,
+                width * height,
+            ));
+            data.extend(std::iter::repeat_n(128u8, width * height / 2));
+        }
+        let file = dir.join("clip.y4m");
+        std::fs::write(&file, data).unwrap();
+        file
     }
     fn view(width: u32, height: u32) -> ViewFacts {
         ViewFacts {
@@ -2108,32 +2129,36 @@ mod tests {
     /// seek would otherwise rebuild the old one) and the picture goes back
     /// to where it was paused.
     ///
-    /// The generated clip cannot seek in libavformat ("Seek failed"): a seek
-    /// back is only possible from mpv's demuxer cache, which mpv enables by
-    /// default for network streams only. Without it the seek back ends
-    /// further on, while `time-pos` reads the seek target as long as the
-    /// seek is in flight; hence `cache` here and `at` waiting for the seek
-    /// to be over.
+    /// The clip is a file that seeks, as the files a user plays do
+    /// (`seekable_clip`): `av://lavfi` cannot seek in libavformat ("Seek
+    /// failed"), and mpv's demuxer cache cannot stand in for it, as its
+    /// packets (`wrapped_avframe`) are never keyframes, so the cache keeps no
+    /// seek range; the seek back then ends where the demuxer had read to.
+    /// `time-pos` reads the seek target as long as the seek is in flight,
+    /// hence `at` waiting for the seek to be over.
     #[test]
     fn a_paused_live_update_previews_then_settles_back_where_it_was() {
         let _one = one_mpv_at_a_time();
         let mpv = mpv("no");
-        mpv.set_property("cache", "yes").unwrap();
+        let dir = tempfile::tempdir().unwrap();
         let mut processing = ready();
         // At `target` with no seek in flight, within 5 s: where it is.
+        // `time-pos` is read first: a queued seek starts in between two
+        // reads, and the other way round `seeking` from before it with
+        // `time-pos` (the target while it lasts) from after it pass as there.
         let at = |target: f64| {
-            let here = || {
-                let seeking = mpv.get_property::<bool>("seeking").unwrap_or(true);
-                let position = mpv.get_property::<f64>("time-pos").unwrap();
-                (!seeking && (position - target).abs() <= 0.001, position)
-            };
             let start = Instant::now();
-            while !here().0 && start.elapsed() < Duration::from_secs(5) {
+            loop {
+                let position = mpv.get_property::<f64>("time-pos").unwrap();
+                let seeking = mpv.get_property::<bool>("seeking").unwrap_or(true);
+                let there = !seeking && (position - target).abs() <= 0.001;
+                if there || start.elapsed() >= Duration::from_secs(5) {
+                    return (there, position);
+                }
                 std::thread::sleep(Duration::from_millis(10));
             }
-            here()
         };
-        playing(&mpv);
+        play(&mpv, seekable_clip(dir.path()).to_str().unwrap());
         processing
             .replace(&mpv, OWNER, 1, Source::Decoded, &video(1, eq(0.1)))
             .unwrap();
