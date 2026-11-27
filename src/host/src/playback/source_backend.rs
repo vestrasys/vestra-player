@@ -863,6 +863,13 @@ impl Sources {
             state["audioOutput"] = output;
             return state;
         }
+        // The pause, read before `eof-reached`: keep-open pauses mpv as it
+        // reaches the end, so a pause read after an `eof-reached` that was
+        // still false can be keep-open's, and the next read took that end for
+        // one reached while paused (a seek from it then stayed paused). Read
+        // first, a pause beside a false `eof-reached` is from before the end.
+        // At the end it is read again below, so the state shows keep-open's.
+        let mut paused: bool = mpv.get_property("pause").unwrap_or(false);
         // keep-open preserves the final frame and does not emit EndFile at
         // natural EOF. Read the EOF fact only against the actual playing entry.
         if let Some((entry, _)) = self.active {
@@ -875,7 +882,9 @@ impl Sources {
                         .ok()
                 });
             let eof = mpv.get_property::<bool>("eof-reached").unwrap_or(false);
-            if !eof {
+            if eof {
+                paused = mpv.get_property("pause").unwrap_or(paused);
+            } else {
                 self.eof_rearm = false;
             }
             if playing == Some(entry)
@@ -883,8 +892,10 @@ impl Sources {
                 && !self.eof_rearm
                 && eof
             {
-                let paused = self.pause_request.unwrap_or(self.session.state().paused);
-                self.end_keeps_pause = self.stepped || paused;
+                // The pause before the end: the last read's (keep-open has
+                // paused mpv by now), or one asked for since.
+                let before = self.pause_request.unwrap_or(self.session.state().paused);
+                self.end_keeps_pause = self.stepped || before;
                 self.session.event(SourceEvent::EndFile {
                     entry,
                     reason: EndReason::Natural,
@@ -894,7 +905,7 @@ impl Sources {
         if let Some((_, ticket)) = self.active {
             self.session.observe(
                 ticket,
-                mpv.get_property("pause").unwrap_or(false),
+                paused,
                 mpv.get_property("time-pos").ok(),
                 mpv.get_property("duration").ok(),
             );

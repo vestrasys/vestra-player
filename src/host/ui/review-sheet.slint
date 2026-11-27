@@ -107,6 +107,7 @@ export component ReviewSheetView inherits Rectangle {
     out property <bool> remember-shown: remember.visible;
     out property <length> remember-x: remember.absolute-position.x - root.absolute-position.x + 6px;
     out property <length> remember-y: remember.absolute-position.y - root.absolute-position.y + remember.height / 2;
+    out property <length> remember-height: remember.height;
 
     init => { keys.focus(); }
 

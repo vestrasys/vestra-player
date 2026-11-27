@@ -86,8 +86,12 @@ export component LeadStripView inherits Rectangle {
         x: 33px;
         y: 8px;
         width: min(self.preferred-width + 1px, root.text-room);
-        // 16px a line (the spec's line height), two lines at most.
-        height: self.preferred-height > 24px ? 32px : 16px;
+        // 16px a line (the spec's line height), two lines at most: an end
+        // state whose one line is wider than the room wraps. Decided on the
+        // width, not on the wrapped height against a line height (no font's
+        // metrics: macOS' Helvetica's two 12px lines are 24px, and a taller
+        // fallback font for CJK or Thai would read as two lines).
+        height: root.ended && self.preferred-width + 1px > root.text-room ? 32px : 16px;
         text: root.strip.text;
         font-size: Theme.font-tab;
         color: Theme.text;

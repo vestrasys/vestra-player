@@ -1269,6 +1269,7 @@ export component W inherits Window {
     in-out property <bool> remember-checked;
     out property <length> remember-x: v.remember-x;
     out property <length> remember-y: v.remember-y;
+    out property <length> remember-h: v.remember-height;
     background: Theme.bg-video;
     Image {
         x: 0px; y: 0px;
@@ -1455,6 +1456,9 @@ fn the_review_sheet_offers_dont_ask_again_by_click_or_ctrl_enter() {
     assert!(boolean(&w, "remember-shown"));
     assert!(!boolean(&w, "remember-checked"));
     let one_line = number(&w, "ph");
+    let one_check = number(&w, "remember-h");
+    // One line fits the 44px footer (its 24px room).
+    assert!(one_check <= 24., "{one_check}");
     let (x, y) = (number(&w, "px"), number(&w, "py"));
     let (bx, by) = (number(&w, "remember-x"), number(&w, "remember-y"));
     // At the footer's left, level with the buttons.
@@ -1495,7 +1499,9 @@ fn the_review_sheet_offers_dont_ask_again_by_click_or_ctrl_enter() {
     assert_eq!(string(&w, "last"), "run");
     key(&w, Key::Escape);
     assert_eq!(string(&w, "last"), "decline");
-    // Two long names wrap: the footer grows, the buttons stay inside.
+    // Two long names wrap: the footer grows by what the two lines need
+    // over its 44px (Segoe UI's two 11px lines need more, macOS'
+    // Helvetica's fit), the check and the buttons stay inside.
     let long = "A Plugin With A Very Long Shown Name Indeed";
     w.set_property(
         "s",
@@ -1509,9 +1515,18 @@ fn the_review_sheet_offers_dont_ask_again_by_click_or_ctrl_enter() {
     .unwrap();
     settle();
     let wrapped = number(&w, "ph");
-    assert!(wrapped > one_line, "{wrapped} > {one_line}");
+    let check = number(&w, "remember-h");
+    assert!(check > one_check, "the names wrap: {check} > {one_check}");
+    // The footer: 44px, or the check's height and 20px.
+    let grown = (check + 20. - 44.).max(0.);
+    assert!(
+        (wrapped - one_line - grown).abs() < 0.5,
+        "{wrapped} = {one_line} + {grown}"
+    );
     let (y, buttons) = (number(&w, "py"), number(&w, "buttons-y"));
     assert!(buttons < y + wrapped - 8., "{buttons}");
+    let bottom = number(&w, "remember-y") + check / 2.;
+    assert!(bottom <= y + wrapped - 8. + 0.5, "{bottom}");
 }
 
 /// The sheet as the spec's renders show it (PROPOSAL §4.3,
@@ -2235,6 +2250,13 @@ fn the_lead_strip_wraps_the_longest_end_state_text_to_two_lines() {
         assert_eq!((number(&w, "h"), number(&w, "w")), (48., 520.), "{kind}");
         set_strip(&w, strip_value(kind, "Stopped", 0., true));
         assert_eq!((number(&w, "h"), number(&w, "w")), (32., 168.), "{kind}");
+        // A short Chinese text (a taller fallback font) stays on one line.
+        set_strip(
+            &w,
+            strip_value(kind, "已完成：Vestra 播放器：静音", 0., true),
+        );
+        let one = number(&w, "w");
+        assert!(number(&w, "h") == 32. && one < 520., "{kind} {one}");
     }
     for kind in ["working", "running"] {
         set_strip(&w, strip_value(kind, longest, 0., true));
