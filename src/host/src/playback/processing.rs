@@ -2107,11 +2107,32 @@ mod tests {
     /// changes settle, the graph text is rewritten with the live value (a
     /// seek would otherwise rebuild the old one) and the picture goes back
     /// to where it was paused.
+    ///
+    /// The generated clip cannot seek in libavformat ("Seek failed"): a seek
+    /// back is only possible from mpv's demuxer cache, which mpv enables by
+    /// default for network streams only. Without it the seek back ends
+    /// further on, while `time-pos` reads the seek target as long as the
+    /// seek is in flight; hence `cache` here and `at` waiting for the seek
+    /// to be over.
     #[test]
     fn a_paused_live_update_previews_then_settles_back_where_it_was() {
         let _one = one_mpv_at_a_time();
         let mpv = mpv("no");
+        mpv.set_property("cache", "yes").unwrap();
         let mut processing = ready();
+        // At `target` with no seek in flight, within 5 s: where it is.
+        let at = |target: f64| {
+            let here = || {
+                let seeking = mpv.get_property::<bool>("seeking").unwrap_or(true);
+                let position = mpv.get_property::<f64>("time-pos").unwrap();
+                (!seeking && (position - target).abs() <= 0.001, position)
+            };
+            let start = Instant::now();
+            while !here().0 && start.elapsed() < Duration::from_secs(5) {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            here()
+        };
         playing(&mpv);
         processing
             .replace(&mpv, OWNER, 1, Source::Decoded, &video(1, eq(0.1)))
@@ -2137,16 +2158,8 @@ mod tests {
         // Settled: rewritten and back.
         processing.tick(&mpv, Instant::now() + live::SETTLE, None);
         assert!(vf(&mpv).contains("brightness=0.3"), "{}", vf(&mpv));
-        let start = Instant::now();
-        while start.elapsed() < Duration::from_secs(5)
-            && (mpv.get_property::<f64>("time-pos").unwrap() - paused_at).abs() > 0.001
-        {
-            std::thread::sleep(Duration::from_millis(10));
-        }
-        assert!(
-            (mpv.get_property::<f64>("time-pos").unwrap() - paused_at).abs() <= 0.001,
-            "back at {paused_at}"
-        );
+        let (back, here) = at(paused_at);
+        assert!(back, "back at {paused_at}, not at {here}");
         assert!(mpv.get_property::<bool>("pause").unwrap());
         // The user moves the picture during a drag (a seek): the next step
         // starts over there, and the settle comes back there.
@@ -2163,12 +2176,8 @@ mod tests {
             .unwrap();
         wait_steps(&mut processing);
         mpv.command(&["seek", "5", "absolute+exact"]).unwrap();
-        let start = Instant::now();
-        while start.elapsed() < Duration::from_secs(5)
-            && (mpv.get_property::<f64>("time-pos").unwrap() - 5.).abs() > 0.001
-        {
-            std::thread::sleep(Duration::from_millis(10));
-        }
+        let (moved, here) = at(5.);
+        assert!(moved, "seeked to 5, not to {here}");
         std::thread::sleep(Duration::from_millis(200));
         processing
             .replace(&mpv, OWNER, 1, Source::Decoded, &video(4, eq(0.4)))
@@ -2177,16 +2186,8 @@ mod tests {
         let anchor = processing.live.anchor.unwrap();
         assert!((anchor - 5.).abs() < 0.001, "re-anchored at {anchor}");
         processing.tick(&mpv, Instant::now() + live::SETTLE, None);
-        let start = Instant::now();
-        while start.elapsed() < Duration::from_secs(5)
-            && (mpv.get_property::<f64>("time-pos").unwrap() - 5.).abs() > 0.001
-        {
-            std::thread::sleep(Duration::from_millis(10));
-        }
-        assert!(
-            (mpv.get_property::<f64>("time-pos").unwrap() - 5.).abs() <= 0.001,
-            "back at 5, not at {paused_at}"
-        );
+        let (back, here) = at(5.);
+        assert!(back, "back at 5 (not {paused_at}), not at {here}");
     }
 
     #[test]
