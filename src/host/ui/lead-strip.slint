@@ -86,8 +86,12 @@ export component LeadStripView inherits Rectangle {
         x: 33px;
         y: 8px;
         width: min(self.preferred-width + 1px, root.text-room);
-        // 16px a line (the spec's line height), two lines at most.
-        height: self.preferred-height > 24px ? 32px : 16px;
+        // 16px a line (the spec's line height), two lines at most. Two
+        // lines when the text is taller than one and a half of the font's
+        // lines: the font's own line height (Segoe UI's 12px line is 16px,
+        // macOS' Helvetica's 12px), not a fixed 24px, which two Helvetica
+        // lines (24px) never passed.
+        height: self.preferred-height > 1.5 * (self.font-metrics.ascent - self.font-metrics.descent) ? 32px : 16px;
         text: root.strip.text;
         font-size: Theme.font-tab;
         color: Theme.text;
