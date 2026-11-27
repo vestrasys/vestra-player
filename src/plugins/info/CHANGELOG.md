@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.19
+
+- About Vestra Player shows the author's copyright, `© 2026 Ziyang Song`, under the version (user ruling 2026-11-27), in the secondary text colour; Copy Info copies it as the third line. A name, not translated. Who must change: nobody.
+
 ## 0.1.18
 
 - `subscribe()` and `player.onChange` are gone (SDK 1.11.0): the overlay (Tab) and the short information (Shift+Tab) open a state stream and listen to `window.changed` (for the video width the short lines are cut to) only while one of them shows, beside their existing 1-second refresh; Playback Properties streams the state while its window is open, where it used a listener of its own. With nothing shown the plugin holds nothing and may be stopped while idle. What is shown is unchanged. Who must change: nobody.

@@ -180,6 +180,7 @@ if (!options["no-installer"]) {
     `/DAppId=${APP_ID}`,
     `/DAppVersion=${version}`,
     `/DAppVersionNumeric=${version.replace(/[-+].*$/, "")}`,
+    `/DCopyright=© ${new Date().getUTCFullYear()} Ziyang Song`,
     `/DSourceDir=${stage}`,
     `/DOutputDir=${out}`,
     `/DOutputBaseFilename=${base}-setup`,

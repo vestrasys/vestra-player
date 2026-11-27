@@ -84,15 +84,19 @@ fn windows_resources(manifest_dir: &str, out_dir: &str) {
     // host changes, so its resource can only name itself (file version ≠
     // product release, "Versions").
     let version = env!("CARGO_PKG_VERSION");
+    // The author's copyright (user ruling 2026-11-27), stamped with the build
+    // year as the macOS bundle's NSHumanReadableCopyright is
+    // (`src/packaging/macos-plist.mjs`).
+    let copyright = format!("© {} Ziyang Song · GPL-3.0-or-later", build_year());
     let res = resources::resource_file(
         &ico,
         version,
         &[
-            ("CompanyName", "Vestra Player contributors"),
+            ("CompanyName", "Ziyang Song"),
             ("FileDescription", "Vestra Player"),
             ("FileVersion", version),
             ("InternalName", "vestra-host"),
-            ("LegalCopyright", "GPL-3.0-or-later"),
+            ("LegalCopyright", &copyright),
             ("OriginalFilename", "vestra-host.exe"),
             ("ProductName", "Vestra Player"),
             ("ProductVersion", version),
@@ -102,6 +106,28 @@ fn windows_resources(manifest_dir: &str, out_dir: &str) {
     let path = std::path::Path::new(out_dir).join("vestra.res");
     std::fs::write(&path, res).expect("write vestra.res");
     println!("cargo:rustc-link-arg={}", path.display());
+}
+
+/// The UTC year of the build: `SOURCE_DATE_EPOCH` when set (reproducible
+/// builds), else now. Days to civil year as in Howard Hinnant's
+/// `civil_from_days`, so the build needs no date crate.
+fn build_year() -> i64 {
+    println!("cargo:rerun-if-env-changed=SOURCE_DATE_EPOCH");
+    let seconds = std::env::var("SOURCE_DATE_EPOCH")
+        .ok()
+        .and_then(|value| value.trim().parse::<i64>().ok())
+        .unwrap_or_else(|| {
+            let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH);
+            i64::try_from(now.expect("clock after 1970").as_secs()).expect("seconds fit i64")
+        });
+    let z = seconds.div_euclid(86_400) + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    // March-based year: January and February belong to the next one.
+    yoe + era * 400 + i64::from(mp >= 10)
 }
 
 /// The player's own catalogs: every
