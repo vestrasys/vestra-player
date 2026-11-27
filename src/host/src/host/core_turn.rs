@@ -985,3 +985,24 @@ fn hold_freed_keeps_a_version_a_running_guest_leases() {
     assert!(!library.join(&other).exists(), "taken out of the library");
     drop(lock);
 }
+
+/// Once the quit has begun (the `quit` command, before the plugins'
+/// shutdown, or the shutdown itself), no shared runner starts or restarts:
+/// a runner that ends then (Restart Manager closing it for an installer)
+/// stays down for the quit to finish.
+#[test]
+fn no_runner_starts_once_the_quit_has_begun() {
+    let root = tempfile::tempdir().unwrap();
+    let (mut core, _events, _commands) = core(root.path());
+    assert!(core.runners_may_start());
+    core.host_command("quit");
+    assert!(core.quitting);
+    assert!(!core.runners_may_start());
+    // Nothing to restart, nothing restarted.
+    core.restart_shared("the shared runner exited");
+    assert!(core.shared.is_none());
+
+    let (mut core, _events, _commands) = self::core(root.path());
+    core.on_demand.quitting = true;
+    assert!(!core.runners_may_start());
+}

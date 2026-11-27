@@ -42,6 +42,11 @@ Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
 CloseApplications=yes
+; Restart Manager closes the player alone: its quit stops the plugin runners
+; (node.exe) and waits for them before the player ends. Shutting node.exe
+; down too raced that quit ("could not be shut down"), and the player
+; restarted a runner it saw end.
+CloseApplicationsFilter=vestra-host.exe
 ; Explorer rereads the file types after install and uninstall.
 ChangesAssociations=yes
 RestartApplications=no
