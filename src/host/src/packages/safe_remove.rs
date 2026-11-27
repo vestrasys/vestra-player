@@ -413,11 +413,25 @@ pub(crate) mod tests {
         fs::create_dir_all(&tree).unwrap();
         let denied = tree.join("denied.txt");
         fs::write(&denied, b"x").unwrap();
-        if !deny_delete(&tree, &denied, true) {
+        let probe = tree.join("probe.txt");
+        fs::write(&probe, b"x").unwrap();
+        if !(deny_delete(&tree, &denied, true) & deny_delete(&tree, &probe, true)) {
             // Skipped: icacls could not set the deny entries here.
+            deny_delete(&tree, &probe, false);
+            deny_delete(&tree, &denied, false);
+            return;
+        }
+        // Precondition: the deny binds this process. A plain delete of a
+        // file denied the same way must be refused; where it is not (an
+        // elevated process whose token lets it delete past the ACL, as on
+        // GitHub's hosted Windows runners), there is nothing to observe and
+        // the test is skipped.
+        if fs::remove_file(&probe).is_ok() {
+            deny_delete(&tree, &denied, false);
             return;
         }
         let left = remove_within(root, &tree).unwrap();
+        deny_delete(&tree, &probe, false);
         deny_delete(&tree, &denied, false);
         assert!(
             left.iter().any(|line| line.contains("denied.txt")),
