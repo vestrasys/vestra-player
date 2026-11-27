@@ -2251,7 +2251,10 @@ fn the_lead_strip_wraps_the_longest_end_state_text_to_two_lines() {
         set_strip(&w, strip_value(kind, "Stopped", 0., true));
         assert_eq!((number(&w, "h"), number(&w, "w")), (32., 168.), "{kind}");
         // A short Chinese text (a taller fallback font) stays on one line.
-        set_strip(&w, strip_value(kind, "已完成：Vestra 播放器：静音", 0., true));
+        set_strip(
+            &w,
+            strip_value(kind, "已完成：Vestra 播放器：静音", 0., true),
+        );
         let one = number(&w, "w");
         assert!(number(&w, "h") == 32. && one < 520., "{kind} {one}");
     }
