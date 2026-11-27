@@ -5,147 +5,147 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: main.ts:49 main.ts:238 ui/page.slint:34
+#: main.ts:56 main.ts:247 ui/page.slint:34
 msgid "Window"
 msgstr "窗口"
 
-#: main.ts:50
+#: main.ts:57
 #, x-machine
 msgid "Window Size"
 msgstr "窗口尺寸"
 
-#: main.ts:51
+#: main.ts:58
 #, x-machine
 msgid "Size on Open"
 msgstr "开始播放时的尺寸"
 
-#: main.ts:52
+#: main.ts:59
 msgid "Always on Top"
 msgstr "置顶"
 
-#: main.ts:75
+#: main.ts:79
 msgid "Mini Size"
 msgstr "迷你尺寸"
 
-#: main.ts:83 main.ts:111
+#: main.ts:87 main.ts:119
 msgid "Switching picture-in-picture"
 msgstr "正在切换画中画"
 
-#: main.ts:83 main.ts:111 main.ts:141 main.ts:154
+#: main.ts:87 main.ts:119 main.ts:150 main.ts:163
 msgid "Resizing the window"
 msgstr "正在调整窗口"
 
-#: main.ts:83 main.ts:141 main.ts:154
+#: main.ts:87 main.ts:150 main.ts:163
 msgid "Not available in fullscreen"
 msgstr "全屏时不可用"
 
-#: main.ts:83 main.ts:111 main.ts:141 main.ts:154 pip.ts:42 size.ts:124
+#: main.ts:87 main.ts:119 main.ts:150 main.ts:163 pip.ts:42 size.ts:125
 msgid "No video"
 msgstr "没有视频"
 
-#: main.ts:104
+#: main.ts:111 main.ts:112
 msgid "Picture-in-Picture"
 msgstr "画中画"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:132 main.ts:173 ui/page.slint:44
+#: main.ts:141 main.ts:182 ui/page.slint:44
 msgid "0.5×"
 msgstr "0.5倍"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:132 main.ts:173 ui/page.slint:44
+#: main.ts:141 main.ts:182 ui/page.slint:44
 msgid "1×"
 msgstr "1倍"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:132 main.ts:173 ui/page.slint:44
+#: main.ts:141 main.ts:182 ui/page.slint:44
 msgid "1.5×"
 msgstr "1.5倍"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:132 main.ts:173 ui/page.slint:44
+#: main.ts:141 main.ts:182 ui/page.slint:44
 msgid "2×"
 msgstr "2倍"
 
-#: main.ts:147 main.ts:173
+#: main.ts:156 main.ts:182
 msgid "Fit to Video Aspect Ratio"
 msgstr "适应视频比例"
 
-#: main.ts:162
+#: main.ts:171
 msgid "When playback starts: Don't resize the window"
 msgstr "开始播放时: 不调整窗口"
 
-#: main.ts:163
+#: main.ts:172
 msgid "When playback starts: Fit to video aspect ratio"
 msgstr "开始播放时: 适应视频比例"
 
-#: main.ts:164
+#: main.ts:173
 msgid "When playback starts: {}×"
 msgstr "开始播放时: {}倍"
 
-#: main.ts:168
+#: main.ts:177
 msgid "Resize only once when playback starts: On"
 msgstr "开始播放时只调整一次: 开"
 
-#: main.ts:168
+#: main.ts:177
 msgid "Resize only once when playback starts: Off"
 msgstr "开始播放时只调整一次: 关"
 
-#: main.ts:173
+#: main.ts:182
 msgid "Don't Resize"
 msgstr "不调整"
 
-#: main.ts:184
+#: main.ts:193
 msgid "Only Once"
 msgstr "只调整一次"
 
-#: main.ts:196
+#: main.ts:205
 msgid "Always on top: Off"
 msgstr "置顶: 关闭"
 
-#: main.ts:196
+#: main.ts:205
 msgid "Always on top: Always"
 msgstr "置顶: 总是"
 
-#: main.ts:196
+#: main.ts:205
 msgid "Always on top: While playing"
 msgstr "置顶: 播放时"
 
-#: main.ts:196
+#: main.ts:205
 msgid "Always on top: While playing in fullscreen"
 msgstr "置顶: 全屏播放时"
 
-#: main.ts:200
+#: main.ts:209
 msgid "Cycle Mode"
 msgstr "切换置顶方式"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:210 ui/page.slint:66
+#: main.ts:219 ui/page.slint:66
 msgid "Never"
 msgstr "不置顶"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:210 ui/page.slint:66
+#: main.ts:219 ui/page.slint:66
 msgid "Always"
 msgstr "总是置顶"
 
-#: main.ts:210
+#: main.ts:219
 msgid "While Playing"
 msgstr "播放时置顶"
 
-#: main.ts:210
+#: main.ts:219
 msgid "While Playing in Fullscreen"
 msgstr "全屏播放时置顶"
 
-#: main.ts:224
+#: main.ts:233
 msgid "Hide pointer while playing: On"
 msgstr "播放时隐藏鼠标: 开"
 
-#: main.ts:224
+#: main.ts:233
 msgid "Hide pointer while playing: Off"
 msgstr "播放时隐藏鼠标: 关"
 
-#: main.ts:229
+#: main.ts:238
 msgid "Hide Pointer While Playing"
 msgstr "播放时隐藏鼠标指针"
 
@@ -181,7 +181,7 @@ msgstr "置顶"
 msgid "Picture-in-picture: On"
 msgstr "画中画: 开"
 
-#: pip.ts:49 pip.ts:68
+#: pip.ts:49 pip.ts:67
 msgid "Picture-in-picture: Off"
 msgstr "画中画: 关"
 
@@ -193,47 +193,47 @@ msgstr "无法进入画中画：{}"
 msgid "Cannot exit picture-in-picture: {}"
 msgstr "无法退出画中画：{}"
 
-#: pip.ts:68
+#: pip.ts:67
 msgid "Picture-in-picture: Off (no video)"
 msgstr "画中画: 关（没有视频）"
 
-#: size.ts:47
+#: size.ts:48
 msgid "Window: {}× (shrunk to fit the screen)"
 msgstr "窗口: {}倍（已按屏幕缩小）"
 
-#: size.ts:47
+#: size.ts:48
 msgid "Window: {}× (enlarged to the minimum size)"
 msgstr "窗口: {}倍（已按最小尺寸放大）"
 
-#: size.ts:47
+#: size.ts:48
 msgid "Window: {}×"
 msgstr "窗口: {}倍"
 
-#: size.ts:64
+#: size.ts:65
 msgid "The window already fits the video aspect ratio"
 msgstr "窗口已适应视频比例"
 
-#: size.ts:72
+#: size.ts:73
 msgid "Window: Fit to video aspect ratio (shrunk to fit the screen)"
 msgstr "窗口: 适应视频比例（已按屏幕缩小）"
 
-#: size.ts:72
+#: size.ts:73
 msgid "Window: Fit to video aspect ratio (enlarged to the minimum size)"
 msgstr "窗口: 适应视频比例（已按最小尺寸放大）"
 
-#: size.ts:72
+#: size.ts:73
 msgid "Window: Fit to video aspect ratio"
 msgstr "窗口: 适应视频比例"
 
-#: size.ts:87
+#: size.ts:88
 msgid "Mini size: Off"
 msgstr "迷你尺寸: 关"
 
-#: size.ts:97
+#: size.ts:98
 msgid "Mini size: On"
 msgstr "迷你尺寸: 开"
 
-#: size.ts:137
+#: size.ts:138
 msgid "Cannot resize the window: {}"
 msgstr "无法调整窗口：{}"
 

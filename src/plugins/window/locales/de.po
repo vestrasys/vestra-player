@@ -6,178 +6,178 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: main.ts:49 main.ts:238 ui/page.slint:34
+#: main.ts:56 main.ts:247 ui/page.slint:34
 #, x-machine
 msgid "Window"
 msgstr "Fenster"
 
-#: main.ts:50
+#: main.ts:57
 #, x-machine
 msgid "Window Size"
 msgstr "Fenstergröße"
 
-#: main.ts:51
+#: main.ts:58
 #, x-machine
 msgid "Size on Open"
 msgstr "Größe bei Wiedergabestart"
 
-#: main.ts:52
+#: main.ts:59
 #, x-machine
 msgid "Always on Top"
 msgstr "Immer im Vordergrund"
 
-#: main.ts:75
+#: main.ts:79
 #, x-machine
 msgid "Mini Size"
 msgstr "Minigröße"
 
-#: main.ts:83 main.ts:111
+#: main.ts:87 main.ts:119
 #, x-machine
 msgid "Switching picture-in-picture"
 msgstr "Bild-in-Bild wird umgeschaltet"
 
-#: main.ts:83 main.ts:111 main.ts:141 main.ts:154
+#: main.ts:87 main.ts:119 main.ts:150 main.ts:163
 #, x-machine
 msgid "Resizing the window"
 msgstr "Fenstergröße wird geändert"
 
-#: main.ts:83 main.ts:141 main.ts:154
+#: main.ts:87 main.ts:150 main.ts:163
 #, x-machine
 msgid "Not available in fullscreen"
 msgstr "Im Vollbild nicht verfügbar"
 
-#: main.ts:83 main.ts:111 main.ts:141 main.ts:154 pip.ts:42 size.ts:124
+#: main.ts:87 main.ts:119 main.ts:150 main.ts:163 pip.ts:42 size.ts:125
 #, x-machine
 msgid "No video"
 msgstr "Kein Video"
 
-#: main.ts:104
+#: main.ts:111 main.ts:112
 #, x-machine
 msgid "Picture-in-Picture"
 msgstr "Bild-in-Bild"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:132 main.ts:173 ui/page.slint:44
+#: main.ts:141 main.ts:182 ui/page.slint:44
 #, x-machine
 msgid "0.5×"
 msgstr "0,5×"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:132 main.ts:173 ui/page.slint:44
+#: main.ts:141 main.ts:182 ui/page.slint:44
 #, x-machine
 msgid "1×"
 msgstr "1×"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:132 main.ts:173 ui/page.slint:44
+#: main.ts:141 main.ts:182 ui/page.slint:44
 #, x-machine
 msgid "1.5×"
 msgstr "1,5×"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:132 main.ts:173 ui/page.slint:44
+#: main.ts:141 main.ts:182 ui/page.slint:44
 #, x-machine
 msgid "2×"
 msgstr "2×"
 
-#: main.ts:147 main.ts:173
+#: main.ts:156 main.ts:182
 #, x-machine
 msgid "Fit to Video Aspect Ratio"
 msgstr "An Seitenverhältnis des Videos anpassen"
 
-#: main.ts:162
+#: main.ts:171
 #, x-machine
 msgid "When playback starts: Don't resize the window"
 msgstr "Bei Wiedergabestart: Fenstergröße nicht ändern"
 
-#: main.ts:163
+#: main.ts:172
 #, x-machine
 msgid "When playback starts: Fit to video aspect ratio"
 msgstr "Bei Wiedergabestart: An Seitenverhältnis des Videos anpassen"
 
-#: main.ts:164
+#: main.ts:173
 #, x-machine
 msgid "When playback starts: {}×"
 msgstr "Bei Wiedergabestart: {}×"
 
-#: main.ts:168
+#: main.ts:177
 #, x-machine
 msgid "Resize only once when playback starts: On"
 msgstr "Nur einmal bei Wiedergabestart anpassen: Ein"
 
-#: main.ts:168
+#: main.ts:177
 #, x-machine
 msgid "Resize only once when playback starts: Off"
 msgstr "Nur einmal bei Wiedergabestart anpassen: Aus"
 
-#: main.ts:173
+#: main.ts:182
 #, x-machine
 msgid "Don't Resize"
 msgstr "Nicht anpassen"
 
-#: main.ts:184
+#: main.ts:193
 #, x-machine
 msgid "Only Once"
 msgstr "Nur einmal"
 
-#: main.ts:196
+#: main.ts:205
 #, x-machine
 msgid "Always on top: Off"
 msgstr "Immer im Vordergrund: Aus"
 
-#: main.ts:196
+#: main.ts:205
 #, x-machine
 msgid "Always on top: Always"
 msgstr "Immer im Vordergrund: Immer"
 
-#: main.ts:196
+#: main.ts:205
 #, x-machine
 msgid "Always on top: While playing"
 msgstr "Immer im Vordergrund: Während der Wiedergabe"
 
-#: main.ts:196
+#: main.ts:205
 #, x-machine
 msgid "Always on top: While playing in fullscreen"
 msgstr "Immer im Vordergrund: Während der Wiedergabe im Vollbild"
 
-#: main.ts:200
+#: main.ts:209
 #, x-machine
 msgid "Cycle Mode"
 msgstr "Modus durchschalten"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:210 ui/page.slint:66
+#: main.ts:219 ui/page.slint:66
 #, x-machine
 msgid "Never"
 msgstr "Nie"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:210 ui/page.slint:66
+#: main.ts:219 ui/page.slint:66
 #, x-machine
 msgid "Always"
 msgstr "Immer"
 
-#: main.ts:210
+#: main.ts:219
 #, x-machine
 msgid "While Playing"
 msgstr "Während der Wiedergabe"
 
-#: main.ts:210
+#: main.ts:219
 #, x-machine
 msgid "While Playing in Fullscreen"
 msgstr "Während der Wiedergabe im Vollbild"
 
-#: main.ts:224
+#: main.ts:233
 #, x-machine
 msgid "Hide pointer while playing: On"
 msgstr "Mauszeiger bei Wiedergabe ausblenden: Ein"
 
-#: main.ts:224
+#: main.ts:233
 #, x-machine
 msgid "Hide pointer while playing: Off"
 msgstr "Mauszeiger bei Wiedergabe ausblenden: Aus"
 
-#: main.ts:229
+#: main.ts:238
 #, x-machine
 msgid "Hide Pointer While Playing"
 msgstr "Mauszeiger bei Wiedergabe ausblenden"
@@ -221,7 +221,7 @@ msgstr "Immer im Vordergrund"
 msgid "Picture-in-picture: On"
 msgstr "Bild-in-Bild: Ein"
 
-#: pip.ts:49 pip.ts:68
+#: pip.ts:49 pip.ts:67
 #, x-machine
 msgid "Picture-in-picture: Off"
 msgstr "Bild-in-Bild: Aus"
@@ -236,57 +236,57 @@ msgstr "Bild-in-Bild kann nicht gestartet werden: {}"
 msgid "Cannot exit picture-in-picture: {}"
 msgstr "Bild-in-Bild kann nicht beendet werden: {}"
 
-#: pip.ts:68
+#: pip.ts:67
 #, x-machine
 msgid "Picture-in-picture: Off (no video)"
 msgstr "Bild-in-Bild: Aus (kein Video)"
 
-#: size.ts:47
+#: size.ts:48
 #, x-machine
 msgid "Window: {}× (shrunk to fit the screen)"
 msgstr "Fenster: {}× (auf Bildschirmgröße verkleinert)"
 
-#: size.ts:47
+#: size.ts:48
 #, x-machine
 msgid "Window: {}× (enlarged to the minimum size)"
 msgstr "Fenster: {}× (auf die Mindestgröße vergrößert)"
 
-#: size.ts:47
+#: size.ts:48
 #, x-machine
 msgid "Window: {}×"
 msgstr "Fenster: {}×"
 
-#: size.ts:64
+#: size.ts:65
 #, x-machine
 msgid "The window already fits the video aspect ratio"
 msgstr "Das Fenster hat bereits das Seitenverhältnis des Videos"
 
-#: size.ts:72
+#: size.ts:73
 #, x-machine
 msgid "Window: Fit to video aspect ratio (shrunk to fit the screen)"
 msgstr "Fenster: An Seitenverhältnis angepasst (auf Bildschirmgröße verkleinert)"
 
-#: size.ts:72
+#: size.ts:73
 #, x-machine
 msgid "Window: Fit to video aspect ratio (enlarged to the minimum size)"
 msgstr "Fenster: An Seitenverhältnis angepasst (auf die Mindestgröße vergrößert)"
 
-#: size.ts:72
+#: size.ts:73
 #, x-machine
 msgid "Window: Fit to video aspect ratio"
 msgstr "Fenster: An Seitenverhältnis angepasst"
 
-#: size.ts:87
+#: size.ts:88
 #, x-machine
 msgid "Mini size: Off"
 msgstr "Minigröße: Aus"
 
-#: size.ts:97
+#: size.ts:98
 #, x-machine
 msgid "Mini size: On"
 msgstr "Minigröße: Ein"
 
-#: size.ts:137
+#: size.ts:138
 #, x-machine
 msgid "Cannot resize the window: {}"
 msgstr "Fenstergröße kann nicht geändert werden: {}"

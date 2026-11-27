@@ -31,8 +31,9 @@ export const PAGE_ID = "window";
  * Mini Size (IA-WIN-01) / 0.5× … 2× (H03) / Fit to Video Aspect Ratio (H04) /
  * When Playback Starts (G-02) / Always on Top (H05, IA-WIN-03),
  * Hide Pointer While Playing (B30, G-06), and the Window settings
- * page. Menu sweep (B5): every command is in the command palette only
- * ("Category: Title", with its key); none has a menu path.
+ * page. Every command is in the command palette ("Category: Title", with
+ * its key). Menu sweep (B5) took them out of the right-click menu, except
+ * Picture-in-Picture: the first item of Tools ▸ (user ruling 2026-11-27).
  * The window itself belongs to the core (`plugin.window`); this plugin
  * keeps the preferences in settings.json and applies them on activation. The
  * core undoes its effects on deactivation.
@@ -69,7 +70,7 @@ export default async function activate(plugin: Plugin) {
 
   const reason = () => sizeReason(plugin, video);
 
-  // Picture-in-Picture (709, no default key) / Mini Size (710, `).
+  // Picture-in-Picture (300 in Tools ▸, no default key) / Mini Size (710, `).
   // IA-WIN-01: ` is Mini Size on every system (id `mini`, so a user's rebinding
   // stays with it); Picture-in-Picture is Vestra's own extra command (id `pip`). The two
   // exclude each other: one is left before the other starts.
@@ -101,13 +102,17 @@ export default async function activate(plugin: Plugin) {
   });
   // `supported` needs the main window, which may not exist yet at activation,
   // so Picture-in-Picture follows `window.changed`: added while supported (macOS 14+).
+  // User ruling 2026-11-27: the first item of Tools ▸ (order 300 sorts before
+  // Audio Track ▸ at 301, the first of the player's tools; group "domain", as
+  // the tracks and Snapshot ▸ below it, so no separator).
   const pipCommand = () =>
     plugin.commands.add({
       id: "pip",
       title: "Picture-in-Picture",
+      path: ["@tools", "Picture-in-Picture"],
       category: category.window,
-      order: 709,
-      group: "screen",
+      order: 300,
+      group: "domain",
       checked: () => pip.active,
       enabled: () => pip.active || video.size !== null,
       busy: () => pip.switching || sizer.resizing,

@@ -13,7 +13,8 @@ Window size, always on top, mini size and picture-in-picture.
 
 ## Entry points
 
-- Command palette (Ctrl+Shift+P), with their keys: **Window**: Picture-in-Picture, Mini Size (`` ` ``), Hide Pointer While Playing; **Window Size**: 0.5× · 1× · 1.5× · 2× (1 · 2 · 3 · 4), Fit to Video Aspect Ratio (8); **Size on Open**: Don't Resize, 0.5×–2×, Fit to Video Aspect Ratio, Only Once; **Always on Top**: Cycle Mode (Ctrl+T) and the four modes. None of them is in the right-click menu.
+- Right-click menu: **Tools ▸ Picture-in-Picture**, its first item (only where the system supports it).
+- Command palette (Ctrl+Shift+P), with their keys: **Window**: Picture-in-Picture, Mini Size (`` ` ``), Hide Pointer While Playing; **Window Size**: 0.5× · 1× · 1.5× · 2× (1 · 2 · 3 · 4), Fit to Video Aspect Ratio (8); **Size on Open**: Don't Resize, 0.5×–2×, Fit to Video Aspect Ratio, Only Once; **Always on Top**: Cycle Mode (Ctrl+T) and the four modes. Apart from Picture-in-Picture, none of them is in the right-click menu.
 - Options window **Playback ▸ Window**.
 
 ## Limits
