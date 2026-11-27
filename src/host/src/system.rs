@@ -113,9 +113,7 @@ pub fn displays_here() -> Option<Vec<platform::Display>> {
         return Some(test.clone());
     }
     #[cfg(target_os = "macos")]
-    if objc2::MainThreadMarker::new().is_none() {
-        return None;
-    }
+    objc2::MainThreadMarker::new()?;
     Some(platform::displays())
 }
 
