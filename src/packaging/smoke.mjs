@@ -2,16 +2,18 @@
 /**
  * Smoke test of a packaged player (proposal §4.3, §7): starts it headless
  * with an empty data directory and a PATH without node, ffmpeg or Homebrew,
- * and requires every built-in plugin to reach runtime.ready (panel plugins
- * may instead report "mounts require a native shell", which is what
- * headless mode answers them), and the start-up line to name the release
- * version of the packaged release.json (<plugins>/../release.json).
+ * and requires every built-in plugin to reach runtime.ready (a panel plugin
+ * may instead have its ui.mount answered "mounts require a native shell",
+ * which is what headless mode answers it), and the start-up line to name
+ * the release version of the packaged release.json (<plugins>/../release.json).
+ * Both are read per plugin id from the host's wire trace
+ * (VESTRA_TEST_WIRE_TRACE), not from what the plugins log.
  *
  *   node packaging/smoke.mjs --exe <vestra-host[.exe]> --plugins <Resources/plugins>
  *     [--seconds N]   default 15, on Windows 45
  */
 import { spawn } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
 import {
@@ -33,6 +35,10 @@ const builtins = (
 ).plugins;
 const windows = process.platform === "win32";
 const home = await mkdtemp(join(tmpdir(), "vestra-smoke-"));
+// Every line between the host and its plugins (process/wire_trace.rs), kept
+// apart from the data directory so it is not listed among its files.
+const traceDir = await mkdtemp(join(tmpdir(), "vestra-smoke-trace-"));
+const wireTrace = join(traceDir, "wire.jsonl");
 
 const systemPath = windows
   ? [
@@ -43,6 +49,7 @@ const systemPath = windows
 const env = {
   PATH: systemPath.join(delimiter),
   HOME: home,
+  VESTRA_TEST_WIRE_TRACE: wireTrace,
   ...(windows
     ? {
         APPDATA: join(home, "AppData", "Roaming"),
@@ -112,39 +119,60 @@ if (exists(releaseFile)) {
     );
   else console.log(`smoke: the player reports release ${shown}`);
 } else problems.push(`${releaseFile} is missing`);
-// Counted per plugin, so one plugin reporting twice cannot stand in for
-// another that never got there. The host logs `runtime <owner>
-// runtime.ready: …` (one owner per plugin instance).
-const ready = new Set(
-  output
-    .split("\n")
-    .map((line) => /\bruntime (\d+) runtime\.ready\b/.exec(line)?.[1])
-    .filter(Boolean),
-).size;
-// The shared runner prefixes a built-in's output with its id
-// (`[vestra.playlist] HostError: …`); a plugin in its own runner has no
-// prefix, so each such line counts on its own.
-const headlessLines = output
+// Counted per built-in id from the wire trace: the plugin sent
+// `runtime.ready`, or the host answered its `ui.mount` with "mounts require
+// a native shell" (and then stops it). What the plugin logs about that
+// refusal is not used: its activation reports the first failed start-up
+// request in the order they began, and when the host's stop arrives with the
+// refusal, an earlier request the stop rejects ("plugin stopped") can come
+// first (release run 45998431304, vestra.subtitles).
+const traced = (await readFile(wireTrace, "utf8").catch(() => ""))
   .split("\n")
-  .map((line) =>
-    /^(?:\[([^\]\s]+)\] )?HostError: mounts require a native shell/.exec(line),
+  .filter(Boolean)
+  .map((line) => {
+    try {
+      return JSON.parse(line);
+    } catch {
+      return {};
+    }
+  });
+const mounts = new Set(); // `${plugin} ${id}` of each ui.mount request
+const readyIds = new Set();
+const headlessIds = new Set();
+for (const { plugin, dir, line } of traced) {
+  if (!plugin || !line) continue;
+  if (dir === "in" && line.event === "runtime.ready") readyIds.add(plugin);
+  else if (dir === "in" && line.method === "ui.mount")
+    mounts.add(`${plugin} ${line.id}`);
+  else if (
+    dir === "out" &&
+    mounts.has(`${plugin} ${line.id}`) &&
+    line.error?.message === "mounts require a native shell"
   )
-  .filter(Boolean);
-const headlessOnly =
-  new Set(headlessLines.filter((m) => m[1]).map((m) => m[1])).size +
-  headlessLines.filter((m) => !m[1]).length;
-if (ready + headlessOnly < builtins.length)
+    headlessIds.add(plugin);
+}
+const ready = builtins.filter(({ id }) => readyIds.has(id)).length;
+const headlessOnly = builtins.filter(
+  ({ id }) => !readyIds.has(id) && headlessIds.has(id),
+).length;
+const missing = builtins
+  .map(({ id }) => id)
+  .filter((id) => !readyIds.has(id) && !headlessIds.has(id));
+if (!traced.length) problems.push(`no wire trace at ${wireTrace}`);
+else if (missing.length)
   problems.push(
-    `${ready} ready + ${headlessOnly} headless-only < ${builtins.length} built-in plugins`,
+    `${ready} ready + ${headlessOnly} headless-only < ${builtins.length} built-in plugins; neither: ${missing.join(", ")}`,
   );
 if (problems.length) {
   // What the host left in its data directory says how far start-up got.
   console.log(`data directory (${dataFiles.length} files):`);
   for (const file of dataFiles.slice(0, 100)) console.log(`  ${file}`);
   await rm(home, { recursive: true, force: true });
+  await rm(traceDir, { recursive: true, force: true });
   fail(`smoke test failed: ${problems.join("; ")}`);
 }
 await rm(home, { recursive: true, force: true });
+await rm(traceDir, { recursive: true, force: true });
 console.log(
   `smoke test passed: ${ready} plugins ready, ${headlessOnly} need a native shell, ${builtins.length} built in`,
 );
