@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.51
+
+- The vendored SDK is 1.11.4 (`npm run vendor:sdk`): the built-in command list puts Window: Picture-in-Picture under Tools ▸ in the right-click menu (it was in the command palette only), so the documentation tree and `llms.txt` describe the menu the player shows. Who must change: nobody.
+
 ## 2.2.50
 
 - The vendored SDK is 1.11.3 (`npm run vendor:sdk`): a player control reads the state first when nothing keeps the plugin's copy current, so a plugin that read the state once is no longer refused with `stale`. Who must change: nobody.

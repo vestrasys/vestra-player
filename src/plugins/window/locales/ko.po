@@ -6,178 +6,178 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: main.ts:57 main.ts:248 ui/page.slint:34
+#: main.ts:56 main.ts:247 ui/page.slint:34
 #, x-machine
 msgid "Window"
 msgstr "창"
 
-#: main.ts:58
+#: main.ts:57
 #, x-machine
 msgid "Window Size"
 msgstr "창 크기"
 
-#: main.ts:59
+#: main.ts:58
 #, x-machine
 msgid "Size on Open"
 msgstr "재생 시작 시 크기"
 
-#: main.ts:60
+#: main.ts:59
 #, x-machine
 msgid "Always on Top"
 msgstr "항상 위에 표시"
 
-#: main.ts:80
+#: main.ts:79
 #, x-machine
 msgid "Mini Size"
 msgstr "미니 크기"
 
-#: main.ts:88 main.ts:120
+#: main.ts:87 main.ts:119
 #, x-machine
 msgid "Switching picture-in-picture"
 msgstr "PIP 모드 전환 중"
 
-#: main.ts:88 main.ts:120 main.ts:151 main.ts:164
+#: main.ts:87 main.ts:119 main.ts:150 main.ts:163
 #, x-machine
 msgid "Resizing the window"
 msgstr "창 크기 조정 중"
 
-#: main.ts:88 main.ts:151 main.ts:164
+#: main.ts:87 main.ts:150 main.ts:163
 #, x-machine
 msgid "Not available in fullscreen"
 msgstr "전체 화면에서는 사용할 수 없습니다"
 
-#: main.ts:88 main.ts:120 main.ts:151 main.ts:164 pip.ts:42 size.ts:125
+#: main.ts:87 main.ts:119 main.ts:150 main.ts:163 pip.ts:42 size.ts:125
 #, x-machine
 msgid "No video"
 msgstr "비디오가 없습니다"
 
-#: main.ts:112 main.ts:113
+#: main.ts:111 main.ts:112
 #, x-machine
 msgid "Picture-in-Picture"
 msgstr "PIP 모드"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:142 main.ts:183 ui/page.slint:44
+#: main.ts:141 main.ts:182 ui/page.slint:44
 #, x-machine
 msgid "0.5×"
 msgstr "0.5×"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:142 main.ts:183 ui/page.slint:44
+#: main.ts:141 main.ts:182 ui/page.slint:44
 #, x-machine
 msgid "1×"
 msgstr "1×"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:142 main.ts:183 ui/page.slint:44
+#: main.ts:141 main.ts:182 ui/page.slint:44
 #, x-machine
 msgid "1.5×"
 msgstr "1.5×"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:142 main.ts:183 ui/page.slint:44
+#: main.ts:141 main.ts:182 ui/page.slint:44
 #, x-machine
 msgid "2×"
 msgstr "2×"
 
-#: main.ts:157 main.ts:183
+#: main.ts:156 main.ts:182
 #, x-machine
 msgid "Fit to Video Aspect Ratio"
 msgstr "비디오 화면비에 맞추기"
 
-#: main.ts:172
+#: main.ts:171
 #, x-machine
 msgid "When playback starts: Don't resize the window"
 msgstr "재생 시작 시: 창 크기 조정 안 함"
 
-#: main.ts:173
+#: main.ts:172
 #, x-machine
 msgid "When playback starts: Fit to video aspect ratio"
 msgstr "재생 시작 시: 비디오 화면비에 맞추기"
 
-#: main.ts:174
+#: main.ts:173
 #, x-machine
 msgid "When playback starts: {}×"
 msgstr "재생 시작 시: {}×"
 
-#: main.ts:178
+#: main.ts:177
 #, x-machine
 msgid "Resize only once when playback starts: On"
 msgstr "재생 시작 시 한 번만 크기 조정: 켬"
 
-#: main.ts:178
+#: main.ts:177
 #, x-machine
 msgid "Resize only once when playback starts: Off"
 msgstr "재생 시작 시 한 번만 크기 조정: 끔"
 
-#: main.ts:183
+#: main.ts:182
 #, x-machine
 msgid "Don't Resize"
 msgstr "크기 조정 안 함"
 
-#: main.ts:194
+#: main.ts:193
 #, x-machine
 msgid "Only Once"
 msgstr "한 번만"
 
-#: main.ts:206
+#: main.ts:205
 #, x-machine
 msgid "Always on top: Off"
 msgstr "항상 위에 표시: 끔"
 
-#: main.ts:206
+#: main.ts:205
 #, x-machine
 msgid "Always on top: Always"
 msgstr "항상 위에 표시: 항상"
 
-#: main.ts:206
+#: main.ts:205
 #, x-machine
 msgid "Always on top: While playing"
 msgstr "항상 위에 표시: 재생 중"
 
-#: main.ts:206
+#: main.ts:205
 #, x-machine
 msgid "Always on top: While playing in fullscreen"
 msgstr "항상 위에 표시: 전체 화면 재생 중"
 
-#: main.ts:210
+#: main.ts:209
 #, x-machine
 msgid "Cycle Mode"
 msgstr "모드 순환"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:220 ui/page.slint:66
+#: main.ts:219 ui/page.slint:66
 #, x-machine
 msgid "Never"
 msgstr "안 함"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:220 ui/page.slint:66
+#: main.ts:219 ui/page.slint:66
 #, x-machine
 msgid "Always"
 msgstr "항상"
 
-#: main.ts:220
+#: main.ts:219
 #, x-machine
 msgid "While Playing"
 msgstr "재생 중"
 
-#: main.ts:220
+#: main.ts:219
 #, x-machine
 msgid "While Playing in Fullscreen"
 msgstr "전체 화면 재생 중"
 
-#: main.ts:234
+#: main.ts:233
 #, x-machine
 msgid "Hide pointer while playing: On"
 msgstr "재생 중 포인터 숨기기: 켬"
 
-#: main.ts:234
+#: main.ts:233
 #, x-machine
 msgid "Hide pointer while playing: Off"
 msgstr "재생 중 포인터 숨기기: 끔"
 
-#: main.ts:239
+#: main.ts:238
 #, x-machine
 msgid "Hide Pointer While Playing"
 msgstr "재생 중 포인터 숨기기"

@@ -2,7 +2,7 @@
 
 ## 0.1.11
 
-- Picture-in-Picture is back in the right-click menu (user ruling 2026-11-27): a top-level item directly below the player's Play/Pause, with no separator between them (menu path `["Picture-in-Picture"]`, order 202, group `domain`; Play/Pause is 201 in `domain`). Where the system has picture-in-picture (macOS 14+) the short menu reads Open ▸ · Close · Play/Pause · Picture-in-Picture · Tools ▸ · Options… · Quit; elsewhere the command is still not registered, so the menu is unchanged. Same id, title, translations, check mark, enabled state, busy state, reasons and command palette entry (Window: Picture-in-Picture). Mini Size, the sizes, Size on Open, Always on Top and Hide Pointer While Playing stay in the command palette only. Who must change: nobody.
+- Picture-in-Picture is back in the right-click menu (user ruling 2026-11-27), as the first item of **Tools ▸** (menu path `["@tools", "Picture-in-Picture"]`, order 300, group `domain`: before Audio Track ▸ at 301, the first of the player's tools, and in the tracks' group, so no separator). The top level keeps its six items. Where the system has picture-in-picture (macOS 14+) Tools ▸ starts with Picture-in-Picture; elsewhere the command is still not registered, so the menu is unchanged. Same id, title, translations, check mark, enabled state, busy state, reasons and command palette entry (Window: Picture-in-Picture). Mini Size, the sizes, Size on Open, Always on Top and Hide Pointer While Playing stay in the command palette only. Who must change: nobody.
 
 ## 0.1.10
 
