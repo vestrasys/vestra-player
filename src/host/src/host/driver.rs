@@ -108,6 +108,20 @@ impl Drop for PanicWatchdog {
     }
 }
 
+/// The core's thread returned (it gave its core back, `run_core`): from
+/// then on the interface ends its event loop, also when the quit it was
+/// asked for never reached the loop (`core_ended`).
+static CORE_ENDED: AtomicBool = AtomicBool::new(false);
+
+/// Whether the core's thread has ended. The interface asks for the quit
+/// only after its event loop ended, so a loop still running then lost its
+/// quit (Windows: winit's hidden thread window was destroyed): it ends on
+/// its own, without the event loop's proxy (`frame_pacing::Handler`), so
+/// the player never outlives its core.
+pub(crate) fn core_ended() -> bool {
+    CORE_ENDED.load(Ordering::Acquire)
+}
+
 /// The interface's wake (plan step S3a(4), the S3a brief's "Queues"): at
 /// most one `invoke_from_event_loop` pending at a time. The core sets the
 /// flag when it posts; the interface clears it before it drains.
@@ -506,6 +520,7 @@ impl Host {
                     logged!("exit: the core's thread panicked; ending the player");
                     platform::exit_now(CORE_PANIC_EXIT);
                 }
+                CORE_ENDED.store(true, Ordering::Release);
             })?;
         self.link.thread = Some(CoreThread { handle, done: back });
         Ok(())

@@ -27,7 +27,10 @@
 //! memory and the system's low-memory notification (`physical_memory`,
 //! `LowMemoryNotification`: the plugin supervisor's process budget and
 //! memory pressure), the session
-//! ending (`on_session_end`, a thread-local `WH_CALLWNDPROC` hook), the DXGI adapters with their driver versions
+//! ending (`on_session_end`, a thread-local `WH_CALLWNDPROC` hook), a
+//! `WM_CLOSE` to a library's hidden window told instead of destroying it
+//! (`on_close_of`, a subclassed window procedure: winit's thread event
+//! target), the DXGI adapters with their driver versions
 //! (`dxgi_adapters`, through the `windows` crate's COM interfaces; no device
 //! is created), and whether an adapter's driver offers RTX Video Super
 //! Resolution (`video_super_resolution`: a short-lived Direct3D 11 device
@@ -469,6 +472,151 @@ pub fn on_session_end(ended: impl Fn(SessionEnd) + 'static) -> bool {
     };
     if hook.is_null() {
         ON_SESSION_END.set(None);
+        return false;
+    }
+    true
+}
+
+/// What [`on_close_of`] installed on this thread: the window procedure it
+/// replaced and whom it tells.
+struct CloseHook {
+    previous: windows_sys::Win32::UI::WindowsAndMessaging::WNDPROC,
+    closed: Box<dyn Fn()>,
+}
+
+thread_local! {
+    static ON_CLOSE: std::cell::RefCell<Option<CloseHook>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// The window procedure [`on_close_of`] puts in front of the window's own:
+/// `WM_CLOSE` is answered here (the window stays), everything else goes on.
+///
+/// # Safety
+///
+/// Called only by the system as the window procedure of the window that
+/// `on_close_of` subclassed, on its thread, with that call's arguments.
+unsafe extern "system" fn close_hook_proc(
+    window: HWND,
+    message: u32,
+    wparam: usize,
+    lparam: isize,
+) -> isize {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{CallWindowProcW, DefWindowProcW, WM_CLOSE};
+    // `try_with`/`try_borrow`: the default procedure while the thread's
+    // locals are torn down (the window is destroyed after them).
+    let previous = ON_CLOSE
+        .try_with(|hook| {
+            hook.try_borrow()
+                .ok()
+                .and_then(|hook| hook.as_ref().and_then(|hook| hook.previous))
+        })
+        .ok()
+        .flatten();
+    if message == WM_CLOSE && previous.is_some() {
+        let _ = ON_CLOSE.try_with(|hook| {
+            if let Ok(hook) = hook.try_borrow()
+                && let Some(hook) = hook.as_ref()
+            {
+                // A panic must not unwind into the system's call.
+                let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| (hook.closed)()));
+            }
+        });
+        return 0;
+    }
+    match previous {
+        // SAFETY: `previous` is the procedure the window had before
+        // `on_close_of` replaced it, called with this call's own arguments,
+        // as subclassing requires.
+        Some(previous) => unsafe {
+            CallWindowProcW(Some(previous), window, message, wparam, lparam)
+        },
+        // SAFETY: the system's default procedure, with this call's arguments.
+        None => unsafe { DefWindowProcW(window, message, wparam, lparam) },
+    }
+}
+
+/// The first top-level window of this thread whose class is `class`.
+fn thread_window_of_class(class: &[u16]) -> Option<HWND> {
+    use windows_sys::Win32::Foundation::LPARAM;
+    use windows_sys::Win32::System::Threading::GetCurrentThreadId;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{EnumThreadWindows, GetClassNameW};
+    struct Search<'a> {
+        class: &'a [u16],
+        found: Option<HWND>,
+    }
+    unsafe extern "system" fn each(window: HWND, search: LPARAM) -> i32 {
+        // SAFETY: `search` is the address of the `Search` that
+        // `thread_window_of_class` passed; EnumThreadWindows calls back on
+        // this thread, synchronously, while it is alive and not otherwise
+        // borrowed.
+        let search = unsafe { &mut *(search as *mut Search) };
+        let mut name = [0u16; 64];
+        // SAFETY: GetClassNameW writes at most `name.len()` UTF-16 units
+        // (with the terminator) into `name`, a live local.
+        let length = unsafe { GetClassNameW(window, name.as_mut_ptr(), name.len() as i32) };
+        let length = usize::try_from(length).unwrap_or(0);
+        if name[..length] == *search.class {
+            search.found = Some(window);
+            return 0;
+        }
+        1
+    }
+    let mut search = Search { class, found: None };
+    // SAFETY: the callback matches WNDENUMPROC; the LPARAM is the address of
+    // `search`, alive (and not used otherwise) until EnumThreadWindows
+    // returns, which calls the callback only before it returns.
+    unsafe {
+        EnumThreadWindows(
+            GetCurrentThreadId(),
+            Some(each),
+            (&raw mut search) as LPARAM,
+        )
+    };
+    search.found
+}
+
+/// From now on, `WM_CLOSE` sent or posted to this thread's top-level window
+/// of window class `class` calls `closed` instead of reaching the window,
+/// which stays (its procedure is subclassed). For a hidden window a library
+/// owns that passes `WM_CLOSE` on to `DefWindowProc`, which destroys it:
+/// winit's thread event target, which Restart Manager (an installer's
+/// "close the applications") and `taskkill` send `WM_CLOSE` like every
+/// other top-level window; without it the event loop's wake messages are
+/// lost. Once per thread; false when already installed, when this thread
+/// has no such window, or when the system refused.
+pub fn on_close_of(class: &str, closed: impl Fn() + 'static) -> bool {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GWLP_WNDPROC, GetWindowLongPtrW, SetWindowLongPtrW, WNDPROC,
+    };
+    if ON_CLOSE.with_borrow(Option::is_some) {
+        return false;
+    }
+    let class: Vec<u16> = class.encode_utf16().collect();
+    let Some(window) = thread_window_of_class(&class) else {
+        return false;
+    };
+    // SAFETY: a live window of this thread (found above, on this thread);
+    // the call only reads its procedure.
+    let previous = unsafe { GetWindowLongPtrW(window, GWLP_WNDPROC) };
+    if previous == 0 {
+        return false;
+    }
+    // SAFETY: a non-zero GWLP_WNDPROC value is the window's procedure (or a
+    // handle CallWindowProcW resolves), the size of the function pointer
+    // that `WNDPROC` holds; it is only ever passed to CallWindowProcW.
+    let previous = unsafe { std::mem::transmute::<isize, WNDPROC>(previous) };
+    // Set before the swap: the first message to our procedure finds it.
+    ON_CLOSE.set(Some(CloseHook {
+        previous,
+        closed: Box::new(closed),
+    }));
+    let ours: unsafe extern "system" fn(HWND, u32, usize, isize) -> isize = close_hook_proc;
+    // SAFETY: the same live window of this thread; the new procedure is a
+    // plain function of this crate, alive for the process, which passes
+    // every message but WM_CLOSE on to the previous one.
+    if unsafe { SetWindowLongPtrW(window, GWLP_WNDPROC, ours as usize as isize) } == 0 {
+        ON_CLOSE.set(None);
         return false;
     }
     true
@@ -2683,6 +2831,60 @@ mod tests {
             // destroyed once.
             unsafe { DestroyWindow(self.0 as _) };
         }
+    }
+
+    /// `on_close_of`: WM_CLOSE sent or posted to the thread's window of the
+    /// class is told and the window stays (a STATIC window, which
+    /// `DefWindowProc` would destroy); other messages still reach it; once
+    /// per thread; false without such a window.
+    #[test]
+    fn close_of_a_window_is_told_and_the_window_stays() {
+        use super::{on_close_of, window_exists};
+        use std::cell::Cell;
+        use std::rc::Rc;
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            DispatchMessageW, GetWindowTextW, MSG, PM_REMOVE, PeekMessageW, PostMessageW,
+            SendMessageW, SetWindowTextW, WM_CLOSE,
+        };
+        // On its own thread: the hook is thread-local and once per thread.
+        std::thread::spawn(|| {
+            assert!(!on_close_of("VestraNoSuchClass", || {}), "no such window");
+            let window = UnseenWindow::new();
+            let closes = Rc::new(Cell::new(0));
+            let told = closes.clone();
+            assert!(on_close_of("Static", move || told.set(told.get() + 1)));
+            assert!(!on_close_of("Static", || {}), "once per thread");
+            // SAFETY: a message sent to this thread's window, no pointers.
+            unsafe { SendMessageW(window.0 as _, WM_CLOSE, 0, 0) };
+            assert_eq!(closes.get(), 1);
+            assert!(window_exists(window.0), "a sent WM_CLOSE left it");
+            // SAFETY: as above, posted; then this thread's queue is pumped
+            // (`message` is a live local the call fills).
+            unsafe {
+                PostMessageW(window.0 as _, WM_CLOSE, 0, 0);
+                let mut message: MSG = std::mem::zeroed();
+                while PeekMessageW(&mut message, std::ptr::null_mut(), 0, 0, PM_REMOVE) != 0 {
+                    DispatchMessageW(&message);
+                }
+            }
+            assert_eq!(closes.get(), 2);
+            assert!(window_exists(window.0), "a posted WM_CLOSE left it");
+            let title = windows_sys::w!("passed on");
+            let mut read = [0u16; 16];
+            // SAFETY: a static NUL-terminated title; `read` is a live local
+            // the call fills up to its length.
+            let length = unsafe {
+                SetWindowTextW(window.0 as _, title);
+                GetWindowTextW(window.0 as _, read.as_mut_ptr(), read.len() as i32)
+            };
+            assert_eq!(
+                String::from_utf16_lossy(&read[..length as usize]),
+                "passed on",
+                "other messages reach the window's own procedure"
+            );
+        })
+        .join()
+        .unwrap();
     }
 
     /// Real window round trip: what `set_normal_placement` sets,

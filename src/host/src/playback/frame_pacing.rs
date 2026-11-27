@@ -837,7 +837,14 @@ impl CustomApplicationHandler for Handler {
         }
         result
     }
-    fn about_to_wait(&mut self, _: &winit::event_loop::ActiveEventLoop) -> EventResult {
+    fn about_to_wait(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) -> EventResult {
+        // The core's thread ended while the loop runs: the quit asked of
+        // the loop was lost (`host::driver::core_ended`). The loop ends here,
+        // not through Slint's proxy, whose window may be the one gone.
+        if crate::host::driver::core_ended() && !event_loop.exiting() {
+            logged!("ui: the core ended without the interface's quit; the event loop ends");
+            event_loop.exit();
+        }
         PACING.with(|pacing| {
             if let Some(pacing) = pacing.borrow_mut().as_mut() {
                 pacing.cycles.close_paint();

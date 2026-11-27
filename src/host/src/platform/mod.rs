@@ -20,7 +20,7 @@
 //! | files and links | `reveal`, `open_path`, `open_url` (blocking, run on a worker thread) |
 //! | opening the player | `on_open_files` (macOS: open-documents Apple events through `vestra-open-files`; elsewhere files come on the command line), `single_instance` / `single_instance_restarted` → `Launch` / `Primary` (shared, in `instance.rs`), `allow_handoff_foreground` (Windows: `AllowSetForegroundWindow`) |
 //! | secrets | `secret_get`, `secret_set`, `secret_delete` (blocking) |
-//! | facts | `os_facts` (blocking), `gpu_adapters` (Windows: DXGI through `vestra-win32`; elsewhere none yet), `memory_status` (Windows: private bytes and commit charge through `vestra-win32`; elsewhere none yet), `physical_memory` → `physical_memory_mib` (Windows: `GlobalMemoryStatusEx` through `vestra-win32`; macOS: `NSProcessInfo`; Linux: `/proc/meminfo`; 8 GiB when unknown), `PressureSource` → `MemoryPressure` (the plugin supervisor's input: Windows: thresholds on available physical memory and the system's low-memory notification through `vestra-win32`; Linux: PSI; macOS: none yet), `on_session_end` (Windows: `WM_QUERYENDSESSION`/`WM_ENDSESSION` through `vestra-win32`; elsewhere nothing, the quit request ends the event loop), `displays` (UI thread),`app_data_dir`, `SLINT_CONTROL_IS_COMMAND`, `CTRL_ACCEPTS_CMD`, `preferred_languages` (here, through sys-locale on every system) |
+//! | facts | `os_facts` (blocking), `gpu_adapters` (Windows: DXGI through `vestra-win32`; elsewhere none yet), `memory_status` (Windows: private bytes and commit charge through `vestra-win32`; elsewhere none yet), `physical_memory` → `physical_memory_mib` (Windows: `GlobalMemoryStatusEx` through `vestra-win32`; macOS: `NSProcessInfo`; Linux: `/proc/meminfo`; 8 GiB when unknown), `PressureSource` → `MemoryPressure` (the plugin supervisor's input: Windows: thresholds on available physical memory and the system's low-memory notification through `vestra-win32`; Linux: PSI; macOS: none yet), `on_session_end` (Windows: `WM_QUERYENDSESSION`/`WM_ENDSESSION` through `vestra-win32`, an ended session also quits; elsewhere nothing, the quit request ends the event loop), `on_quit_request` (Windows: `WM_CLOSE` to winit's hidden thread window kept from destroying it, through `vestra-win32`; elsewhere nothing), `displays` (UI thread),`app_data_dir`, `SLINT_CONTROL_IS_COMMAND`, `CTRL_ACCEPTS_CMD`, `preferred_languages` (here, through sys-locale on every system) |
 //! | installation | `install_layout` (pure, in `layout.rs`, for every system) → `current_install_layout` |
 //! | child processes | `tool_command`, `hide_console` (Windows: `CREATE_NO_WINDOW` when the host has no console; elsewhere nothing) |
 //! | storage | `sync_dir` (Unix: `fsync` below; Windows: `FlushFileBuffers` on a directory handle) |
@@ -813,6 +813,12 @@ pub enum SessionEvent {
 /// ends the event loop like Quit, so nothing more is needed here.
 #[cfg(not(target_os = "windows"))]
 pub fn on_session_end(_ended: impl Fn(SessionEvent) + 'static) {}
+
+/// The system asks the player to quit without its main window's close
+/// (Windows: `WM_CLOSE` to winit's hidden thread window, or the session
+/// ends). Elsewhere nothing: macOS's quit request ends the event loop.
+#[cfg(not(target_os = "windows"))]
+pub fn on_quit_request(_asked: impl Fn() + 'static) {}
 
 /// Windows only (`vestra-win32`); macOS would need the Mach task calls in
 /// an unsafe crate, so no memory line there yet.
