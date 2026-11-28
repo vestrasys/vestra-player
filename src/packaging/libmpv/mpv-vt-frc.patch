@@ -51,7 +51,7 @@
  extern const struct mp_user_filter_entry vf_gpu;
 --- a/video/filter/vf_vtfrc.m
 +++ b/video/filter/vf_vtfrc.m
-@@ -0,0 +1,1307 @@
+@@ -0,0 +1,1407 @@
 +/*
 + * This file is part of mpv.
 + *
@@ -211,6 +211,13 @@
 +    // processor's state is not this pair's, and Apple's header asks for
 +    // Random then.
 +    CVPixelBufferRef last_submitted;
++    // Software frames: the pool they are copied into, and the last B's copy
++    // (by its data and pts), so A is not copied again.
++    CVPixelBufferPoolRef sw_pool;
++    OSType sw_pool_fmt;
++    CVPixelBufferRef last_sw_buf;
++    const uint8_t *last_sw_data;
++    double last_sw_pts;
 +    float last_thumb[THUMB_H][THUMB_W];   // and its thumbnail
 +};
 +
@@ -245,6 +252,8 @@
 +    CVPixelBufferRelease(s->last_nat);
 +    CVPixelBufferRelease(s->last_proc);
 +    CVPixelBufferRelease(s->last_submitted);
++    CVPixelBufferPoolRelease(s->sw_pool);
++    CVPixelBufferRelease(s->last_sw_buf);
 +    if (s->xfer) {
 +        VTPixelTransferSessionInvalidate(s->xfer);
 +        CFRelease(s->xfer);
@@ -272,7 +281,11 @@
 +    s->owner = NULL;
 +    pthread_mutex_unlock(&s->lock);
 +    atomic_store(&s->cancel, true);
-+    session_unref(s);
++    // The last reference may end the processor's session (endSession) and
++    // free pools: never on mpv's thread.
++    dispatch_async(s->queue, ^{
++        session_unref(s);
++    });
 +}
 +
 +static CVPixelBufferPoolRef make_pool(NSDictionary *attrs, int w, int h,
@@ -457,6 +470,44 @@
 +    return true;
 +}
 +
++// Whether this system has the two interpolators. The isSupported class
++// properties ask VideoToolbox, which can wait for a service: on a macOS VM in
++// CI the filter's `vf add` hung mpv's thread. So they are read once, on a
++// background queue, and `vf add` waits at most SUPPORT_WAIT_MS for the
++// answer; without one the filter is refused ("… (no answer)").
++#define SUPPORT_WAIT_MS 1500
++static dispatch_once_t support_once;
++static dispatch_group_t support_group;
++static atomic_bool have_regular, have_lowlatency;
++
++static void query_support(void)
++{
++    dispatch_once(&support_once, ^{
++        support_group = dispatch_group_create();
++        dispatch_group_async(support_group,
++                             dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
++            @autoreleasepool {
++                if (@available(macOS 15.4, *))
++                    atomic_store(&have_regular, VTFrameRateConversionConfiguration.isSupported);
++#if HAVE_LOWLATENCY_SDK
++                if (@available(macOS 26.0, *))
++                    atomic_store(&have_lowlatency,
++                                 VTLowLatencyFrameInterpolationConfiguration.isSupported);
++#endif
++            }
++        });
++    });
++}
++
++// False when the answer did not come within SUPPORT_WAIT_MS.
++static bool wait_for_support(void)
++{
++    query_support();
++    return !dispatch_group_wait(support_group,
++                                dispatch_time(DISPATCH_TIME_NOW,
++                                              SUPPORT_WAIT_MS * NSEC_PER_MSEC));
++}
++
 +// Sizes the low-latency interpolator refused (any failure at its start or
 +// probe), for the process: each size is tried once, so removing and adding
 +// the filter does not start and probe a session again for every add.
@@ -503,7 +554,7 @@
 +                             "in this process", MAX_LEAKS);
 +                } else if (ll_refused(s->w, s->h, why_ll, sizeof(why_ll))) {
 +                    // tried before
-+                } else if (VTLowLatencyFrameInterpolationConfiguration.isSupported) {
++                } else if (atomic_load(&have_lowlatency)) {
 +                    id c = [[[VTLowLatencyFrameInterpolationConfiguration alloc]
 +                        initWithFrameWidth:s->w frameHeight:s->h
 +                        numberOfInterpolatedFrames:1] autorelease];
@@ -530,7 +581,7 @@
 +        }
 +        if (!ok && !atomic_load(&s->cancel)) {
 +            if (@available(macOS 15.4, *)) {
-+                if (VTFrameRateConversionConfiguration.isSupported) {
++                if (atomic_load(&have_regular)) {
 +                    id c = [[[VTFrameRateConversionConfiguration alloc]
 +                        initWithFrameWidth:s->w frameHeight:s->h
 +                        usePrecomputedFlow:NO
@@ -600,6 +651,69 @@
 +    return s;
 +}
 +
++// ------------------------------------------------------------ software frames
++
++// Software frames (copy-back decoding) are copied into IOSurface-backed
++// CVPixelBuffers, and the in-between frames back into mp_images, on the
++// conversion queue: nothing of CoreVideo runs on mpv's thread for them.
++
++static OSType sw_cv_format(struct mp_image *img)
++{
++    bool full = img->params.repr.levels == PL_COLOR_LEVELS_FULL;
++    if (img->imgfmt == IMGFMT_P010)
++        return full ? kCVPixelFormatType_420YpCbCr10BiPlanarFullRange
++                    : kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange;
++    return full ? kCVPixelFormatType_420YpCbCr8BiPlanarFullRange
++                : kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange;
++}
++
++static void attach_colors(CVPixelBufferRef buf, const struct mp_image_params *par)
++{
++    CFStringRef matrix = kCVImageBufferYCbCrMatrix_ITU_R_709_2;
++    if (par->repr.sys == PL_COLOR_SYSTEM_BT_601)
++        matrix = kCVImageBufferYCbCrMatrix_ITU_R_601_4;
++    else if (par->repr.sys == PL_COLOR_SYSTEM_BT_2020_NC)
++        matrix = kCVImageBufferYCbCrMatrix_ITU_R_2020;
++    CFStringRef primaries = kCVImageBufferColorPrimaries_ITU_R_709_2;
++    if (par->color.primaries == PL_COLOR_PRIM_BT_601_525)
++        primaries = kCVImageBufferColorPrimaries_SMPTE_C;
++    else if (par->color.primaries == PL_COLOR_PRIM_BT_601_625)
++        primaries = kCVImageBufferColorPrimaries_EBU_3213;
++    else if (par->color.primaries == PL_COLOR_PRIM_BT_2020)
++        primaries = kCVImageBufferColorPrimaries_ITU_R_2020;
++    CVBufferSetAttachment(buf, kCVImageBufferYCbCrMatrixKey, matrix,
++                          kCVAttachmentMode_ShouldPropagate);
++    CVBufferSetAttachment(buf, kCVImageBufferColorPrimariesKey, primaries,
++                          kCVAttachmentMode_ShouldPropagate);
++    CVBufferSetAttachment(buf, kCVImageBufferTransferFunctionKey,
++                          kCVImageBufferTransferFunction_ITU_R_709_2,
++                          kCVAttachmentMode_ShouldPropagate);
++}
++
++// Copies the two planes of an NV12/P010 frame between an mp_image and a
++// CVPixelBuffer of the same size.
++static void copy_planes(struct mp_image *img,
++                        CVPixelBufferRef buf, bool to_buffer)
++{
++    CVPixelBufferLockBaseAddress(buf, to_buffer ? 0 : kCVPixelBufferLock_ReadOnly);
++    size_t bytes = img->imgfmt == IMGFMT_P010 ? 2 : 1;
++    for (int n = 0; n < 2; n++) {
++        // The chroma plane holds (w + 1) / 2 CbCr pairs per row.
++        size_t row = (n ? (size_t)(img->w + 1) / 2 * 2 : (size_t)img->w) * bytes;
++        uint8_t *base = CVPixelBufferGetBaseAddressOfPlane(buf, n);
++        size_t stride = CVPixelBufferGetBytesPerRowOfPlane(buf, n);
++        int rows = n ? (img->h + 1) / 2 : img->h;
++        for (int y = 0; y < rows; y++) {
++            uint8_t *mem = img->planes[n] + (ptrdiff_t)y * img->stride[n];
++            if (to_buffer)
++                memcpy(base + y * stride, mem, row);
++            else
++                memcpy(mem, base + y * stride, row);
++        }
++    }
++    CVPixelBufferUnlockBaseAddress(buf, to_buffer ? 0 : kCVPixelBufferLock_ReadOnly);
++}
++
 +// ------------------------------------------------------------ jobs
 +
 +// One pair. Three stages: conversion in (s->conv), the processor
@@ -616,6 +730,8 @@
 +    bool random;             // sent as Random (regular processor)
 +    bool cut;                // a scene cut: the in-between frame repeats A
 +    CVPixelBufferRef out;    // the in-between frame, in the input's format
++    struct mp_image *a_img, *b_img; // software frames: the pair (copied in stage_in)
++    struct mp_image *out_img;       // software frames: the in-between frame
 +    double submitted, convert_ms, process_ms, out_ms, ms;
 +    char error[256];
 +};
@@ -630,6 +746,9 @@
 +    CVPixelBufferRelease(j->pb);
 +    CVPixelBufferRelease(j->dst);
 +    CVPixelBufferRelease(j->out);
++    talloc_free(j->a_img);
++    talloc_free(j->b_img);
++    talloc_free(j->out_img);
 +    free(j);
 +}
 +
@@ -718,11 +837,43 @@
 +    return true;
 +}
 +
++// A software frame as an IOSurface-backed CVPixelBuffer (retained).
++static CVPixelBufferRef sw_buffer(struct session *s, struct mp_image *img)
++{
++    OSType fmt = sw_cv_format(img);
++    if (!s->sw_pool || s->sw_pool_fmt != fmt) {
++        CVPixelBufferPoolRelease(s->sw_pool);
++        s->sw_pool = make_pool(nil, img->w, img->h, fmt);
++        s->sw_pool_fmt = fmt;
++    }
++    CVPixelBufferRef buf = pool_buffer(s->sw_pool);
++    if (!buf)
++        return NULL;
++    copy_planes(img, buf, true);
++    attach_colors(buf, &img->params);
++    return buf;
++}
++
 +static void stage_in(struct session *s, struct job *j)
 +{
 +    if (atomic_load(&s->cancel))
 +        return;
 +    double t0 = now_ms();
++    if (j->b_img) {
++        // Software frames: A is the last B's copy when it is that frame.
++        bool same = s->last_sw_buf && j->a_img->planes[0] == s->last_sw_data &&
++                    j->a_img->pts == s->last_sw_pts;
++        j->a = same ? CVPixelBufferRetain(s->last_sw_buf) : sw_buffer(s, j->a_img);
++        j->b = sw_buffer(s, j->b_img);
++        CVPixelBufferRelease(s->last_sw_buf);
++        s->last_sw_buf = j->b ? CVPixelBufferRetain(j->b) : NULL;
++        s->last_sw_data = j->b_img->planes[0];
++        s->last_sw_pts = j->b_img->pts;
++        if (!j->a || !j->b) {
++            snprintf(j->error, sizeof(j->error), "could not copy the frames");
++            return;
++        }
++    }
 +    j->sequential = s->last_nat && j->a == s->last_nat && s->last_proc;
 +    // (Only for reusing the conversion; the submission mode is decided on
 +    // the processor queue, stage_process.)
@@ -802,10 +953,28 @@
 +    s->last_submitted = interpolated ? CVPixelBufferRetain(j->b) : NULL;
 +}
 +
++// The in-between frame of a software pair as an mp_image like B.
++static void sw_image(struct job *j)
++{
++    if (!j->b_img || !j->out)
++        return;
++    struct mp_image *img = mp_image_alloc(j->b_img->imgfmt, j->b_img->w, j->b_img->h);
++    if (!img) {
++        snprintf(j->error, sizeof(j->error), "could not allocate a frame");
++        return;
++    }
++    copy_planes(img, j->out, false);
++    mp_image_copy_attributes(img, j->b_img);
++    j->out_img = img;
++}
++
 +static void stage_out(struct session *s, struct job *j)
 +{
 +    if (j->cut) {
-+        j->out = CVPixelBufferRetain(j->a);
++        if (j->a) {
++            j->out = CVPixelBufferRetain(j->a);
++            sw_image(j);
++        }
 +        return;
 +    }
 +    if (atomic_load(&s->cancel) || j->error[0] || !j->dst)
@@ -814,6 +983,7 @@
 +    j->out = to_natural(s, j->dst, j->b);
 +    if (!j->out)
 +        snprintf(j->error, sizeof(j->error), "could not convert the result");
++    sw_image(j);
 +    j->out_ms = now_ms() - t0;
 +}
 +
@@ -855,12 +1025,11 @@
 +    struct mp_image_params params;
 +    bool configured;
 +    int fmt;                 // IMGFMT_NV12 or IMGFMT_P010
-+    CVPixelBufferPoolRef sw_pool; // software frames are copied into these
 +    struct session *s;
 +    bool ready_logged;
 +
 +    struct mp_image *prev;   // the last frame in: A of the next pair
-+    CVPixelBufferRef prev_buf;
++    CVPixelBufferRef prev_buf; // hardware frames: prev's CVPixelBuffer
 +    struct {
 +        struct job *job;
 +        struct mp_image *b; // goes out after the job's in-between frame
@@ -882,98 +1051,22 @@
 +    CVPixelBufferRelease(arg);
 +}
 +
-+static OSType sw_cv_format(struct priv *p)
-+{
-+    bool full = p->params.repr.levels == PL_COLOR_LEVELS_FULL;
-+    if (p->fmt == IMGFMT_P010)
-+        return full ? kCVPixelFormatType_420YpCbCr10BiPlanarFullRange
-+                    : kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange;
-+    return full ? kCVPixelFormatType_420YpCbCr8BiPlanarFullRange
-+                : kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange;
-+}
 +
-+static void attach_colors(CVPixelBufferRef buf, const struct mp_image_params *par)
-+{
-+    CFStringRef matrix = kCVImageBufferYCbCrMatrix_ITU_R_709_2;
-+    if (par->repr.sys == PL_COLOR_SYSTEM_BT_601)
-+        matrix = kCVImageBufferYCbCrMatrix_ITU_R_601_4;
-+    else if (par->repr.sys == PL_COLOR_SYSTEM_BT_2020_NC)
-+        matrix = kCVImageBufferYCbCrMatrix_ITU_R_2020;
-+    CFStringRef primaries = kCVImageBufferColorPrimaries_ITU_R_709_2;
-+    if (par->color.primaries == PL_COLOR_PRIM_BT_601_525)
-+        primaries = kCVImageBufferColorPrimaries_SMPTE_C;
-+    else if (par->color.primaries == PL_COLOR_PRIM_BT_601_625)
-+        primaries = kCVImageBufferColorPrimaries_EBU_3213;
-+    else if (par->color.primaries == PL_COLOR_PRIM_BT_2020)
-+        primaries = kCVImageBufferColorPrimaries_ITU_R_2020;
-+    CVBufferSetAttachment(buf, kCVImageBufferYCbCrMatrixKey, matrix,
-+                          kCVAttachmentMode_ShouldPropagate);
-+    CVBufferSetAttachment(buf, kCVImageBufferColorPrimariesKey, primaries,
-+                          kCVAttachmentMode_ShouldPropagate);
-+    CVBufferSetAttachment(buf, kCVImageBufferTransferFunctionKey,
-+                          kCVImageBufferTransferFunction_ITU_R_709_2,
-+                          kCVAttachmentMode_ShouldPropagate);
-+}
 +
-+// Copies the two planes of an NV12/P010 frame between an mp_image and a
-+// CVPixelBuffer of the same size.
-+static void copy_planes(struct priv *p, struct mp_image *img,
-+                        CVPixelBufferRef buf, bool to_buffer)
-+{
-+    CVPixelBufferLockBaseAddress(buf, to_buffer ? 0 : kCVPixelBufferLock_ReadOnly);
-+    size_t bytes = p->fmt == IMGFMT_P010 ? 2 : 1;
-+    for (int n = 0; n < 2; n++) {
-+        // The chroma plane holds (w + 1) / 2 CbCr pairs per row.
-+        size_t row = (n ? (size_t)(img->w + 1) / 2 * 2 : (size_t)img->w) * bytes;
-+        uint8_t *base = CVPixelBufferGetBaseAddressOfPlane(buf, n);
-+        size_t stride = CVPixelBufferGetBytesPerRowOfPlane(buf, n);
-+        int rows = n ? (img->h + 1) / 2 : img->h;
-+        for (int y = 0; y < rows; y++) {
-+            uint8_t *mem = img->planes[n] + (ptrdiff_t)y * img->stride[n];
-+            if (to_buffer)
-+                memcpy(base + y * stride, mem, row);
-+            else
-+                memcpy(mem, base + y * stride, row);
-+        }
-+    }
-+    CVPixelBufferUnlockBaseAddress(buf, to_buffer ? 0 : kCVPixelBufferLock_ReadOnly);
-+}
 +
-+// img as a CVPixelBuffer (retained): the hardware frame itself, or a copy.
-+static CVPixelBufferRef frame_buffer(struct mp_filter *f, struct mp_image *img)
-+{
-+    struct priv *p = f->priv;
-+    if (img->imgfmt == IMGFMT_VIDEOTOOLBOX)
-+        return CVPixelBufferRetain((CVPixelBufferRef)img->planes[3]);
-+    CVPixelBufferRef buf = pool_buffer(p->sw_pool);
-+    if (!buf)
-+        return NULL;
-+    copy_planes(p, img, buf, true);
-+    attach_colors(buf, &img->params);
-+    return buf;
-+}
 +
 +// The in-between frame as an mp_image like `like`.
-+static struct mp_image *wrap(struct mp_filter *f, CVPixelBufferRef buf,
-+                             struct mp_image *like, double pts)
++// A hardware in-between frame as an mp_image like `like` (no copy).
++static struct mp_image *wrap(CVPixelBufferRef buf, struct mp_image *like, double pts)
 +{
-+    struct priv *p = f->priv;
-+    struct mp_image *out;
-+    if (like->imgfmt == IMGFMT_VIDEOTOOLBOX) {
-+        out = mp_image_new_custom_ref(like, CVPixelBufferRetain(buf), release_buffer);
-+        if (!out)
-+            return NULL;
-+        out->planes[3] = (uint8_t *)buf;
-+        if (like->hwctx) {
-+            out->hwctx = av_buffer_ref(like->hwctx);
-+            MP_HANDLE_OOM(out->hwctx);
-+        }
-+    } else {
-+        out = mp_image_alloc(like->imgfmt, like->w, like->h);
-+        if (!out)
-+            return NULL;
-+        copy_planes(p, out, buf, false);
-+        mp_image_copy_attributes(out, like);
++    struct mp_image *out = mp_image_new_custom_ref(like, CVPixelBufferRetain(buf),
++                                                   release_buffer);
++    if (!out)
++        return NULL;
++    out->planes[3] = (uint8_t *)buf;
++    if (like->hwctx) {
++        out->hwctx = av_buffer_ref(like->hwctx);
++        MP_HANDLE_OOM(out->hwctx);
 +    }
 +    out->pts = pts;
 +    return out;
@@ -1041,11 +1134,8 @@
 +
 +static void vf_vtfrc_destroy(struct mp_filter *f)
 +{
-+    struct priv *p = f->priv;
 +    vf_vtfrc_reset(f);
 +    drop_session(f);
-+    CVPixelBufferPoolRelease(p->sw_pool);
-+    p->sw_pool = NULL;
 +}
 +
 +// A new format or size: a new session; frames pass through until it is
@@ -1055,8 +1145,6 @@
 +    struct priv *p = f->priv;
 +    set_prev(p, NULL, NULL);
 +    drop_session(f);
-+    CVPixelBufferPoolRelease(p->sw_pool);
-+    p->sw_pool = NULL;
 +    p->params = img->params;
 +    p->configured = true;
 +    bool hw = img->imgfmt == IMGFMT_VIDEOTOOLBOX;
@@ -1075,12 +1163,6 @@
 +        CVPixelBufferRef buf = (CVPixelBufferRef)img->planes[3];
 +        w = (int)CVPixelBufferGetWidth(buf);
 +        h = (int)CVPixelBufferGetHeight(buf);
-+    } else {
-+        p->sw_pool = make_pool(nil, w, h, sw_cv_format(p));
-+        if (!p->sw_pool) {
-+            MP_ERR(f, "could not create a %dx%d frame pool\n", w, h);
-+            return false;
-+        }
 +    }
 +    MP_VERBOSE(f, "starting a session for %dx%d %s%s\n", w, h,
 +               mp_imgfmt_to_name(p->fmt), hw ? " (videotoolbox)" : "");
@@ -1103,8 +1185,14 @@
 +    if (j->cut)
 +        p->cuts++;
 +    p->randoms += j->random;
-+    if (j->out) {
-+        struct mp_image *mid = wrap(f, j->out, b, (j->pts_a + j->pts_b) / 2);
++    if (j->out_img || (j->out && b->imgfmt == IMGFMT_VIDEOTOOLBOX)) {
++        double pts = (j->pts_a + j->pts_b) / 2;
++        struct mp_image *mid = j->out_img;
++        j->out_img = NULL;
++        if (mid)
++            mid->pts = pts;
++        else
++            mid = wrap(j->out, b, pts);
 +        if (mid) {
 +            mid->pkt_duration = gap / 2;
 +            push_out(p, mid);
@@ -1168,10 +1256,14 @@
 +    bool pair = ready && p->prev && gap > 0 && gap < MAX_GAP;
 +    if (!pair && p->num_jobs)
 +        return false; // out of order otherwise
-+    CVPixelBufferRef buf = ready ? frame_buffer(f, img) : NULL;
-+    if (pair && !p->prev_buf)
-+        p->prev_buf = frame_buffer(f, p->prev);
-+    if (!pair || !buf || !p->prev_buf) {
++    // Hardware frames are used as they are (retained); software frames are
++    // copied on the conversion queue (stage_in).
++    bool hw = img->imgfmt == IMGFMT_VIDEOTOOLBOX;
++    CVPixelBufferRef buf = ready && hw ? CVPixelBufferRetain((CVPixelBufferRef)img->planes[3])
++                                       : NULL;
++    if (pair && hw && !p->prev_buf && p->prev->imgfmt == IMGFMT_VIDEOTOOLBOX)
++        p->prev_buf = CVPixelBufferRetain((CVPixelBufferRef)p->prev->planes[3]);
++    if (!pair || (hw && (!buf || !p->prev_buf))) {
 +        // Not (yet) doubling: as it is.
 +        set_prev(p, mp_image_new_ref(img), buf);
 +        push_out(p, img);
@@ -1181,8 +1273,15 @@
 +    MP_HANDLE_OOM(j);
 +    atomic_init(&j->refs, 2); // the filter's and the queues'
 +    atomic_init(&j->done, false);
-+    j->a = CVPixelBufferRetain(p->prev_buf);
-+    j->b = CVPixelBufferRetain(buf);
++    if (hw) {
++        j->a = CVPixelBufferRetain(p->prev_buf);
++        j->b = CVPixelBufferRetain(buf);
++    } else {
++        j->a_img = mp_image_new_ref(p->prev);
++        j->b_img = mp_image_new_ref(img);
++        MP_HANDLE_OOM(j->a_img);
++        MP_HANDLE_OOM(j->b_img);
++    }
 +    j->pts_a = p->prev->pts;
 +    j->pts_b = img->pts;
 +    submit_job(p->s, j);
@@ -1304,19 +1403,20 @@
 +    struct priv *p = f->priv;
 +    p->opts = talloc_steal(p, options);
 +
-+    bool regular = false, lowlatency = false;
-+    if (@available(macOS 15.4, *))
-+        regular = VTFrameRateConversionConfiguration.isSupported;
-+#if HAVE_LOWLATENCY_SDK
-+    if (@available(macOS 26.0, *))
-+        lowlatency = VTLowLatencyFrameInterpolationConfiguration.isSupported;
-+#endif
++    const char *which = p->opts->engine == ENGINE_LOWLATENCY ? "low-latency"
++                      : p->opts->engine == ENGINE_REGULAR ? "regular" : "any";
++    if (!wait_for_support()) {
++        MP_ERR(f, "VideoToolbox frame interpolation (%s) is not available on "
++               "this system (no answer)\n", which);
++        talloc_free(f);
++        return NULL;
++    }
++    bool regular = atomic_load(&have_regular), lowlatency = atomic_load(&have_lowlatency);
 +    if (p->opts->engine == ENGINE_LOWLATENCY ? !lowlatency
 +        : p->opts->engine == ENGINE_REGULAR ? !regular : !(regular || lowlatency)) {
 +        MP_ERR(f, "VideoToolbox frame interpolation (%s) is not available on "
 +               "this system (regular: macOS 15.4, low-latency: macOS 26; Apple "
-+               "silicon)\n", p->opts->engine == ENGINE_LOWLATENCY ? "low-latency"
-+               : p->opts->engine == ENGINE_REGULAR ? "regular" : "any");
++               "silicon)\n", which);
 +        talloc_free(f);
 +        return NULL;
 +    }
