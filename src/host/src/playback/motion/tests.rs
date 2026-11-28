@@ -38,6 +38,7 @@ fn facts<'a>(probe: &'a MotionProbe, reason: &'a RenderReason, rendering: &'a Va
         doubling: false,
         broken: None,
         format: None,
+        learned: None,
     }
 }
 
@@ -1604,15 +1605,398 @@ fn the_input_rate_is_measured_out_of_the_chain_and_kept_in_it() {
 #[test]
 fn overload_names_what_could_not_keep_up_by_renderer() {
     // GPU rendering: the GPU (the converter and the drawing).
-    let gpu = overload_message(true, "51.2 of 60 fps");
+    let gpu = overload_message(Engine::Amd, true, "51.2 of 60 fps");
     assert!(gpu.starts_with("the GPU could not keep up"), "{gpu}");
     assert!(gpu.ends_with("51.2 of 60 fps"), "{gpu}");
     // Software rendering: the CPU copying and drawing the doubled frames
     // (the GPU was 25–40 % busy, 2026-11-23), and what helps. Either engine.
-    let cpu = overload_message(false, "51.2 of 60 fps");
+    let cpu = overload_message(Engine::Amd, false, "51.2 of 60 fps");
     assert_eq!(
         cpu,
         "rendering on the CPU could not keep up with this video's doubled frames (51.2 of 60 fps); GPU Rendering (Picture ▸ Rendering) helps"
     );
     assert!(!cpu.contains("GPU could not"), "{cpu}");
+}
+
+fn apple_m2() -> MotionProbe {
+    Ok(MotionGpu {
+        name: "Apple M2".into(),
+    })
+}
+
+#[test]
+fn apples_engine_parses_names_its_vendor_and_waits_for_another() {
+    assert_eq!(Engine::from_name(APPLE), Some(Engine::Apple));
+    assert_eq!(Engine::Apple.as_str(), "apple");
+    assert_eq!(Engine::Apple.vendor(), "Apple");
+    assert_eq!(Engine::Apple.converter(), "vtfrc");
+    assert_eq!(Engine::ALL.len(), 3);
+    let (reason, rendering) = (RenderReason::Default, Value::Null);
+    let probe = apple_m2();
+    let apple = |other| Facts {
+        engine: Engine::Apple,
+        other,
+        ..facts(&probe, &reason, &rendering)
+    };
+    assert_eq!(check(&apple(None), Mode::Double), Ok(()));
+    assert_eq!(check(&apple(None), Mode::Display), Ok(()));
+    let error = check(&apple(Some(Engine::Amd)), Mode::Double).unwrap_err();
+    assert_eq!(error.code(), "other-engine");
+    let error = check(
+        &Facts {
+            other: Some(Engine::Apple),
+            ..facts(&probe, &reason, &rendering)
+        },
+        Mode::Double,
+    )
+    .unwrap_err();
+    assert!(error.message().starts_with("Apple motion smoothing is on"));
+    // The player's own error for an unknown engine names all three.
+    let _one = one_mpv_at_a_time();
+    let mpv = mpv();
+    let (events, received) = mpsc::channel();
+    let mut motion = with_stand_in();
+    let bad = command(1, "video.motion.state", json!({"engine":"intel"}));
+    assert!(motion.command(&mpv, &software(), &bad, &events, &mut Recorded::default()));
+    let error = reply(&received).unwrap_err();
+    assert_eq!(
+        error.message,
+        r#"engine must be "amd", "nvidia" or "apple""#
+    );
+}
+
+#[test]
+fn apple_takes_10_bit_sdr_but_not_hdr() {
+    assert_eq!(format_reason(Engine::Apple, 10, false), None);
+    assert_eq!(
+        format_reason(Engine::Apple, 8, true).as_deref(),
+        Some("HDR")
+    );
+    assert_eq!(
+        format_reason(Engine::Amd, 10, false).as_deref(),
+        Some("10-bit")
+    );
+    assert_eq!(
+        format_reason(Engine::Nvidia, 8, true).as_deref(),
+        Some("HDR")
+    );
+    let (reason, rendering) = (RenderReason::Default, Value::Null);
+    let probe = apple_m2();
+    let error = check(
+        &Facts {
+            engine: Engine::Apple,
+            format: Some("HDR".into()),
+            ..facts(&probe, &reason, &rendering)
+        },
+        Mode::Double,
+    )
+    .unwrap_err();
+    assert_eq!(error.code(), "format");
+    assert!(!error.fixed());
+    assert!(
+        error.message().contains("SDR video only"),
+        "{}",
+        error.message()
+    );
+}
+
+/// Apple's size limit is learned in the run, not from a table: nothing is
+/// refused up front (4K included), and once a size fell far behind, that
+/// size and larger are `size` for this renderer and mode while smaller
+/// ones are still tried.
+#[test]
+fn apples_size_limit_is_what_fell_far_behind_in_this_run() {
+    let (reason, rendering) = (RenderReason::Default, Value::Null);
+    let probe = apple_m2();
+    let at = |video, learned| Facts {
+        engine: Engine::Apple,
+        video: Some(video),
+        source_fps: Some(24.),
+        learned,
+        ..facts(&probe, &reason, &rendering)
+    };
+    // No static limit: the AMD table's 4K24 edge does not apply.
+    assert_eq!(check(&at((3840., 2160.), None), Mode::Double), Ok(()));
+    assert_eq!(check(&at((3840., 2160.), None), Mode::Display), Ok(()));
+    let learned = Learned {
+        load: 3840. * 1600. * 48.,
+        words: "3840×1600 at 24 fps".into(),
+    };
+    let error = check(&at((3840., 2160.), Some(&learned)), Mode::Double).unwrap_err();
+    assert_eq!(error.code(), "size");
+    assert!(!error.fixed());
+    assert_eq!(
+        error.message(),
+        "this video (3840×2160 at 24 fps) is too large for Apple motion smoothing on this computer: 3840×1600 at 24 fps could not keep up in this run; smaller videos are still tried"
+    );
+    assert_eq!(
+        check(&at((3840., 1600.), Some(&learned)), Mode::Double)
+            .unwrap_err()
+            .code(),
+        "size"
+    );
+    assert_eq!(
+        check(&at((1920., 1080.), Some(&learned)), Mode::Double),
+        Ok(())
+    );
+}
+
+#[test]
+fn an_apple_overload_far_behind_is_learned_a_passing_one_is_not() {
+    let _one = one_mpv_at_a_time();
+    let mpv = mpv();
+    play(&mpv, 30);
+    let render = software();
+    let mut motion = with_stand_in();
+    motion.probe[Engine::Apple] = Some(apple_m2());
+    // Behind but not far (a passing slowdown): this video only.
+    motion.learn(&mpv, Engine::Apple, (false, Mode::Double, 60.), 0.15);
+    assert!(motion.learned.is_empty());
+    // AMD and NVIDIA keep their measured tables.
+    motion.learn(&mpv, Engine::Amd, (false, Mode::Double, 60.), 0.4);
+    assert!(motion.learned.is_empty());
+    // Far behind: 320×240 at 30 fps is now this run's limit for software
+    // rendering's Double.
+    motion.learn(&mpv, Engine::Apple, (false, Mode::Double, 60.), 0.33);
+    let learned = &motion.learned[&(Engine::Apple, false, false)];
+    assert_eq!(learned.words, "320×240 at 30 fps");
+    let error = motion
+        .check_now(&mpv, &render, &Value::Null, Engine::Apple, Mode::Double)
+        .unwrap_err();
+    assert_eq!(error.code(), "size", "{}", error.message());
+    // Match Display with GPU rendering is another limit, not learned yet.
+    assert!(!motion.learned.contains_key(&(Engine::Apple, true, true)));
+}
+
+#[test]
+fn apples_converter_cannot_start_where_the_system_has_no_interpolation() {
+    let refused = "VideoToolbox frame interpolation (any) is not available on this system (regular: macOS 15.4, low-latency: macOS 26; Apple silicon)";
+    assert!(device_failure(Engine::Apple, refused, 1));
+    // A size or a video it cannot take stays per video.
+    assert!(!device_failure(
+        Engine::Apple,
+        "frame interpolation unavailable for 8192x4320: regular interpolator: not supported on this Mac",
+        5
+    ));
+    assert!(!device_failure(
+        Engine::Apple,
+        "HDR video is not supported (pq)",
+        5
+    ));
+    assert!(!device_failure(Engine::Amd, refused, 5));
+    // After mpv refused the filter, that line makes it `runtime`.
+    let mut motion = with_stand_in();
+    motion.refused[Engine::Apple] = Some("filter refused".into());
+    motion.refusing = Some(Engine::Apple);
+    motion.log("vtfrc", "error", refused);
+    assert_eq!(motion.broken[Engine::Apple].as_deref(), Some(refused));
+    assert_eq!(motion.refused[Engine::Apple], None);
+    let (reason, rendering) = (RenderReason::Default, Value::Null);
+    let probe = apple_m2();
+    let error = check(
+        &Facts {
+            engine: Engine::Apple,
+            broken: Some(refused),
+            ..facts(&probe, &reason, &rendering)
+        },
+        Mode::Double,
+    )
+    .unwrap_err();
+    assert_eq!(error.code(), "runtime");
+    assert!(error.fixed());
+    assert!(
+        error
+            .message()
+            .starts_with("Apple's frame interpolation cannot start on this Mac")
+    );
+}
+
+#[test]
+fn apples_overload_names_the_frame_interpolation_not_a_faster_search() {
+    let gpu = overload_message(Engine::Apple, true, "30.1 of 48 fps");
+    assert_eq!(
+        gpu,
+        "this computer's frame interpolation could not keep up with this video: 30.1 of 48 fps"
+    );
+    assert!(overload_message(Engine::Apple, false, "x").starts_with("rendering on the CPU"));
+    assert!(!Engine::Apple.faster_step());
+    assert!(Engine::Amd.faster_step() && Engine::Nvidia.faster_step());
+}
+
+#[test]
+fn apples_converter_lines_count_and_its_session_ready_is_heard() {
+    let mut motion = with_stand_in();
+    motion.applied = Some(Applied {
+        engine: Engine::Apple,
+        mode: Mode::Double,
+        large: false,
+        performance: false,
+    });
+    motion.log(
+        "vtfrc",
+        "v",
+        "starting a session for 1920x800 nv12 (videotoolbox)",
+    );
+    assert!(!motion.converter_ready);
+    motion.log(
+        "vtfrc",
+        "info",
+        "regular interpolator ready for 1920x800 after 410 ms",
+    );
+    assert!(motion.converter_ready);
+    motion.log("vtfrc", "error", "HDR video is not supported (pq)");
+    assert_eq!(
+        motion.last_error.as_deref(),
+        Some("HDR video is not supported (pq)")
+    );
+}
+
+/// Apple's `vtfrc` in this libmpv (ours, src/packaging/libmpv): in mpv's
+/// chain without copy-back, its session ready, the rate doubled. A libmpv
+/// without it (Homebrew's) refuses the filter: `filter`. macOS only, silent
+/// (`ao=null`, `vo=null`).
+#[test]
+fn apples_converter_doubles_in_mpv_without_copy_back() {
+    if !cfg!(target_os = "macos") {
+        return;
+    }
+    let _one = one_mpv_at_a_time();
+    let mpv = mpv();
+    mpv.request_log_messages("v").unwrap();
+    play(&mpv, 30);
+    let render = software();
+    let (events, received) = mpsc::channel();
+    let mut motion = Motion::with_probe(apple_m2);
+    motion.any_rate = false;
+    motion.input = Some(30.);
+    motion.generation = Some(1);
+    let mut effects = Recorded::default();
+    let feed = |motion: &mut Motion| {
+        while let Some(event) = mpv.poll_event() {
+            if let rsmpv::Event::LogMessage(m) = &event {
+                motion.log(&m.prefix, &m.level, &m.text);
+            }
+        }
+    };
+    let on = command(
+        1,
+        "video.motion.set",
+        json!({"engine":"apple","mode":"double"}),
+    );
+    assert!(motion.command(&mpv, &render, &on, &events, &mut effects));
+    let state = reply(&received).unwrap();
+    assert!(
+        effects.held.is_empty(),
+        "no copy-back for Apple: {:?}",
+        effects.held
+    );
+    if !labels(&mpv).iter().any(|l| l == LABEL) {
+        // This libmpv has no `vtfrc`.
+        assert_eq!(state["double"]["code"], "filter", "{state}");
+        diag!("no vtfrc in this libmpv: {state}");
+        return;
+    }
+    assert_eq!(state["active"], "double", "{state}");
+    assert_eq!(state["gpu"], "Apple M2", "{state}");
+    mpv.set_property("pause", false).unwrap();
+    let until = Instant::now() + Duration::from_secs(8);
+    let mut doubled = 0.;
+    while Instant::now() < until {
+        feed(&mut motion);
+        motion.poll(&mpv, &render, &events, &mut effects, 1);
+        doubled = mpv.get_property::<f64>("estimated-vf-fps").unwrap_or(0.);
+        if motion.converter_ready && doubled > 55. {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    assert!(motion.converter_ready, "vtfrc said its session is ready");
+    assert!(doubled > 55., "30 fps doubled: {doubled}");
+    assert!(motion.failed.is_none(), "{:?}", motion.failed);
+    let state = motion.state(&mpv, &render, 1, Engine::Apple, &Value::Null);
+    assert_eq!(state["searchMode"], "native", "{state}");
+    assert_eq!(state["inChain"], true, "{state}");
+    let off = command(
+        1,
+        "video.motion.set",
+        json!({"engine":"apple","mode":"off"}),
+    );
+    assert!(motion.command(&mpv, &render, &off, &events, &mut effects));
+    assert!(!labels(&mpv).iter().any(|l| l == LABEL));
+    assert!(effects.held.iter().all(|held| !held), "{:?}", effects.held);
+}
+
+/// A real clip through Apple's converter as the player drives it (VideoToolbox
+/// decoding, no copy-back, the fallback watching), silent and headless:
+/// `VESTRA_APPLE_CLIP=<file>` with a libmpv that has `vtfrc`
+/// (`DYLD_LIBRARY_PATH=<deps>/lib`). Reports the output rate, the ready
+/// line and whether the fallback stepped in.
+#[test]
+#[ignore = "real machine: Apple silicon, a clip and our libmpv"]
+fn apple_real_clip_through_the_converter() {
+    let Some(clip) = std::env::var_os("VESTRA_APPLE_CLIP") else {
+        diag!("VESTRA_APPLE_CLIP not set");
+        return;
+    };
+    let seconds: u64 = std::env::var("VESTRA_APPLE_SECONDS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(15);
+    let _one = one_mpv_at_a_time();
+    let mpv = mpv();
+    mpv.request_log_messages("v").unwrap();
+    mpv.set_property("hwdec", "videotoolbox").unwrap();
+    mpv.command(&["loadfile", &clip.to_string_lossy()]).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while video_size(&mpv).is_none() || source_fps(&mpv).is_none() {
+        assert!(Instant::now() < deadline, "the clip does not open");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    std::thread::sleep(Duration::from_millis(1500));
+    let render = software();
+    let (events, received) = mpsc::channel();
+    let mut motion = Motion::with_probe(apple_m2);
+    // Software rendering by itself needs twice the rate to be the
+    // display's; the converter is what is measured here.
+    motion.any_rate = true;
+    motion.generation = Some(1);
+    let mut effects = Recorded::default();
+    motion.poll(&mpv, &render, &events, &mut effects, 1);
+    let on = command(
+        1,
+        "video.motion.set",
+        json!({"engine":"apple","mode":"double"}),
+    );
+    motion.command(&mpv, &render, &on, &events, &mut effects);
+    let state = reply(&received).unwrap();
+    diag!("apple clip: {state}");
+    let until = Instant::now() + Duration::from_secs(seconds);
+    let mut samples = Vec::new();
+    while Instant::now() < until {
+        while let Some(event) = mpv.poll_event() {
+            if let rsmpv::Event::LogMessage(m) = &event {
+                if m.prefix == "vtfrc" && m.level != "debug" {
+                    diag!("[vtfrc] {}: {}", m.level, m.text.trim_end());
+                }
+                motion.log(&m.prefix, &m.level, &m.text);
+            }
+        }
+        motion.poll(&mpv, &render, &events, &mut effects, 1);
+        if motion.converter_ready {
+            samples.push(mpv.get_property::<f64>("estimated-vf-fps").unwrap_or(0.));
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    let state = motion.state(&mpv, &render, 1, Engine::Apple, &Value::Null);
+    let tail = &samples[samples.len().saturating_sub(50)..];
+    let mean = tail.iter().sum::<f64>() / tail.len().max(1) as f64;
+    diag!(
+        "apple clip: {:?} hwdec {:?}, input {:?}, output mean of the last 5 s {mean:.1}, held {:?}, overload {:?}, learned {:?}, state {state}",
+        video_size(&mpv),
+        mpv.get_property::<String>("hwdec-current").ok(),
+        motion.input,
+        effects.held,
+        motion.overload,
+        motion.learned
+    );
 }

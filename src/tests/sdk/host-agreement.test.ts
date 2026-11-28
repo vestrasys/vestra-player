@@ -1186,11 +1186,14 @@ test("MotionReasonCode names the player's motion smoothing reason codes (playbac
     host("src/playback/motion.rs"),
   )?.[1];
   assert.ok(own, "Reason::code in motion.rs");
-  const refusals = ["src/platform/mod.rs", "src/platform/windows.rs"].flatMap(
-    (file) =>
-      [...host(file).matchAll(/MotionRefusal \{\s*code: "([a-z-]+)"/g)].map(
-        (m) => m[1]!,
-      ),
+  const refusals = [
+    "src/platform/mod.rs",
+    "src/platform/windows.rs",
+    "src/platform/macos.rs",
+  ].flatMap((file) =>
+    [...host(file).matchAll(/MotionRefusal \{\s*code: "([a-z-]+)"/g)].map(
+      (m) => m[1]!,
+    ),
   );
   const values = (text: string) =>
     [...text.matchAll(/"([^"]+)"/g)].map((m) => m[1]!);
@@ -2203,7 +2206,7 @@ test("TestHost asks for a commands.run plan as the player does (commands_run.rs 
   await stop();
 });
 
-test("motion smoothing's run-long reasons and engines agree (playback/motion.rs FIXED_CODES, AMD, NVIDIA; SDK TestHost and docs)", () => {
+test("motion smoothing's run-long reasons and engines agree (playback/motion.rs FIXED_CODES, AMD, NVIDIA, APPLE; SDK TestHost and docs)", () => {
   const motion = host("src/playback/motion.rs");
   const values = (text: string) =>
     [...text.matchAll(/"([^"]+)"/g)].map((m) => m[1]!);
@@ -2230,6 +2233,7 @@ test("motion smoothing's run-long reasons and engines agree (playback/motion.rs 
   const engines = [
     /pub const AMD: &str = "([^"]+)";/.exec(motion)?.[1],
     /pub const NVIDIA: &str = "([^"]+)";/.exec(motion)?.[1],
+    /pub const APPLE: &str = "([^"]+)";/.exec(motion)?.[1],
   ];
   const sdk = /export type MotionEngine = ([^;]+);/.exec(sdkTypes())?.[1];
   assert.ok(sdk, "MotionEngine in the SDK's plugin types");

@@ -1,5 +1,5 @@
 import type { Json, WireMotionState, WireRenderingState, WireUpscalingState } from "../../wire.ts";
-import type { UpscalingDecodingCause, UpscalingPlugin, UpscalingReason } from "../types.ts";
+import type { MotionEngine, UpscalingDecodingCause, UpscalingPlugin, UpscalingReason } from "../types.ts";
 import type { TestHost } from "./index.ts";
 import type { Handler, Internals } from "./internals.ts";
 /**
@@ -53,6 +53,6 @@ export declare function failVideoShaders(host: TestHost, _inner: Internals, id: 
 /** Implements `TestHost.upscalingDecoding`. */
 export declare function upscalingDecoding(host: TestHost, _inner: Internals, cause: UpscalingDecodingCause, plugins?: readonly UpscalingPlugin[]): UpscalingReason;
 /** `video.motion.state` of an engine from its model (`amd` by default). */
-export declare function motionState(host: TestHost, engine?: "amd" | "nvidia"): WireMotionState;
+export declare function motionState(host: TestHost, engine?: MotionEngine): WireMotionState;
 /** The default handlers of this area's wire methods, by method name. */
 export declare function processingHandlers(host: TestHost, inner: Internals): Record<string, Handler>;

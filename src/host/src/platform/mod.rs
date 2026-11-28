@@ -33,7 +33,7 @@
 //! | redraw pacing | `VBLANK_CLOCK`, `vblank_waiter` → `VBlankWaiter` (Windows: vertical blanks through `vestra-win32`; elsewhere `no_vblank` below: Slint paces, with a display link on macOS) |
 //! | rendering | `window_refresh` (here, through winit on every system), `select_wgpu_windows`, `GPU_RENDER`, `GPU_WINDOWS_WGPU`, `GPU_OPT_IN`, `gpu_start` → `GpuRenderer` / `GpuHandle` (implements `playback::renderer::GpuBackend`) / `GpuFrame` / `GpuDraw`, `gpu_started`, `gpu_failed`, `window_device_lost` (macOS: OpenGL windows, `vestra-gpu-render` with OpenGL; Windows: wgpu/Direct3D 12 windows, `vestra-gpu-render` with Direct3D 11 into shared textures; elsewhere `no_gpu` below refuses, so the host renders in software) |
 //! | video upscaling | `upscaler_probe` → `UpscalerProbe` (blocking: it wakes a sleeping discrete GPU), `gpu_render_adapter`, `upscaler_filter`, `UPSCALER_HWDEC` (Windows: NVIDIA RTX Video Super Resolution through mpv's `d3d11vpp`, checked through `vestra-win32`; elsewhere `no_upscaler` below: `platform`) |
-//! | motion smoothing | `motion_probe(engine)` → `MotionProbe` (no device is created, nothing of Vulkan is loaded), `motion_filter(engine, …)` (Windows: AMD AMF's `frc_amf`, NVIDIA's `fruc_vulkan` with a Vulkan device of the filter's own, both through mpv's `lavfi`; elsewhere `no_motion` below: `platform`) |
+//! | motion smoothing | `motion_probe(engine)` → `MotionProbe` (no device is created, nothing of Vulkan is loaded), `motion_filter(engine, …)`, `prepare_motion`, `unscoped_child_env` (Windows: AMD AMF's `frc_amf`, NVIDIA's `fruc_vulkan` with a Vulkan device of the filter's own, both through mpv's `lavfi`; macOS: Apple's `vtfrc` in our libmpv, Apple silicon and macOS 15.4+; an engine a system lacks, and every engine elsewhere (`no_motion` below): `platform`, [`motion_elsewhere`]) |
 //! | picture-in-picture | `pip_supported`, `PipWindow` (UI thread; macOS: AVKit through `vestra-pip`; elsewhere `pip_unsupported.rs`: `unsupported`) |
 //!
 //! Window rectangles are logical points. macOS uses the Cocoa lower-left
@@ -621,17 +621,32 @@ pub struct MotionRefusal {
 /// What `motion_probe` found.
 pub type MotionProbe = std::result::Result<MotionGpu, MotionRefusal>;
 
-/// No frame-rate converter on this system (macOS, Linux): `platform`.
-#[cfg(not(target_os = "windows"))]
+/// `platform` for an engine this system does not have: which converter
+/// the engine is and the system the player has it on, with this one's
+/// name. Shared by every system's module.
+pub fn motion_elsewhere(engine: crate::playback::motion::Engine) -> MotionRefusal {
+    use crate::playback::motion::Engine;
+    let (converter, on) = match engine {
+        Engine::Amd => ("AMD's frame-rate converter (AMF)", "Windows"),
+        Engine::Nvidia => ("NVIDIA's optical flow", "Windows"),
+        Engine::Apple => ("Apple's frame interpolation (VideoToolbox)", "macOS"),
+    };
+    MotionRefusal {
+        code: "platform",
+        message: format!(
+            "{} motion smoothing uses {converter}, which the player has on {on} only; this is {}",
+            engine.vendor(),
+            crate::playback::render_mode::system_name(std::env::consts::OS)
+        ),
+    }
+}
+
+/// No frame-rate converter on this system (Linux and the rest): `platform`
+/// for every engine.
+#[cfg(not(any(target_os = "windows", target_os = "macos")))]
 mod no_motion {
-    pub fn motion_probe(_engine: crate::playback::motion::Engine) -> super::MotionProbe {
-        Err(super::MotionRefusal {
-            code: "platform",
-            message: format!(
-                "the player has no frame-rate converter on {}; motion smoothing uses AMD's AMF or NVIDIA's optical flow on Windows",
-                crate::playback::render_mode::system_name(std::env::consts::OS)
-            ),
-        })
+    pub fn motion_probe(engine: crate::playback::motion::Engine) -> super::MotionProbe {
+        Err(super::motion_elsewhere(engine))
     }
     /// Nothing to prepare.
     pub fn prepare_motion(_engine: crate::playback::motion::Engine) {}
@@ -646,7 +661,7 @@ mod no_motion {
         None
     }
 }
-#[cfg(not(target_os = "windows"))]
+#[cfg(not(any(target_os = "windows", target_os = "macos")))]
 pub use no_motion::*;
 
 /// One display for `plugin.app.system()`.
