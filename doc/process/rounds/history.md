@@ -8,25 +8,26 @@ This file is the project's round record: how the project got here, the decisions
 
 ## 1. Timeline
 
-| Dates         | Release                          | What shipped                                                                                                                                                                                                   |
-| ------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 10-20/21      | —                                | Rebuild: core UI, menu model, plugin UI, API negotiation (67 core requests settled); basic playback in the core; OS code only in `platform/`; first `unsafe` crates (PiP, GPU)                                 |
-| 10-21/22      | —                                | macOS GPU rendering (OpenGL into IOSurface, software fallback) and system PiP                                                                                                                                  |
-| 10-22/25      | 0.4–0.5.0                        | Slint 1.18.1, Plugin Store (signed index, revocation, sideload), installers (DMG, Inno Setup, portable zip), own visual identity, English + 6 UI languages, Vestra Player AI 2.x                               |
-| 10-25/28      | 0.5.1–0.5.13                     | Windows 4K60 (30 → 60 fps), keyframe seeks, hover thumbnails, plugin management, built-ins in one shared Node process (≈1.1 GB → ≈60 MB), session storage, render modes                                        |
-| 10-27 – 11-01 | 0.5.14–0.6.3                     | Lazy activation (behind a flag), Windows GPU path via wgpu/D3D12 (off by default), AI upscaling experiment, video primitives, large lists on ListView                                                          |
-| 11-02/03      | 0.6.4–0.7.1, SDK 1.6.0           | Plugin process supervisor (B0–B7): one supervisor for every plugin process, on-demand start, restart policy, memory limits                                                                                     |
-| 11-03/04      | 0.7.1–0.7.5, SDK 1.6.1–1.6.3     | Release version split from the host version (host reused by input hash); sidebar tabs on demand with » overflow                                                                                                |
-| 11-07/11      | 0.7.6, SDK 1.6.4–1.7.x           | Menu redesign: command palette, shortcut hints, host-owned button strip, `adjust` slot with Picture/Audio/Subtitles/Playback panels, slim right-click menu; no AccessKit; SDK 1.7.0 layering and docs refactor |
-| 11-09/12      | 0.8.0–0.8.2, SDK 1.7.x           | Clip Export store plugin (capture split: built-in keeps snapshots); Ask Vestra runs commands with approval sheets; AMD Motion Smoothing plugin; VestraBili retired                                             |
-| 11-13         | 0.8.3–0.8.4, SDK 1.7.20–1.8.0    | SDK 1.8.0 "plan A": additions only, existing behaviour frozen; `plugin.mpv` pass-through; Clip Export Highlights (local audio model)                                                                           |
-| 11-14         | 0.9.0, SDK 1.9.0                 | Capability declarations abolished as behaviour switches; per-panel compilation; explicit state reads; Silence Skipper and Loudness plugins                                                                     |
-| 11-15         | 0.10.0–0.10.1, SDK 1.10.0        | Release A of events and triggers: `plugin.trigger()`, `plugin.player.stream(fn)`                                                                                                                               |
-| 11-15/21      | 0.10.2                           | Core thread: plugin requests, supervisor, triggers and playback control on their own thread; the UI thread is a client                                                                                         |
-| 11-21/22      | 0.10.3                           | Guest windows ("play in a new window", Chrome's guest model); README refresh                                                                                                                                   |
-| 11-23         | 0.11.0–0.11.3, SDK 1.11.0–1.11.3 | Release B: `subscribe()`/`onChange()` removed, every plugin migrated; capability permission lists removed; NVIDIA motion smoothing on our libmpv with FFmpeg 9.1 (0.11.1)                                      |
-| 11-26         | 0.11.4–0.11.5                    | Fullscreen pointer freeze on AMD-driven built-in panels fixed (a tiny click-through window keeps DWM composing)                                                                                                |
-| 11-26/27      | 0.11.6                           | First public release: macOS signed and notarized again, branded DMG; docs cleaned for open-sourcing                                                                                                            |
+| Dates         | Release                           | What shipped                                                                                                                                                                                                                                         |
+| ------------- | --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 10-20/21      | —                                 | Rebuild: core UI, menu model, plugin UI, API negotiation (67 core requests settled); basic playback in the core; OS code only in `platform/`; first `unsafe` crates (PiP, GPU)                                                                       |
+| 10-21/22      | —                                 | macOS GPU rendering (OpenGL into IOSurface, software fallback) and system PiP                                                                                                                                                                        |
+| 10-22/25      | 0.4–0.5.0                         | Slint 1.18.1, Plugin Store (signed index, revocation, sideload), installers (DMG, Inno Setup, portable zip), own visual identity, English + 6 UI languages, Vestra Player AI 2.x                                                                     |
+| 10-25/28      | 0.5.1–0.5.13                      | Windows 4K60 (30 → 60 fps), keyframe seeks, hover thumbnails, plugin management, built-ins in one shared Node process (≈1.1 GB → ≈60 MB), session storage, render modes                                                                              |
+| 10-27 – 11-01 | 0.5.14–0.6.3                      | Lazy activation (behind a flag), Windows GPU path via wgpu/D3D12 (off by default), AI upscaling experiment, video primitives, large lists on ListView                                                                                                |
+| 11-02/03      | 0.6.4–0.7.1, SDK 1.6.0            | Plugin process supervisor (B0–B7): one supervisor for every plugin process, on-demand start, restart policy, memory limits                                                                                                                           |
+| 11-03/04      | 0.7.1–0.7.5, SDK 1.6.1–1.6.3      | Release version split from the host version (host reused by input hash); sidebar tabs on demand with » overflow                                                                                                                                      |
+| 11-07/11      | 0.7.6, SDK 1.6.4–1.7.x            | Menu redesign: command palette, shortcut hints, host-owned button strip, `adjust` slot with Picture/Audio/Subtitles/Playback panels, slim right-click menu; no AccessKit; SDK 1.7.0 layering and docs refactor                                       |
+| 11-09/12      | 0.8.0–0.8.2, SDK 1.7.x            | Clip Export store plugin (capture split: built-in keeps snapshots); Ask Vestra runs commands with approval sheets; AMD Motion Smoothing plugin; VestraBili retired                                                                                   |
+| 11-13         | 0.8.3–0.8.4, SDK 1.7.20–1.8.0     | SDK 1.8.0 "plan A": additions only, existing behaviour frozen; `plugin.mpv` pass-through; Clip Export Highlights (local audio model)                                                                                                                 |
+| 11-14         | 0.9.0, SDK 1.9.0                  | Capability declarations abolished as behaviour switches; per-panel compilation; explicit state reads; Silence Skipper and Loudness plugins                                                                                                           |
+| 11-15         | 0.10.0–0.10.1, SDK 1.10.0         | Release A of events and triggers: `plugin.trigger()`, `plugin.player.stream(fn)`                                                                                                                                                                     |
+| 11-15/21      | 0.10.2                            | Core thread: plugin requests, supervisor, triggers and playback control on their own thread; the UI thread is a client                                                                                                                               |
+| 11-21/22      | 0.10.3                            | Guest windows ("play in a new window", Chrome's guest model); README refresh                                                                                                                                                                         |
+| 11-23         | 0.11.0–0.11.3, SDK 1.11.0–1.11.3  | Release B: `subscribe()`/`onChange()` removed, every plugin migrated; capability permission lists removed; NVIDIA motion smoothing on our libmpv with FFmpeg 9.1 (0.11.1)                                                                            |
+| 11-26         | 0.11.4–0.11.5                     | Fullscreen pointer freeze on AMD-driven built-in panels fixed (a tiny click-through window keeps DWM composing)                                                                                                                                      |
+| 11-26/27      | 0.11.6                            | First public release: macOS signed and notarized again, branded DMG; docs cleaned for open-sourcing                                                                                                                                                  |
+| 11-27/28      | 0.11.7–0.11.12, SDK 1.11.4–1.11.5 | Picture-in-Picture under Tools; Apple Motion Smoothing on macOS: our own macOS libmpv with the VideoToolbox filter `vtfrc` (0.11.12), SDK engine `"apple"`, store plugin `zysilm.applemotion`; VestraTube reads YouTube's LockupView results (0.5.7) |
 
 ## 2. Decisions in force
 
@@ -82,12 +83,15 @@ This file is the project's round record: how the project got here, the decisions
 - **One render-mode decision** with a denylist, a local override file and a crash guard (user, 10-28). Hybrid laptops use the high-performance GPU (user, 10-31).
 - **The UI reaches the display rate even in CPU mode** (user).
 - **macOS stays on OpenGL with a software fallback**; PiP is the system PiP on macOS only (user, 10-21).
-- **AI upscaling and motion smoothing are offered by plugins** (RTX VSR in Picture ▸ Rendering; AMD and NVIDIA Motion Smoothing as store plugins) (user, 10-27, 11-12, 11-22).
+- **AI upscaling and motion smoothing are offered by plugins** (RTX VSR in Picture ▸ Rendering; AMD, NVIDIA and Apple Motion Smoothing as store plugins) (user, 10-27, 11-12, 11-22, 11-27).
+- **macOS motion smoothing is Apple's VideoToolbox frame interpolation** in our own macOS libmpv (`vtfrc`: low-latency interpolator where the size fits, else the regular one); a size is refused only after two far-behind playbacks, cleared when the mode is set again; virtual Macs are refused (user, 11-27/28: released as is, 1080p Double holds on an M2 Air, Match Display at 1080p does not).
 
 ### Packaging and releases
 
 - Bundled Node 26; installers on GitHub Releases; macOS arm64 from 15.0, signed and notarized ([macos-signing.md](../../releases/macos-signing.md)); Windows per-user installer plus portable zip; release notes at `doc/releases/v<version>.md` (user, 10-22).
 - **Decided releases go ahead without a final go**; the update check is on by default (user, 11-01, 11-12).
+- **Release the player less often; extend features mainly through plugin updates** (store or built-in plugin updates); player-only fixes are batched unless a user-facing bug cannot wait (user, 11-28).
+- **The macOS libmpv is built by us** (`build-macos.sh`, the Windows build's mpv commit and patches plus `vtfrc`, Homebrew's FFmpeg) in `deps.yml` on macos-15 with Xcode 26; minimum macOS stays 15.0 (11-28).
 - **The release version is separate from the host version**; a release reuses a published host whose inputs hash the same (`host.json`) (11-03).
 - **Tags are never moved and nothing is force-pushed**; a tag whose run fails ships as the next patch (user).
 - **GPL source is published with the public release**; no written offer before it (user, 11-23).
@@ -104,24 +108,33 @@ Most lessons are rules in agentic-workflow.md, with their evidence. These are no
 - **A "behaviour frozen" refactor needs a differential check**: the first SDK 1.8 plan changed behaviour through declarations that also steered start-up; a 448-state old-vs-new check later caught eight changed command states.
 - **`[skip ci]` in a tagged commit also suppresses the tag-push release run**; dispatch the release workflow on the tag instead.
 - **Node 26 can deadlock in `process.exit` with a GC worker**; scripts set `process.exitCode` and return.
+- **A headless measurement is not the player.** vtfrc doubled 1080p with 0 drops in an offscreen harness, but in the real player (window drawing on the same GPU) 1080p Match Display and 1080p30 fell back on an M2 Air; GUI numbers (`VESTRA_FRAME_LOG`) decide.
+- **CI's macOS runners are virtual Macs.** A filter calling VideoToolbox on mpv's thread hung a test for 57 minutes there; real-hardware paths need deadlines in tests and must never block mpv's thread.
 
 ## 4. Open topics
 
-| Area       | Topic                                                                                      | Next step                                                                                |
-| ---------- | ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
-| Release    | Windows code signing                                                                       | After the public release (SignPath Foundation needs a public repo and CI-built releases) |
-| Interface  | Whether a hidden sidebar should stand by the current tab's plugin                          | User decision                                                                            |
-| Supervisor | Store shows "Running" for a plugin in standby; hang attribution inside the shared runner   | `store.ts`, `shared-runner.ts`                                                           |
-| Platform   | Uninstall with data removal deletes the directory inline                                   | `package_manager.rs`                                                                     |
-| Rendering  | Windows Auto still resolves to CPU (GPU default not decided)                               | `host/rendering.rs`                                                                      |
-| Rendering  | Slint upgrade for present mode, latency and surface access (upstream slint-ui/slint#14969) | Slint pinned                                                                             |
-| Rendering  | `unsafe/gpu-probe` still in the tree; wgpu Vulkan/GLES backends compiled in                | Remove or reduce to a test                                                               |
-| Rendering  | PiP on Windows and Linux                                                                   | `pip_unsupported.rs`                                                                     |
-| Hardware   | Never-run cases: Intel GPUs, WARP/RDP, device loss in cooldown                             | When hardware is at hand                                                                 |
-| Online     | Preview thumbnails for network sources; re-resolve an expired stream URL mid-playback      | Host API needed                                                                          |
-| AI         | Web search for Vestra Player AI                                                            | Needs rulings (paid, default off, security)                                              |
-| Fullscreen | Report the AMD cursor stall to AMD; recheck the unmerged fullscreen-entry branch           | Coordinator                                                                              |
-| Plugins    | Browser video bridge ("play in Vestra" from websites)                                      | Discuss with the user                                                                    |
+| Area       | Topic                                                                                                                                      | Next step                                                                                |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
+| Release    | Windows code signing                                                                                                                       | After the public release (SignPath Foundation needs a public repo and CI-built releases) |
+| Interface  | Whether a hidden sidebar should stand by the current tab's plugin                                                                          | User decision                                                                            |
+| Supervisor | Store shows "Running" for a plugin in standby; hang attribution inside the shared runner                                                   | `store.ts`, `shared-runner.ts`                                                           |
+| Platform   | Uninstall with data removal deletes the directory inline                                                                                   | `package_manager.rs`                                                                     |
+| Rendering  | Windows Auto still resolves to CPU (GPU default not decided)                                                                               | `host/rendering.rs`                                                                      |
+| Rendering  | Slint upgrade for present mode, latency and surface access (upstream slint-ui/slint#14969)                                                 | Slint pinned                                                                             |
+| Rendering  | `unsafe/gpu-probe` still in the tree; wgpu Vulkan/GLES backends compiled in                                                                | Remove or reduce to a test                                                               |
+| Rendering  | PiP on Windows and Linux                                                                                                                   | `pip_unsupported.rs`                                                                     |
+| Hardware   | Never-run cases: Intel GPUs, WARP/RDP, device loss in cooldown                                                                             | When hardware is at hand                                                                 |
+| Online     | Preview thumbnails for network sources; re-resolve an expired stream URL mid-playback                                                      | Host API needed                                                                          |
+| AI         | Web search for Vestra Player AI                                                                                                            | Needs rulings (paid, default off, security)                                              |
+| Fullscreen | Report the AMD cursor stall to AMD; recheck the unmerged fullscreen-entry branch                                                           | Coordinator                                                                              |
+| Plugins    | Browser video bridge ("play in Vestra" from websites)                                                                                      | Discuss with the user                                                                    |
+| Motion     | `vtfrc-no-block`: no VideoToolbox call on mpv's threads (support query off-thread with a timeout); then reconsider refusing virtual Macs   | Reviewed branch waits for the next batched player release                                |
+| Motion     | Size learning: no strike while the converter was never ready; strikes never expire                                                         | Maintainer                                                                               |
+| Rendering  | macOS presenter shows ~45 of 48 frames/s in Double on a 60 Hz display                                                                      | Maintainer, measure with `VESTRA_FRAME_LOG`                                              |
+| Interface  | Right-click menu shows a checkmark before Play/Pause while paused; Apple status line reads "30 → 30" until output is measured              | Interaction lead / applemotion author                                                    |
+| SDK        | `no-gpu` docs should mention virtual Macs                                                                                                  | Next SDK patch                                                                           |
+| Plugins    | VestraTube: Retry after a failed continuation reuses it; unread nodes in mixed pages are not logged; live test does not tell layouts apart | Its author                                                                               |
+| Plugins    | clipexport highlights drag test flaky on the macOS runner (PR #83)                                                                         | Its author                                                                               |
 
 ## 5. Superseded
 
@@ -161,4 +174,5 @@ Kept so that old commits and comments make sense:
 
 ### Log (newest first)
 
+- 11-28: Apple Motion Smoothing project (loop) done: player 0.11.12 with our macOS libmpv (`vtfrc`), SDK 1.11.5, store plugin `zysilm.applemotion` 0.1.0; VestraTube 0.5.7 side lane; promo takes recorded on the Mac for the Windows coordinator. Lasting decisions, lessons and open topics folded into §1–§4.
 - 11-27: macOS signed 0.11.6 tested OK; history condensed before open-sourcing.
