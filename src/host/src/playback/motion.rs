@@ -440,7 +440,11 @@ pub struct Strike {
 /// How long Apple's converter may take to say its session is ready
 /// (`… interpolator ready for …`) before its output is judged all the same:
 /// it passes frames through until then (0.35–0.65 s measured, the first
-/// session after a restart of the Mac several seconds).
+/// session after a restart of the Mac several seconds). A converter that
+/// never gets ready (a session start the system never answers, as on a
+/// virtual Mac) is judged all the same once this has passed: passing
+/// frames through is half the doubled rate, so the fallback takes the
+/// filter out with `overload` instead of leaving it waiting.
 pub const APPLE_READY: Duration = Duration::from_secs(15);
 
 /// First failure wins: the system's check, the filter, the renderer (Match
@@ -779,6 +783,9 @@ pub struct Motion {
     /// is ready (Apple's; the others are judged from the warm-up on).
     added: Option<Instant>,
     converter_ready: bool,
+    /// How long Apple's converter may take to be ready ([`APPLE_READY`];
+    /// tests shorten it).
+    apple_ready: Duration,
     /// The renderer's publish gate (`follow_gate`; none: always open).
     gate: Option<Arc<AtomicBool>>,
     /// The gate as the last look saw it: a change is looked at at once.
@@ -841,6 +848,7 @@ impl Motion {
             strikes: BTreeMap::new(),
             added: None,
             converter_ready: false,
+            apple_ready: APPLE_READY,
             gate: None,
             gate_seen: true,
         }
@@ -1532,7 +1540,7 @@ impl Motion {
             && !self.converter_ready
             && self
                 .added
-                .is_some_and(|at| now.saturating_duration_since(at) < APPLE_READY);
+                .is_some_and(|at| now.saturating_duration_since(at) < self.apple_ready);
         let (true, false, Some(fps)) = (playing, starting, fps) else {
             self.watch = Watch::default();
             return None;
