@@ -51,7 +51,7 @@
  extern const struct mp_user_filter_entry vf_gpu;
 --- a/video/filter/vf_vtfrc.m
 +++ b/video/filter/vf_vtfrc.m
-@@ -0,0 +1,1196 @@
+@@ -0,0 +1,1253 @@
 +/*
 + * This file is part of mpv.
 + *
@@ -85,7 +85,8 @@
 + *  - regular: VTFrameRateConversion (macOS 15.4+), any size, but RGhA
 + *    (half-float RGBA) only: frames are converted with VTPixelTransferSession
 + *    on the way in and back to the input's format on the way out. Its
-+ *    session takes seconds to start (about 9 s on an M2).
++ *    session starts in under a second once its model is on the Mac (350-650
++ *    ms on an M2); the first start ever can take seconds.
 + *  - auto (default): lowlatency when it is there and its probe passes,
 + *    else regular.
 + *
@@ -137,6 +138,9 @@
 +
 +// Interpolation failures in a row before the filter gives up.
 +#define MAX_FAILURES 5
++// Failed low-latency calls whose buffers are leaked on purpose (see
++// leak_failed_call) before the filter gives up, per filter instance.
++#define MAX_LEAKS 5
 +// Consecutive frames further apart than this are not interpolated (a
 +// discontinuity rather than a frame step).
 +#define MAX_GAP 1.0
@@ -199,7 +203,13 @@
 +    CVPixelBufferPoolRef src_pool, dst_pool, nat_pool;
 +    OSType nat_pool_fmt;
 +    VTPixelTransferSessionRef xfer;
-+    CVPixelBufferRef last_nat, last_proc; // the previous B, for sequential pairs
++    CVPixelBufferRef last_nat, last_proc; // the previous B, for converting once
++    // The processor queue only: the B of the last pair the processor
++    // interpolated. A pair is Sequential only when its A is this frame;
++    // after a skipped pair (scene cut, failed conversion or call) the
++    // processor's state is not this pair's, and Apple's header asks for
++    // Random then.
++    CVPixelBufferRef last_submitted;
 +    float last_thumb[THUMB_H][THUMB_W];   // and its thumbnail
 +};
 +
@@ -233,6 +243,7 @@
 +    CVPixelBufferPoolRelease(s->nat_pool);
 +    CVPixelBufferRelease(s->last_nat);
 +    CVPixelBufferRelease(s->last_proc);
++    CVPixelBufferRelease(s->last_submitted);
 +    if (s->xfer) {
 +        VTPixelTransferSessionInvalidate(s->xfer);
 +        CFRelease(s->xfer);
@@ -266,20 +277,23 @@
 +static CVPixelBufferPoolRef make_pool(NSDictionary *attrs, int w, int h,
 +                                      OSType fmt)
 +{
-+    NSMutableDictionary *a = attrs ? [[attrs mutableCopy] autorelease]
-+                                   : [NSMutableDictionary dictionary];
-+    a[(id)kCVPixelBufferWidthKey] = @(w);
-+    a[(id)kCVPixelBufferHeightKey] = @(h);
-+    a[(id)kCVPixelBufferPixelFormatTypeKey] = @(fmt);
-+    if (!a[(id)kCVPixelBufferIOSurfacePropertiesKey])
-+        a[(id)kCVPixelBufferIOSurfacePropertiesKey] = @{};
-+    // Frames that leave the filter are mapped by mpv's VideoToolbox interop
-+    // (Metal or OpenGL).
-+    a[(id)kCVPixelBufferMetalCompatibilityKey] = @YES;
-+    CVPixelBufferPoolRef pool = NULL;
-+    if (CVPixelBufferPoolCreate(NULL, NULL, (CFDictionaryRef)a, &pool))
-+        return NULL;
-+    return pool;
++    // (Also called on mpv's filter thread, which has no autorelease pool.)
++    @autoreleasepool {
++        NSMutableDictionary *a = attrs ? [[attrs mutableCopy] autorelease]
++                                       : [NSMutableDictionary dictionary];
++        a[(id)kCVPixelBufferWidthKey] = @(w);
++        a[(id)kCVPixelBufferHeightKey] = @(h);
++        a[(id)kCVPixelBufferPixelFormatTypeKey] = @(fmt);
++        if (!a[(id)kCVPixelBufferIOSurfacePropertiesKey])
++            a[(id)kCVPixelBufferIOSurfacePropertiesKey] = @{};
++        // Frames that leave the filter are mapped by mpv's VideoToolbox interop
++        // (Metal or OpenGL).
++        a[(id)kCVPixelBufferMetalCompatibilityKey] = @YES;
++        CVPixelBufferPoolRef pool = NULL;
++        if (CVPixelBufferPoolCreate(NULL, NULL, (CFDictionaryRef)a, &pool))
++            return NULL;
++        return pool;
++    }
 +}
 +
 +static CVPixelBufferRef pool_buffer(CVPixelBufferPoolRef pool)
@@ -337,6 +351,25 @@
 +                 destinationFrames:@[dst]] autorelease];
 +}
 +
++// On macOS 26.2 a failing low-latency call (-19740) releases buffers it does
++// not own: the retain count of the previous frame's buffer dropped while our
++// references and the frame objects were alive, and frames shown later
++// crashed in mpv's renderer. Not seen with the regular processor. After a
++// failed low-latency call everything the call saw is leaked on purpose
++// (three buffers and the frame objects); the filter counts these and gives
++// up after MAX_LEAKS, so the leak stays bounded.
++static void leak_failed_call(CVPixelBufferRef a, CVPixelBufferRef b,
++                             CVPixelBufferRef d, id fa, id fb, id fd, id params)
++{
++    CFRetain(a);
++    CFRetain(b);
++    CFRetain(d);
++    [fa retain];
++    [fb retain];
++    [fd retain];
++    [params retain];
++}
++
 +// Interpolates one pair of black frames: the low-latency processor accepts
 +// any size at its start and only fails on the first frame.
 +static bool probe(struct session *s, char *why, size_t size)
@@ -363,6 +396,8 @@
 +            snprintf(what, sizeof(what), "%dx%d refused on the first frame",
 +                     s->w, s->h);
 +            describe(why, size, what, err);
++            if (params && s->engine == ENGINE_LOWLATENCY)
++                leak_failed_call(a, b, d, fa, fb, fd, params); // once per session
 +        }
 +    } else {
 +        snprintf(why, size, "could not allocate %dx%d frames", s->w, s->h);
@@ -523,7 +558,9 @@
 +    CVPixelBufferRef a, b;   // the pair, in the input's format
 +    double pts_a, pts_b;
 +    CVPixelBufferRef pa, pb, dst; // in the processor's format
-+    bool sequential;
++    bool sequential;         // A is the previous pair's B (converted once)
++    bool leaked;             // a failed low-latency call: its buffers leaked
++    bool random;             // sent as Random (regular processor)
 +    bool cut;                // a scene cut: the in-between frame repeats A
 +    CVPixelBufferRef out;    // the in-between frame, in the input's format
 +    double submitted, convert_ms, process_ms, out_ms, ms;
@@ -634,6 +671,8 @@
 +        return;
 +    double t0 = now_ms();
 +    j->sequential = s->last_nat && j->a == s->last_nat && s->last_proc;
++    // (Only for reusing the conversion; the submission mode is decided on
++    // the processor queue, stage_process.)
 +    if (s->cut > 0) {
 +        float thumb[THUMB_H][THUMB_W];
 +        bool have_a = j->sequential || thumbnail(j->a, s->last_thumb);
@@ -658,10 +697,8 @@
 +    j->convert_ms = now_ms() - t0;
 +}
 +
-+static void stage_process(struct session *s, struct job *j)
++static void process_pair(struct session *s, struct job *j)
 +{
-+    if (atomic_load(&s->cancel) || j->cut)
-+        return;
 +    if (!j->pa || !j->pb || !(j->dst = pool_buffer(s->dst_pool))) {
 +        snprintf(j->error, sizeof(j->error), "could not convert or allocate frames");
 +        return;
@@ -679,31 +716,36 @@
 +                initWithBuffer:j->pb presentationTimeStamp:tb] autorelease];
 +            VTFrameProcessorFrame *fd = [[[VTFrameProcessorFrame alloc]
 +                initWithBuffer:j->dst presentationTimeStamp:tm] autorelease];
-+            id params = fa && fb && fd ? make_params(s, fa, fb, fd, j->sequential) : nil;
++            bool sequential = s->last_submitted && j->a == s->last_submitted;
++            j->random = !sequential && s->engine == ENGINE_REGULAR;
++            id params = fa && fb && fd ? make_params(s, fa, fb, fd, sequential) : nil;
 +            NSError *err = nil;
-+            // On macOS 26.2 a failing low-latency call (-19740) releases
-+            // buffers it does not own: the retain count of the previous
-+            // frame's buffer dropped while our references and the frame
-+            // objects were alive, and frames shown later crashed in mpv's
-+            // renderer. After a failure everything the call saw is leaked
-+            // on purpose (buffers and frame objects): a few buffers per
-+            // failure, MAX_FAILURES at most, against a crash.
 +            if (!params) {
 +                snprintf(j->error, sizeof(j->error), "invalid frames or parameters");
 +            } else if (![(VTFrameProcessor *)s->processor
 +                            processWithParameters:params error:&err]) {
 +                describe(j->error, sizeof(j->error), "interpolation failed", err);
-+                CFRetain(j->pa);
-+                CFRetain(j->pb);
-+                CFRetain(j->dst);
-+                [fa retain];
-+                [fb retain];
-+                [fd retain];
-+                [params retain];
++                if (s->engine == ENGINE_LOWLATENCY) {
++                    leak_failed_call(j->pa, j->pb, j->dst, fa, fb, fd, params);
++                    j->leaked = true;
++                }
 +            }
 +            j->process_ms = now_ms() - t0;
 +        }
 +    }
++}
++
++static void stage_process(struct session *s, struct job *j)
++{
++    bool interpolated = false;
++    if (!atomic_load(&s->cancel) && !j->cut) {
++        process_pair(s, j);
++        interpolated = !j->error[0];
++    }
++    // The processor's state follows the last pair it interpolated: a cut,
++    // a failure or a cancelled pair makes the next pair Random.
++    CVPixelBufferRelease(s->last_submitted);
++    s->last_submitted = interpolated ? CVPixelBufferRetain(j->b) : NULL;
 +}
 +
 +static void stage_out(struct session *s, struct job *j)
@@ -775,9 +817,10 @@
 +    struct mp_image *out[2];
 +    int num_out;
 +    bool eof;
++    int leaks;               // failed low-latency calls leaked, for the filter's life
 +
 +    // statistics (of the current session)
-+    long long pairs, interpolated, cuts, failures, failures_in_row;
++    long long pairs, interpolated, cuts, randoms, failures, failures_in_row;
 +    double ms_sum, ms_max, process_sum;
 +};
 +
@@ -825,8 +868,10 @@
 +                        CVPixelBufferRef buf, bool to_buffer)
 +{
 +    CVPixelBufferLockBaseAddress(buf, to_buffer ? 0 : kCVPixelBufferLock_ReadOnly);
-+    size_t row = (size_t)img->w * (p->fmt == IMGFMT_P010 ? 2 : 1);
++    size_t bytes = p->fmt == IMGFMT_P010 ? 2 : 1;
 +    for (int n = 0; n < 2; n++) {
++        // The chroma plane holds (w + 1) / 2 CbCr pairs per row.
++        size_t row = (n ? (size_t)(img->w + 1) / 2 * 2 : (size_t)img->w) * bytes;
 +        uint8_t *base = CVPixelBufferGetBaseAddressOfPlane(buf, n);
 +        size_t stride = CVPixelBufferGetBytesPerRowOfPlane(buf, n);
 +        int rows = n ? (img->h + 1) / 2 : img->h;
@@ -901,12 +946,12 @@
 +    if (!p->s || !p->pairs)
 +        return;
 +    double n = p->interpolated ? p->interpolated : 1;
-+    MP_INFO(f, "%s, %dx%d: %lld pairs, %lld interpolated, %lld scene cuts "
-+            "repeated, %lld failed; "
++    MP_INFO(f, "%s, %dx%d: %lld pairs, %lld interpolated (%lld as Random), "
++            "%lld scene cuts repeated, %lld failed; "
 +            "per frame %.1f ms in the processor, %.1f ms from submission "
 +            "(at most %.1f ms)\n",
 +            engine_name(p->s->engine), p->s->w, p->s->h, p->pairs,
-+            p->interpolated, p->cuts, p->failures, p->process_sum / n, p->ms_sum / n,
++            p->interpolated, p->randoms, p->cuts, p->failures, p->process_sum / n, p->ms_sum / n,
 +            p->ms_max);
 +}
 +
@@ -917,7 +962,8 @@
 +    session_release(p->s);
 +    p->s = NULL;
 +    p->ready_logged = false;
-+    p->pairs = p->interpolated = p->cuts = p->failures = p->failures_in_row = 0;
++    p->pairs = p->interpolated = p->cuts = p->randoms = p->failures =
++        p->failures_in_row = 0;
 +    p->ms_sum = p->ms_max = p->process_sum = 0;
 +}
 +
@@ -1003,6 +1049,7 @@
 +           j->process_ms, j->out_ms);
 +    if (j->cut)
 +        p->cuts++;
++    p->randoms += j->random;
 +    if (j->out) {
 +        struct mp_image *mid = wrap(f, j->out, b, (j->pts_a + j->pts_b) / 2);
 +        if (mid) {
@@ -1019,8 +1066,18 @@
 +    } else {
 +        p->failures++;
 +        p->failures_in_row++;
++        p->leaks += j->leaked;
++        const char *why = NULL;
++        char msg[64];
 +        if (p->failures_in_row >= MAX_FAILURES) {
-+            MP_ERR(f, "%s (%d times in a row): giving up\n", j->error, MAX_FAILURES);
++            snprintf(msg, sizeof(msg), "%d times in a row", MAX_FAILURES);
++            why = msg;
++        } else if (p->leaks >= MAX_LEAKS) {
++            snprintf(msg, sizeof(msg), "%d low-latency failures in all", MAX_LEAKS);
++            why = msg;
++        }
++        if (why) {
++            MP_ERR(f, "%s (%s): giving up\n", j->error, why);
 +            job_unref(j);
 +            talloc_free(b);
 +            mp_filter_internal_mark_failed(f);
