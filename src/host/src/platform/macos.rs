@@ -1,7 +1,8 @@
 //! macOS: AppKit through objc2 (windows, pasteboard, alerts), the system's
 //! `caffeinate` (sleep assertions) and `open` (Finder, default apps and
 //! browser), the login keychain (through keyring), NSProcessInfo and
-//! `sysctl` (system facts). Window observation covers this application's own
+//! `sysctl` (system facts, and where Apple's frame interpolation works for
+//! motion smoothing). Window observation covers this application's own
 //! windows only: no activation, no other applications.
 
 use super::{
@@ -716,15 +717,7 @@ pub fn os_facts() -> OsFacts {
     } else {
         format!("{}.{}", v.majorVersion, v.minorVersion)
     };
-    let model = Command::new("/usr/sbin/sysctl")
-        .args(["-n", "hw.model"])
-        .stdin(Stdio::null())
-        .stderr(Stdio::null())
-        .output()
-        .ok()
-        .filter(|output| output.status.success())
-        .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_owned())
-        .filter(|model| !model.is_empty());
+    let model = sysctl("hw.model");
     OsFacts {
         os: "macos",
         name: "macOS".into(),
@@ -732,6 +725,19 @@ pub fn os_facts() -> OsFacts {
         build: build_of(&info.operatingSystemVersionString().to_string()),
         model,
     }
+}
+
+/// One `sysctl -n` value, trimmed; `None` when it is not there.
+fn sysctl(name: &str) -> Option<String> {
+    Command::new("/usr/sbin/sysctl")
+        .args(["-n", name])
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_owned())
+        .filter(|value| !value.is_empty())
 }
 
 /// Installed physical memory, in bytes (`NSProcessInfo.physicalMemory`).
@@ -895,6 +901,117 @@ impl crate::playback::renderer::GpuBackend for GpuHandle {
     }
 }
 
+// ------------------------------------------------------- motion smoothing
+
+/// The macOS version Apple's frame interpolation needs: VideoToolbox's
+/// `VTFrameRateConversion` came with 15.4 (the low-latency interpolator,
+/// which `vtfrc` prefers for small videos, with 26).
+pub const APPLE_MOTION_MACOS: (isize, isize) = (15, 4);
+
+/// Where motion smoothing's engine works (`playback/motion.rs`): Apple's
+/// only ([`apple_motion_probe`]); AMD's and NVIDIA's are Windows only
+/// (`platform`).
+pub fn motion_probe(engine: crate::playback::motion::Engine) -> super::MotionProbe {
+    match engine {
+        crate::playback::motion::Engine::Apple => apple_motion_probe(),
+        crate::playback::motion::Engine::Amd | crate::playback::motion::Engine::Nvidia => {
+            Err(super::motion_elsewhere(engine))
+        }
+    }
+}
+
+/// Apple's frame interpolation: Apple silicon (`hw.optional.arm64`, which
+/// also reads 1 for a translated process), not a virtual Mac
+/// ([`virtual_mac`]) and macOS 15.4 or newer (NSProcessInfo). The chip's
+/// name (`machdep.cpu.brand_string`, `Apple M2`) is the state's `gpu`.
+/// Whether VideoToolbox serves this Mac is known only when the filter is
+/// created: `vtfrc` refuses then, and `motion::device_failure` makes that
+/// `runtime` for the run.
+fn apple_motion_probe() -> super::MotionProbe {
+    let v = objc2_foundation::NSProcessInfo::processInfo().operatingSystemVersion();
+    apple_motion_verdict(
+        sysctl("hw.optional.arm64").as_deref() == Some("1"),
+        virtual_mac().then(|| sysctl("hw.model").unwrap_or_else(|| "a virtual Mac".into())),
+        sysctl("machdep.cpu.brand_string"),
+        (v.majorVersion, v.minorVersion),
+    )
+}
+
+/// This Mac is a virtual machine (`kern.hv_vmm_present`, or a `VirtualMac`
+/// model, as Apple's Virtualization framework names its guests). Its
+/// graphics device is a paravirtual one: on GitHub's macOS 15 runner a
+/// test that drove `vtfrc` did not finish (2026-11-28, run 46119696846,
+/// cancelled 57 minutes later; every one of its own waits is bounded, so
+/// mpv itself did not come back; the same test takes 2 s on an M2), so
+/// Apple's engine is not offered on a virtual Mac rather than risking a
+/// player that stops.
+pub fn virtual_mac() -> bool {
+    sysctl("kern.hv_vmm_present").as_deref() == Some("1")
+        || sysctl("hw.model").is_some_and(|model| model.starts_with("VirtualMac"))
+}
+
+/// [`apple_motion_probe`]'s decision from what it read: `virtual_model` is
+/// the model of a virtual Mac, `None` on a real one.
+fn apple_motion_verdict(
+    apple_silicon: bool,
+    virtual_model: Option<String>,
+    chip: Option<String>,
+    version: (isize, isize),
+) -> super::MotionProbe {
+    if let Some(model) = virtual_model {
+        return Err(super::MotionRefusal {
+            code: "no-gpu",
+            message: format!(
+                "this Mac is a virtual machine ({model}); Apple motion smoothing needs the frame interpolation of a real Mac's Apple silicon"
+            ),
+        });
+    }
+    if !apple_silicon {
+        return Err(super::MotionRefusal {
+            code: "no-gpu",
+            message: format!(
+                "this Mac has {}; Apple motion smoothing uses the frame interpolation of Apple silicon (M1 or newer)",
+                chip.as_deref().unwrap_or("an Intel processor")
+            ),
+        });
+    }
+    if version < APPLE_MOTION_MACOS {
+        return Err(super::MotionRefusal {
+            code: "runtime",
+            message: format!(
+                "macOS {}.{} has no frame interpolation in VideoToolbox; Apple motion smoothing needs macOS {}.{} or newer",
+                version.0, version.1, APPLE_MOTION_MACOS.0, APPLE_MOTION_MACOS.1
+            ),
+        });
+    }
+    Ok(super::MotionGpu {
+        name: chip.unwrap_or_else(|| "Apple silicon".into()),
+    })
+}
+
+/// Nothing to prepare: `vtfrc` needs no environment of its own.
+pub fn prepare_motion(_engine: crate::playback::motion::Engine) {}
+
+/// Nothing scoped (`prepare_motion`).
+pub fn unscoped_child_env(_command: &mut std::process::Command) {}
+
+/// mpv's filter for Apple's motion smoothing: our libmpv's `vtfrc`
+/// (src/packaging/libmpv), which takes VideoToolbox frames as they are
+/// decoded (and frames in memory), so the decoding is left as it is. It
+/// picks the low-latency interpolator where the Mac takes the size (macOS
+/// 26; up to 1280×720's pixels on an M2, probed when its session starts),
+/// else the regular one, at `quality=normal`: `quality=quality` dropped
+/// frames at 1080p on the M2, and nothing faster exists, so `large` and
+/// `performance` change nothing. AMD's and NVIDIA's are Windows only.
+pub fn motion_filter(
+    engine: crate::playback::motion::Engine,
+    _large: bool,
+    _performance: bool,
+) -> Option<String> {
+    (engine == crate::playback::motion::Engine::Apple)
+        .then(|| "vtfrc=engine=auto:quality=normal".to_owned())
+}
+
 /// Start drawing `mpv` at `size` pixels; frames are shown while `publish`.
 pub fn gpu_start(
     mpv: std::sync::Arc<rsmpv::Mpv>,
@@ -949,6 +1066,57 @@ mod tests {
             assert_eq!(tool_level(false, floating), main);
             assert!(tool_level(true, floating) < objc2_app_kit::NSModalPanelWindowLevel);
         }
+    }
+
+    #[test]
+    fn apple_motion_needs_apple_silicon_and_macos_15_4() {
+        use crate::playback::motion::Engine;
+        let chip = || Some("Apple M2".to_owned());
+        assert_eq!(
+            apple_motion_verdict(true, None, chip(), (26, 2))
+                .unwrap()
+                .name,
+            "Apple M2"
+        );
+        assert!(apple_motion_verdict(true, None, chip(), (15, 4)).is_ok());
+        let old = apple_motion_verdict(true, None, chip(), (15, 3)).unwrap_err();
+        assert_eq!(old.code, "runtime");
+        assert!(old.message.contains("macOS 15.3"), "{}", old.message);
+        assert!(old.message.contains("15.4 or newer"), "{}", old.message);
+        let intel = apple_motion_verdict(false, None, Some("Intel(R) Core(TM) i7".into()), (26, 2))
+            .unwrap_err();
+        assert_eq!(intel.code, "no-gpu");
+        assert!(intel.message.contains("Apple silicon"), "{}", intel.message);
+        let guest =
+            apple_motion_verdict(true, Some("VirtualMac2,1".into()), chip(), (15, 7)).unwrap_err();
+        assert_eq!(guest.code, "no-gpu");
+        assert!(
+            guest.message.contains("virtual machine (VirtualMac2,1)"),
+            "{}",
+            guest.message
+        );
+        // This machine answers either way, quickly.
+        let _ = virtual_mac();
+        // The other engines are Windows only; the filter is Apple's alone.
+        for engine in [Engine::Amd, Engine::Nvidia] {
+            let refusal = motion_probe(engine).unwrap_err();
+            assert_eq!(refusal.code, "platform");
+            assert!(
+                refusal.message.contains("Windows only"),
+                "{}",
+                refusal.message
+            );
+            assert!(
+                refusal.message.ends_with("this is macOS"),
+                "{}",
+                refusal.message
+            );
+            assert_eq!(motion_filter(engine, false, false), None);
+        }
+        assert_eq!(
+            motion_filter(Engine::Apple, true, true).as_deref(),
+            Some("vtfrc=engine=auto:quality=normal")
+        );
     }
 
     #[test]

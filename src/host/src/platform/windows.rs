@@ -2376,11 +2376,12 @@ const AMD: u32 = 0x1002;
 
 /// Where motion smoothing's engine works (`playback/motion.rs`): AMD's
 /// ([`amd_motion_probe`]) or NVIDIA's ([`nvidia_motion_probe`]). DXGI
-/// only: no device, no Vulkan.
+/// only: no device, no Vulkan. Apple's is macOS only (`platform`).
 pub fn motion_probe(engine: crate::playback::motion::Engine) -> super::MotionProbe {
     match engine {
         crate::playback::motion::Engine::Amd => amd_motion_probe(),
         crate::playback::motion::Engine::Nvidia => nvidia_motion_probe(),
+        crate::playback::motion::Engine::Apple => Err(super::motion_elsewhere(engine)),
     }
 }
 
@@ -2514,10 +2515,12 @@ pub fn motion_filter(
     large: bool,
     performance: bool,
 ) -> Option<String> {
-    Some(match engine {
-        crate::playback::motion::Engine::Amd => frc_amf_filter(large, performance),
-        crate::playback::motion::Engine::Nvidia => fruc_vulkan_filter(large, performance),
-    })
+    match engine {
+        crate::playback::motion::Engine::Amd => Some(frc_amf_filter(large, performance)),
+        crate::playback::motion::Engine::Nvidia => Some(fruc_vulkan_filter(large, performance)),
+        // macOS only.
+        crate::playback::motion::Engine::Apple => None,
+    }
 }
 
 /// Before NVIDIA's converter first creates its Vulkan device: the Vulkan

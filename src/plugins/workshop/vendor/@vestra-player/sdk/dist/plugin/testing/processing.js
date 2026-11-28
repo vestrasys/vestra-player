@@ -247,34 +247,51 @@ export function upscalingDecoding(host, _inner, cause, plugins = []) {
     host.upscaling.hwdecCurrent = current;
     return reason;
 }
+/** The engines, in the order the player looks at them when none holds the converter. */
+const ENGINES = [
+    "amd",
+    "nvidia",
+    "apple",
+];
 /** The engine a request names, checked as the player does. */
 function engineOf(p) {
-    if (p.engine !== "amd" && p.engine !== "nvidia")
-        throw new HostError("invalid", 'engine must be "amd" or "nvidia"');
-    return p.engine;
+    const engine = ENGINES.find((name) => name === p.engine);
+    if (!engine)
+        throw new HostError("invalid", 'engine must be "amd", "nvidia" or "apple"');
+    return engine;
 }
-/** The model of an engine: {@link TestHost.motion} (`amd`) or {@link TestHost.nvidiaMotion}. */
+/** The model of an engine: {@link TestHost.motion} (`amd`), {@link TestHost.nvidiaMotion} or {@link TestHost.appleMotion}. */
 function modelOf(host, engine) {
-    return engine === "amd" ? host.motion : host.nvidiaMotion;
+    return engine === "amd"
+        ? host.motion
+        : engine === "nvidia"
+            ? host.nvidiaMotion
+            : host.appleMotion;
 }
 /** The engine whose converter is in the chain, as the player keeps it: the first one set to a mode, while its mode is not `off`. */
 const motionHolder = new WeakMap();
-/** Which engine holds the converter now: the one recorded while it is on, else the first that is on (`amd` first). */
+/** Which engine holds the converter now: the one recorded while it is on, else the first that is on (`amd`, then `nvidia`, then `apple`). */
 function holderOf(host) {
     const on = (engine) => modelOf(host, engine).mode !== "off";
     const recorded = motionHolder.get(host);
     if (recorded && on(recorded))
         return recorded;
-    const next = on("amd") ? "amd" : on("nvidia") ? "nvidia" : null;
+    const next = ENGINES.find(on) ?? null;
     if (next)
         motionHolder.set(host, next);
     else
         motionHolder.delete(host);
     return next;
 }
-/** The player's message while the other engine holds the converter (as playback/motion.rs). */
+/** Each engine's vendor, for the messages (as playback/motion.rs `Engine::vendor`). */
+const VENDORS = {
+    amd: "AMD",
+    nvidia: "NVIDIA",
+    apple: "Apple",
+};
+/** The player's message while another engine holds the converter (as playback/motion.rs). */
 function otherEngine(holder) {
-    const vendor = holder === "amd" ? "AMD" : "NVIDIA";
+    const vendor = VENDORS[holder];
     return {
         code: "other-engine",
         message: `${vendor} motion smoothing is on (another plugin); one converter runs at a time, so this waits until it is off`,
@@ -388,9 +405,12 @@ export function processingHandlers(host, inner) {
                 if (reason && MOTION_FIXED.includes(reason.code) && !passes)
                     throw new HostError("unsupported", `motion smoothing cannot work here: ${reason.message}`);
             }
+            // An engine already on (preset by a test as another plugin's) holds
+            // the converter before this request counts.
+            const before = holderOf(host);
             model.mode = mode;
             // The first engine set to a mode holds the converter while it is on.
-            if (mode !== "off" && holderOf(host) === null)
+            if (mode !== "off" && before === null)
                 motionHolder.set(host, engine);
             holderOf(host);
             return motionState(host, engine);

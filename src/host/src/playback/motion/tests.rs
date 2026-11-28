@@ -38,6 +38,7 @@ fn facts<'a>(probe: &'a MotionProbe, reason: &'a RenderReason, rendering: &'a Va
         doubling: false,
         broken: None,
         format: None,
+        learned: None,
     }
 }
 
@@ -1604,15 +1605,742 @@ fn the_input_rate_is_measured_out_of_the_chain_and_kept_in_it() {
 #[test]
 fn overload_names_what_could_not_keep_up_by_renderer() {
     // GPU rendering: the GPU (the converter and the drawing).
-    let gpu = overload_message(true, "51.2 of 60 fps");
+    let gpu = overload_message(Engine::Amd, true, "51.2 of 60 fps");
     assert!(gpu.starts_with("the GPU could not keep up"), "{gpu}");
     assert!(gpu.ends_with("51.2 of 60 fps"), "{gpu}");
     // Software rendering: the CPU copying and drawing the doubled frames
     // (the GPU was 25–40 % busy, 2026-11-23), and what helps. Either engine.
-    let cpu = overload_message(false, "51.2 of 60 fps");
+    let cpu = overload_message(Engine::Amd, false, "51.2 of 60 fps");
     assert_eq!(
         cpu,
         "rendering on the CPU could not keep up with this video's doubled frames (51.2 of 60 fps); GPU Rendering (Picture ▸ Rendering) helps"
     );
     assert!(!cpu.contains("GPU could not"), "{cpu}");
+}
+
+fn apple_m2() -> MotionProbe {
+    Ok(MotionGpu {
+        name: "Apple M2".into(),
+    })
+}
+
+#[test]
+fn apples_engine_parses_names_its_vendor_and_waits_for_another() {
+    assert_eq!(Engine::from_name(APPLE), Some(Engine::Apple));
+    assert_eq!(Engine::Apple.as_str(), "apple");
+    assert_eq!(Engine::Apple.vendor(), "Apple");
+    assert_eq!(Engine::Apple.converter(), "vtfrc");
+    assert_eq!(Engine::ALL.len(), 3);
+    let (reason, rendering) = (RenderReason::Default, Value::Null);
+    let probe = apple_m2();
+    let apple = |other| Facts {
+        engine: Engine::Apple,
+        other,
+        ..facts(&probe, &reason, &rendering)
+    };
+    assert_eq!(check(&apple(None), Mode::Double), Ok(()));
+    assert_eq!(check(&apple(None), Mode::Display), Ok(()));
+    let error = check(&apple(Some(Engine::Amd)), Mode::Double).unwrap_err();
+    assert_eq!(error.code(), "other-engine");
+    let error = check(
+        &Facts {
+            other: Some(Engine::Apple),
+            ..facts(&probe, &reason, &rendering)
+        },
+        Mode::Double,
+    )
+    .unwrap_err();
+    assert!(error.message().starts_with("Apple motion smoothing is on"));
+    // The player's own error for an unknown engine names all three.
+    let _one = one_mpv_at_a_time();
+    let mpv = mpv();
+    let (events, received) = mpsc::channel();
+    let mut motion = with_stand_in();
+    let bad = command(1, "video.motion.state", json!({"engine":"intel"}));
+    assert!(motion.command(&mpv, &software(), &bad, &events, &mut Recorded::default()));
+    let error = reply(&received).unwrap_err();
+    assert_eq!(
+        error.message,
+        r#"engine must be "amd", "nvidia" or "apple""#
+    );
+}
+
+#[test]
+fn apple_takes_10_bit_sdr_but_not_hdr() {
+    assert_eq!(format_reason(Engine::Apple, 10, false), None);
+    assert_eq!(
+        format_reason(Engine::Apple, 8, true).as_deref(),
+        Some("HDR")
+    );
+    assert_eq!(
+        format_reason(Engine::Amd, 10, false).as_deref(),
+        Some("10-bit")
+    );
+    assert_eq!(
+        format_reason(Engine::Nvidia, 8, true).as_deref(),
+        Some("HDR")
+    );
+    let (reason, rendering) = (RenderReason::Default, Value::Null);
+    let probe = apple_m2();
+    let error = check(
+        &Facts {
+            engine: Engine::Apple,
+            format: Some("HDR".into()),
+            ..facts(&probe, &reason, &rendering)
+        },
+        Mode::Double,
+    )
+    .unwrap_err();
+    assert_eq!(error.code(), "format");
+    assert!(!error.fixed());
+    assert!(
+        error.message().contains("SDR video only"),
+        "{}",
+        error.message()
+    );
+}
+
+/// Apple's size limit is learned in the run, not from a table: nothing is
+/// refused up front (4K included), and once a size fell far behind, that
+/// size and larger are `size` for this renderer and mode while smaller
+/// ones are still tried.
+#[test]
+fn apples_size_limit_is_what_fell_far_behind_in_this_run() {
+    let (reason, rendering) = (RenderReason::Default, Value::Null);
+    let probe = apple_m2();
+    let at = |video, learned| Facts {
+        engine: Engine::Apple,
+        video: Some(video),
+        source_fps: Some(24.),
+        learned,
+        ..facts(&probe, &reason, &rendering)
+    };
+    // No static limit: the AMD table's 4K24 edge does not apply.
+    assert_eq!(check(&at((3840., 2160.), None), Mode::Double), Ok(()));
+    assert_eq!(check(&at((3840., 2160.), None), Mode::Display), Ok(()));
+    let learned = Learned {
+        load: 3840. * 1600. * 48.,
+        words: "3840×1600 at 24 fps".into(),
+    };
+    let error = check(&at((3840., 2160.), Some(&learned)), Mode::Double).unwrap_err();
+    assert_eq!(error.code(), "size");
+    assert!(!error.fixed());
+    assert_eq!(
+        error.message(),
+        "this video (3840×2160 at 24 fps) is too large for Apple motion smoothing on this computer: videos of about 3840×1600 at 24 fps fell far behind twice in this run; smaller videos are still tried, and choosing the mode again tries this size again"
+    );
+    assert_eq!(
+        check(&at((3840., 1600.), Some(&learned)), Mode::Double)
+            .unwrap_err()
+            .code(),
+        "size"
+    );
+    assert_eq!(
+        check(&at((1920., 1080.), Some(&learned)), Mode::Double),
+        Ok(())
+    );
+}
+
+/// A size is learned only from two far-behind playbacks of about that
+/// size with GPU rendering, never from one window, a passing slowdown, a
+/// much smaller or larger video, or AMD's and NVIDIA's (measured tables);
+/// a plugin setting the mode again forgets it.
+#[test]
+fn an_apple_size_is_learned_from_two_playbacks_far_behind_and_forgotten_on_a_retry() {
+    let _one = one_mpv_at_a_time();
+    let mpv = mpv();
+    play(&mpv, 30);
+    let mut motion = with_stand_in();
+    motion.probe[Engine::Apple] = Some(apple_m2());
+    let key = (Engine::Apple, false);
+    // Behind but not far (a passing slowdown): no strike.
+    motion.strike(&mpv, Engine::Apple, (Mode::Double, 60.), 0.15);
+    assert!(motion.strikes.is_empty());
+    // AMD and NVIDIA keep their measured tables.
+    motion.strike(&mpv, Engine::Amd, (Mode::Double, 60.), 0.4);
+    assert!(motion.strikes.is_empty());
+    // Far behind once: a strike, nothing learned.
+    motion.strike(&mpv, Engine::Apple, (Mode::Double, 60.), 0.33);
+    assert_eq!(motion.strikes[&key].len(), 1);
+    assert!(motion.learned.is_empty());
+    // Far behind again on the same playback: still one strike.
+    motion.strike(&mpv, Engine::Apple, (Mode::Double, 60.), 0.4);
+    assert_eq!(motion.strikes[&key].len(), 1);
+    assert!(motion.learned.is_empty());
+    // A much larger video on another playback is not about the same size.
+    motion.strikes.get_mut(&key).unwrap()[0].load *= 4.;
+    motion.generation = Some(2);
+    motion.strike(&mpv, Engine::Apple, (Mode::Double, 60.), 0.33);
+    assert!(motion.learned.is_empty());
+    // About the same size on a third playback: learned, the smaller load.
+    motion.generation = Some(3);
+    motion.strike(&mpv, Engine::Apple, (Mode::Double, 60.), 0.33);
+    let learned = &motion.learned[&key];
+    assert_eq!(learned.words, "320×240 at 30 fps");
+    assert_eq!(learned.load, 320. * 240. * 60.);
+    // Match Display is another limit, not learned.
+    assert!(!motion.learned.contains_key(&(Engine::Apple, true)));
+    // Only with GPU rendering: software rendering does not apply it.
+    let error = motion.check_now(&mpv, &software(), &Value::Null, Engine::Apple, Mode::Double);
+    assert_ne!(error.err().map(|e| e.code()), Some("size"));
+    // The user tries again: a plugin sets the mode, and the limit goes.
+    let (events, received) = mpsc::channel();
+    let on = command(
+        1,
+        "video.motion.set",
+        json!({"engine":"apple","mode":"double"}),
+    );
+    let mut effects = Recorded::default();
+    motion.command(&mpv, &software(), &on, &events, &mut effects);
+    assert!(reply(&received).is_ok());
+    assert!(motion.learned.is_empty());
+    assert!(motion.strikes.is_empty());
+}
+
+/// A window in which `vtfrc` said it stalled, or one with software
+/// rendering, is no strike (the apply path decides that before `strike`).
+#[test]
+fn a_stalled_window_is_marked_and_a_new_session_waits_for_ready_again() {
+    let mut motion = with_stand_in();
+    motion.applied = Some(Applied {
+        engine: Engine::Apple,
+        mode: Mode::Double,
+        large: false,
+        performance: false,
+    });
+    motion.log(
+        "vtfrc",
+        "warn",
+        "the processor has not answered for 1000 ms: frames pass through until it does",
+    );
+    assert!(motion.watch.stalled);
+    // A ready session, then a new one (another video or size): the gate
+    // applies again, the warm-up starts afresh.
+    motion.converter_ready = true;
+    motion.watch.since = Some(Instant::now());
+    motion.log(
+        "vtfrc",
+        "v",
+        "starting a session for 1280x534 nv12 (videotoolbox)",
+    );
+    assert!(!motion.converter_ready);
+    assert!(
+        motion
+            .added
+            .is_some_and(|at| at.elapsed() < Duration::from_secs(1))
+    );
+    assert!(motion.watch.since.is_none() && !motion.watch.stalled);
+}
+
+#[test]
+fn apples_converter_cannot_start_where_the_system_has_no_interpolation() {
+    let refused = "VideoToolbox frame interpolation (any) is not available on this system (regular: macOS 15.4, low-latency: macOS 26; Apple silicon)";
+    assert!(device_failure(Engine::Apple, refused, 1));
+    // A size or a video it cannot take stays per video.
+    assert!(!device_failure(
+        Engine::Apple,
+        "frame interpolation unavailable for 8192x4320: regular interpolator: not supported on this Mac",
+        5
+    ));
+    assert!(!device_failure(
+        Engine::Apple,
+        "HDR video is not supported (pq)",
+        5
+    ));
+    assert!(!device_failure(Engine::Amd, refused, 5));
+    // After mpv refused the filter, that line makes it `runtime`.
+    let mut motion = with_stand_in();
+    motion.refused[Engine::Apple] = Some("filter refused".into());
+    motion.refusing = Some(Engine::Apple);
+    motion.log("vtfrc", "error", refused);
+    assert_eq!(motion.broken[Engine::Apple].as_deref(), Some(refused));
+    assert_eq!(motion.refused[Engine::Apple], None);
+    let (reason, rendering) = (RenderReason::Default, Value::Null);
+    let probe = apple_m2();
+    let error = check(
+        &Facts {
+            engine: Engine::Apple,
+            broken: Some(refused),
+            ..facts(&probe, &reason, &rendering)
+        },
+        Mode::Double,
+    )
+    .unwrap_err();
+    assert_eq!(error.code(), "runtime");
+    assert!(error.fixed());
+    assert!(
+        error
+            .message()
+            .starts_with("Apple's frame interpolation cannot start on this Mac")
+    );
+}
+
+#[test]
+fn apples_overload_names_the_frame_interpolation_not_a_faster_search() {
+    let gpu = overload_message(Engine::Apple, true, "30.1 of 48 fps");
+    assert_eq!(
+        gpu,
+        "this computer's frame interpolation could not keep up with this video: 30.1 of 48 fps"
+    );
+    assert!(overload_message(Engine::Apple, false, "x").starts_with("rendering on the CPU"));
+    assert!(!Engine::Apple.faster_step());
+    assert!(Engine::Amd.faster_step() && Engine::Nvidia.faster_step());
+}
+
+#[test]
+fn apples_converter_lines_count_and_its_session_ready_is_heard() {
+    let mut motion = with_stand_in();
+    motion.applied = Some(Applied {
+        engine: Engine::Apple,
+        mode: Mode::Double,
+        large: false,
+        performance: false,
+    });
+    motion.log(
+        "vtfrc",
+        "v",
+        "starting a session for 1920x800 nv12 (videotoolbox)",
+    );
+    assert!(!motion.converter_ready);
+    motion.log(
+        "vtfrc",
+        "info",
+        "regular interpolator ready for 1920x800 after 410 ms",
+    );
+    assert!(motion.converter_ready);
+    motion.log("vtfrc", "error", "HDR video is not supported (pq)");
+    assert_eq!(
+        motion.last_error.as_deref(),
+        Some("HDR video is not supported (pq)")
+    );
+}
+
+/// What a test that drives the real `vtfrc` is doing now, for its watchdog.
+#[derive(Clone)]
+struct Steps(std::sync::Arc<std::sync::Mutex<(&'static str, Instant)>>);
+
+impl Steps {
+    fn new() -> Self {
+        Self(std::sync::Arc::new(std::sync::Mutex::new((
+            "start",
+            Instant::now(),
+        ))))
+    }
+    /// The next step, also on stderr directly (not captured by the test
+    /// harness, so a CI log shows it even when the test never ends).
+    fn now(&self, step: &'static str) {
+        let mut at = self
+            .0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        say(&format!(
+            "{} after {} ms: {step}",
+            at.0,
+            at.1.elapsed().as_millis()
+        ));
+        *at = (step, Instant::now());
+    }
+    fn current(&self) -> (&'static str, Duration) {
+        let at = self
+            .0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        (at.0, at.1.elapsed())
+    }
+}
+
+/// A line on stderr that the test harness does not capture.
+fn say(line: &str) {
+    use std::io::Write;
+    let _ = writeln!(std::io::stderr(), "vtfrc test: {line}");
+}
+
+/// Run a test that drives the real `vtfrc` on its own thread with a hard
+/// deadline: mpv blocked inside the filter (its core thread waiting on
+/// VideoToolbox) fails the test with the step it hung in, instead of
+/// hanging the whole test run. The thread is left behind then.
+fn with_deadline(seconds: u64, body: impl FnOnce(&Steps) + Send + 'static) {
+    let steps = Steps::new();
+    let (done, finished) = mpsc::channel();
+    let inner = steps.clone();
+    let worker = std::thread::spawn(move || {
+        body(&inner);
+        let _ = done.send(());
+    });
+    match finished.recv_timeout(Duration::from_secs(seconds)) {
+        Ok(()) => worker.join().unwrap(),
+        // The body panicked: its own message.
+        Err(mpsc::RecvTimeoutError::Disconnected) => {
+            if let Err(panic) = worker.join() {
+                std::panic::resume_unwind(panic);
+            }
+        }
+        Err(mpsc::RecvTimeoutError::Timeout) => {
+            let (step, since) = steps.current();
+            panic!(
+                "mpv did not come back for {} s in step \"{step}\" (stuck there {} ms): its core thread is blocked inside vtfrc/VideoToolbox on this machine",
+                seconds,
+                since.as_millis()
+            );
+        }
+    }
+}
+
+/// Drain mpv's events into motion's log, a bounded number at a time.
+fn feed(mpv: &Mpv, motion: &mut Motion) {
+    for _ in 0..10_000 {
+        let Some(event) = mpv.poll_event() else {
+            return;
+        };
+        if let rsmpv::Event::LogMessage(m) = &event {
+            if m.prefix == "vtfrc" && m.level != "debug" && m.level != "trace" {
+                say(&format!("[vtfrc] {}: {}", m.level, m.text.trim_end()));
+            }
+            motion.log(&m.prefix, &m.level, &m.text);
+        }
+    }
+}
+
+/// A virtual Mac (GitHub's macOS runner): the player does not offer
+/// Apple's engine there (`platform::virtual_mac`), so the tests that drive
+/// the real `vtfrc` skip, said on stderr, unless `VESTRA_VTFRC_ON_VM=1`
+/// asks to drive it all the same (to see under the deadline which step
+/// does not come back).
+fn skipped_on_a_virtual_mac() -> bool {
+    #[cfg(target_os = "macos")]
+    if crate::platform::virtual_mac() && std::env::var_os("VESTRA_VTFRC_ON_VM").is_none() {
+        say(
+            "SKIPPED: a virtual Mac, where the player does not offer Apple's engine; VESTRA_VTFRC_ON_VM=1 drives vtfrc all the same",
+        );
+        return true;
+    }
+    false
+}
+
+/// How long the real `vtfrc` may take to be ready in a test before the run
+/// is inconclusive: the regular interpolator took about 9 s for its first
+/// session on an M2.
+const TEST_READY: Duration = Duration::from_secs(20);
+
+/// Apple's `vtfrc` in this libmpv (ours, src/packaging/libmpv): in mpv's
+/// chain without copy-back, its session ready, the rate doubled, a new
+/// session for another size waited for again. A libmpv without it
+/// (Homebrew's) refuses the filter: `filter`. Where the interpolator never
+/// gets ready within [`TEST_READY`] (a virtual Mac), the doubling is
+/// inconclusive and said so on stderr, and the host's side is checked
+/// instead: the gate gives up, the fallback takes the filter out with
+/// `overload`, and off and mpv's teardown come back. Every mpv call runs
+/// under a hard deadline ([`with_deadline`]). macOS only, silent
+/// (`ao=null`, `vo=null`).
+#[test]
+fn apples_converter_doubles_in_mpv_without_copy_back() {
+    if !cfg!(target_os = "macos") || skipped_on_a_virtual_mac() {
+        return;
+    }
+    let _one = one_mpv_at_a_time();
+    with_deadline(120, |steps| {
+        steps.now("mpv starts and plays a test video");
+        let mpv = mpv();
+        mpv.request_log_messages("v").unwrap();
+        play(&mpv, 30);
+        let render = software();
+        let (events, received) = mpsc::channel();
+        let mut motion = Motion::with_probe(apple_m2);
+        motion.any_rate = false;
+        motion.input = Some(30.);
+        motion.generation = Some(1);
+        let mut effects = Recorded::default();
+        steps.now("vf add vtfrc (the filter is created: VideoToolbox's isSupported)");
+        let on = command(
+            1,
+            "video.motion.set",
+            json!({"engine":"apple","mode":"double"}),
+        );
+        assert!(motion.command(&mpv, &render, &on, &events, &mut effects));
+        let state = reply(&received).unwrap();
+        assert!(
+            effects.held.is_empty(),
+            "no copy-back for Apple: {:?}",
+            effects.held
+        );
+        if !labels(&mpv).iter().any(|l| l == LABEL) {
+            // This libmpv has no `vtfrc`.
+            assert_eq!(state["double"]["code"], "filter", "{state}");
+            say(&format!("no vtfrc in this libmpv: {state}"));
+            steps.now("mpv is destroyed");
+            drop(mpv);
+            return;
+        }
+        assert_eq!(state["active"], "double", "{state}");
+        assert_eq!(state["gpu"], "Apple M2", "{state}");
+        steps.now("playing until the session is ready and the rate doubles");
+        mpv.set_property("pause", false).unwrap();
+        let until = Instant::now() + TEST_READY;
+        let mut doubled = 0.;
+        while Instant::now() < until {
+            feed(&mpv, &mut motion);
+            motion.poll(&mpv, &render, &events, &mut effects, 1);
+            doubled = mpv.get_property::<f64>("estimated-vf-fps").unwrap_or(0.);
+            if motion.converter_ready && doubled > 55. {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        if !motion.converter_ready {
+            say(&format!(
+                "INCONCLUSIVE: vtfrc's session was not ready within {} s on this machine (output {doubled:.1} fps); the doubling is not tested here, the host's handling of a converter that never gets ready is",
+                TEST_READY.as_secs()
+            ));
+            steps.now("the gate gives up and the fallback takes the filter out");
+            motion.apple_ready = Duration::ZERO;
+            let until = Instant::now() + WARMUP + WINDOW + Duration::from_secs(4);
+            while Instant::now() < until && motion.overload.is_none() {
+                feed(&mpv, &mut motion);
+                motion.poll(&mpv, &render, &events, &mut effects, 1);
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            assert!(
+                motion.overload.is_some() || motion.failed.is_some(),
+                "a converter that never gets ready is taken out"
+            );
+            assert!(!labels(&mpv).iter().any(|l| l == LABEL));
+            steps.now("mpv is destroyed");
+            drop(mpv);
+            return;
+        }
+        assert!(doubled > 55., "30 fps doubled: {doubled}");
+        assert!(motion.failed.is_none(), "{:?}", motion.failed);
+        let state = motion.state(&mpv, &render, 1, Engine::Apple, &Value::Null);
+        assert_eq!(state["searchMode"], "native", "{state}");
+        assert_eq!(state["inChain"], true, "{state}");
+        // The next video, another size, with the filter left in the chain:
+        // vtfrc starts a new session, and the warm-up waits for it again.
+        steps.now("the next video, another size: a new session");
+        mpv.command(&["loadfile", "av://lavfi:testsrc=size=640x360:rate=30"])
+            .unwrap();
+        let until = Instant::now() + TEST_READY;
+        let (mut restarted, mut ready_again) = (false, false);
+        while Instant::now() < until && !ready_again {
+            feed(&mpv, &mut motion);
+            restarted |= !motion.converter_ready;
+            ready_again = restarted && motion.converter_ready;
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert!(restarted, "the new session put the gate back");
+        assert!(ready_again, "and its ready line opened it");
+        steps.now("vf remove (off)");
+        let off = command(
+            1,
+            "video.motion.set",
+            json!({"engine":"apple","mode":"off"}),
+        );
+        assert!(motion.command(&mpv, &render, &off, &events, &mut effects));
+        assert!(!labels(&mpv).iter().any(|l| l == LABEL));
+        assert!(effects.held.iter().all(|held| !held), "{:?}", effects.held);
+        steps.now("mpv is destroyed");
+        drop(mpv);
+        steps.now("done");
+    });
+}
+
+/// Removing `vtfrc` and destroying mpv while its session is still starting
+/// (the regular interpolator on a large video takes the longest) come back
+/// at once: the session's start runs on its own queue, and the filter only
+/// lets go of it. A libmpv without `vtfrc` skips this. Hard deadline.
+#[test]
+fn removing_vtfrc_while_its_session_starts_does_not_wait() {
+    if !cfg!(target_os = "macos") || skipped_on_a_virtual_mac() {
+        return;
+    }
+    let _one = one_mpv_at_a_time();
+    with_deadline(60, |steps| {
+        steps.now("mpv plays a 4K test video");
+        let mpv = mpv();
+        mpv.request_log_messages("v").unwrap();
+        mpv.command(&["loadfile", "av://lavfi:testsrc=size=3840x2160:rate=24"])
+            .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while video_size(&mpv).is_none() {
+            assert!(Instant::now() < deadline, "no video");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        steps.now("vf add vtfrc (regular interpolator)");
+        let added = Instant::now();
+        if mpv
+            .command(&["vf", "add", &format!("@{LABEL}:vtfrc=engine=regular")])
+            .is_err()
+        {
+            say("no vtfrc in this libmpv (or no frame interpolation here): skipped");
+            return;
+        }
+        let add_ms = added.elapsed().as_millis();
+        // The first frame starts the session.
+        let until = Instant::now() + Duration::from_secs(5);
+        let mut motion = with_stand_in();
+        let mut starting = false;
+        while Instant::now() < until && !starting {
+            while let Some(event) = mpv.poll_event() {
+                if let rsmpv::Event::LogMessage(m) = &event
+                    && m.prefix == "vtfrc"
+                {
+                    starting |= m.text.contains("starting a session for");
+                    motion.log(&m.prefix, &m.level, &m.text);
+                }
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        steps.now("vf remove while the session starts");
+        let removed = Instant::now();
+        mpv.command(&["vf", "remove", &format!("@{LABEL}")])
+            .unwrap();
+        let remove_ms = removed.elapsed().as_millis();
+        steps.now("mpv is destroyed");
+        let destroyed = Instant::now();
+        drop(mpv);
+        let destroy_ms = destroyed.elapsed().as_millis();
+        say(&format!(
+            "vf add {add_ms} ms, session started: {starting}, vf remove {remove_ms} ms, destroy {destroy_ms} ms"
+        ));
+        assert!(remove_ms < 2000, "vf remove waited {remove_ms} ms");
+        assert!(destroy_ms < 5000, "mpv's teardown waited {destroy_ms} ms");
+        steps.now("done");
+    });
+}
+
+/// A real clip through Apple's converter as the player drives it (VideoToolbox
+/// decoding, no copy-back, the fallback watching), silent and headless:
+/// `VESTRA_APPLE_CLIP=<file>` with a libmpv that has `vtfrc`
+/// (`DYLD_LIBRARY_PATH=<deps>/lib`). Reports the output rate, the ready
+/// line and whether the fallback stepped in.
+#[test]
+#[ignore = "real machine: Apple silicon, a clip and our libmpv"]
+fn apple_real_clip_through_the_converter() {
+    if !cfg!(target_os = "macos") {
+        return;
+    }
+    let Some(clip) = std::env::var_os("VESTRA_APPLE_CLIP") else {
+        diag!("VESTRA_APPLE_CLIP not set");
+        return;
+    };
+    let seconds: u64 = std::env::var("VESTRA_APPLE_SECONDS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(15);
+    let _one = one_mpv_at_a_time();
+    with_deadline(seconds + 60, move |steps| {
+        steps.now("the clip opens");
+        let mpv = mpv();
+        mpv.request_log_messages("v").unwrap();
+        mpv.set_property("hwdec", "videotoolbox").unwrap();
+        mpv.command(&["loadfile", &clip.to_string_lossy()]).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while video_size(&mpv).is_none() || source_fps(&mpv).is_none() {
+            assert!(Instant::now() < deadline, "the clip does not open");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        std::thread::sleep(Duration::from_millis(1500));
+        let render = software();
+        let (events, received) = mpsc::channel();
+        let mut motion = Motion::with_probe(apple_m2);
+        // Software rendering by itself needs twice the rate to be the
+        // display's; the converter is what is measured here.
+        motion.any_rate = true;
+        motion.generation = Some(1);
+        let mut effects = Recorded::default();
+        motion.poll(&mpv, &render, &events, &mut effects, 1);
+        let on = command(
+            1,
+            "video.motion.set",
+            json!({"engine":"apple","mode":"double"}),
+        );
+        steps.now("vf add vtfrc");
+        motion.command(&mpv, &render, &on, &events, &mut effects);
+        let state = reply(&received).unwrap();
+        diag!("apple clip: {state}");
+        steps.now("playing");
+        let until = Instant::now() + Duration::from_secs(seconds);
+        let mut samples = Vec::new();
+        while Instant::now() < until {
+            feed(&mpv, &mut motion);
+            motion.poll(&mpv, &render, &events, &mut effects, 1);
+            if motion.converter_ready {
+                samples.push(mpv.get_property::<f64>("estimated-vf-fps").unwrap_or(0.));
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        let state = motion.state(&mpv, &render, 1, Engine::Apple, &Value::Null);
+        let tail = &samples[samples.len().saturating_sub(50)..];
+        let mean = tail.iter().sum::<f64>() / tail.len().max(1) as f64;
+        diag!(
+            "apple clip: {:?} hwdec {:?}, input {:?}, output mean of the last 5 s {mean:.1}, held {:?}, overload {:?}, learned {:?}, state {state}",
+            video_size(&mpv),
+            mpv.get_property::<String>("hwdec-current").ok(),
+            motion.input,
+            effects.held,
+            motion.overload,
+            motion.learned
+        );
+        steps.now("mpv is destroyed");
+        drop(mpv);
+    });
+}
+
+/// A converter of Apple's that never says it is ready (a session start the
+/// system never answers) is not left waiting: until `apple_ready` its
+/// output is not judged, after it the frames it passes through are judged
+/// as any other output, and the fallback takes the filter out with
+/// `overload`. A stand-in filter that passes the frames through plays the
+/// never-ready `vtfrc`.
+#[test]
+fn an_apple_converter_that_never_gets_ready_is_taken_out_after_the_gate() {
+    let _one = one_mpv_at_a_time();
+    let mpv = mpv();
+    play(&mpv, 30);
+    let render = software();
+    let (events, received) = mpsc::channel();
+    let mut motion = Motion::with_probe(apple_m2);
+    motion.filter = stand_in;
+    motion.any_rate = false;
+    motion.input = Some(30.);
+    motion.generation = Some(1);
+    let mut effects = Recorded::default();
+    let on = command(
+        1,
+        "video.motion.set",
+        json!({"engine":"apple","mode":"double"}),
+    );
+    assert!(motion.command(&mpv, &render, &on, &events, &mut effects));
+    assert_eq!(reply(&received).unwrap()["active"], "double");
+    mpv.set_property("pause", false).unwrap();
+    let run = |motion: &mut Motion, effects: &mut Recorded, seconds: u64| {
+        let until = Instant::now() + Duration::from_secs(seconds);
+        while Instant::now() < until && motion.overload.is_none() {
+            motion.checked = None;
+            motion.poll(&mpv, &render, &events, effects, 1);
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    };
+    // Within the gate: nothing judged, although the output is half.
+    motion.apple_ready = Duration::from_secs(3600);
+    run(&mut motion, &mut effects, (WARMUP + WINDOW).as_secs() + 2);
+    assert!(motion.overload.is_none(), "{:?}", motion.overload);
+    assert!(labels(&mpv).iter().any(|l| l == LABEL));
+    // The gate given up: judged, and out with `overload`.
+    motion.apple_ready = Duration::ZERO;
+    run(&mut motion, &mut effects, (WARMUP + WINDOW).as_secs() + 4);
+    let overload = motion.overload.clone().expect("taken out");
+    assert!(overload.contains("could not keep up"), "{overload}");
+    assert!(!labels(&mpv).iter().any(|l| l == LABEL));
+    // Software rendering here: no strike, nothing learned.
+    assert!(motion.strikes.is_empty() && motion.learned.is_empty());
+}
+
+/// The watchdog of the real-`vtfrc` tests fails with the step it hung in.
+#[test]
+#[should_panic(expected = "in step \"waiting forever\"")]
+fn the_vtfrc_watchdog_names_the_step_it_hung_in() {
+    with_deadline(1, |steps| {
+        steps.now("waiting forever");
+        std::thread::sleep(Duration::from_secs(3));
+    });
 }

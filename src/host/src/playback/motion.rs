@@ -4,15 +4,20 @@
 //! converter, real in-between frames rather than blends. Per vendor
 //! ([`Engine`]): `amd` is AMD AMF's `frc_amf`, `nvidia` FFmpeg's
 //! `fruc_vulkan` (NVIDIA's optical flow hardware through Vulkan, RTX 30 and
-//! newer). One converter is in the chain at a time: the engine asked for
-//! first holds it while some plugin asks for it, and the other engine's
-//! requests wait (`other-engine`, with a message that names the engine). Built like video upscaling
+//! newer), both on Windows; `apple` is our libmpv's `vtfrc` (Apple's
+//! VideoToolbox frame interpolation, `VTFrameProcessor`, on macOS 15.4+
+//! with Apple silicon; src/packaging/libmpv). One converter is in the chain
+//! at a time: the engine asked for first holds it while some plugin asks
+//! for it, and the other engines' requests wait (`other-engine`, with a
+//! message that names the engine). Built like video upscaling
 //! (`upscaling.rs`); the measurements are in the same section.
 //!
 //! - **Availability** ([`check`], [`Reason`]). The system's check per
 //!   engine (`platform::motion_probe`: on Windows an AMD GPU and AMD's AMF
 //!   runtime, or an NVIDIA RTX 30+ GPU with a driver of 573.38 or newer; no
-//!   device is created and nothing of Vulkan is loaded) runs once, when a
+//!   device is created and nothing of Vulkan is loaded; on macOS Apple
+//!   silicon and macOS 15.4 or newer, from `sysctl` and NSProcessInfo; an
+//!   engine its system lacks is `platform`) runs once, when a
 //!   plugin first asks for that engine. The filter itself (mpv's libmpv must
 //!   have FFmpeg's `frc_amf` or `fruc_vulkan`) shows when it goes in:
 //!   refused by mpv, it is `filter` for the rest of the run. NVIDIA's
@@ -32,7 +37,8 @@
 //!   With software rendering, `double` only where twice the rate is the
 //!   display's (30 fps on 60 Hz): other rates would judder and the software
 //!   renderer cannot resample.
-//! - **Frames in memory.** The converter fails on Direct3D 11 frames
+//! - **Frames in memory** (AMD, NVIDIA; Apple's `vtfrc` takes VideoToolbox
+//!   frames zero-copy, so its decoding is left as it is). The converter fails on Direct3D 11 frames
 //!   (`AMFFRC->Init() failed with error 4`), so while the filter is in the
 //!   chain the decoding uses copy-back (`Processing::hold_frames_in_memory`,
 //!   switched first, undone after the filter went). The filter goes in only
@@ -45,8 +51,13 @@
 //!   frames (`frame-drop-count`, `decoder-frame-drop-count`) are compared to
 //!   the doubled rate. Behind once: the faster motion search (AMD:
 //!   `mv_search_mode=performance`; NVIDIA: `perf=fast`, which above 1440p
-//!   it already uses, so there it goes straight on); behind again:
-//!   the filter goes for this video, with an `overload` reason. mpv
+//!   it already uses, so there it goes straight on; Apple has no faster
+//!   setting, so it goes straight to `overload`); behind again:
+//!   the filter goes for this video, with an `overload` reason. Apple's
+//!   converter is judged only once it says its session is ready (it passes
+//!   frames through until then, and again after each new session it starts;
+//!   [`APPLE_READY`]), and `overload`s far behind on two playbacks of about
+//!   the same size become this Mac's size limit ([`Learned`]). mpv
 //!   disabling the filter (its log line) takes it out with `failed` and the
 //!   converter's own error; a converter that cannot start on this system
 //!   ([`device_failure`]) is `runtime` for the rest of the run.
@@ -72,30 +83,34 @@ const RERATE: f64 = 1.1;
 
 /// The filter's label in mpv's chain.
 pub const LABEL: &str = "vestra-motion";
-/// The engines (`MotionEngine` in the API): AMD AMF's converter and
-/// NVIDIA's (FFmpeg's `fruc_vulkan`).
+/// The engines (`MotionEngine` in the API): AMD AMF's converter,
+/// NVIDIA's (FFmpeg's `fruc_vulkan`) and Apple's (`vtfrc`).
 pub const AMD: &str = "amd";
 pub const NVIDIA: &str = "nvidia";
+pub const APPLE: &str = "apple";
 
 /// A vendor's frame-rate converter: `MotionEngine` in the API.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Engine {
     Amd,
     Nvidia,
+    Apple,
 }
 
 impl Engine {
-    pub const ALL: [Self; 2] = [Self::Amd, Self::Nvidia];
+    pub const ALL: [Self; 3] = [Self::Amd, Self::Nvidia, Self::Apple];
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Amd => AMD,
             Self::Nvidia => NVIDIA,
+            Self::Apple => APPLE,
         }
     }
     pub fn from_name(text: &str) -> Option<Self> {
         match text {
             AMD => Some(Self::Amd),
             NVIDIA => Some(Self::Nvidia),
+            APPLE => Some(Self::Apple),
             _ => None,
         }
     }
@@ -104,14 +119,37 @@ impl Engine {
         match self {
             Self::Amd => "AMD",
             Self::Nvidia => "NVIDIA",
+            Self::Apple => "Apple",
         }
     }
-    /// The vendor's converter in FFmpeg, for the messages.
+    /// The vendor's converter in libmpv (FFmpeg's, or our mpv's `vtfrc`),
+    /// for the messages.
     fn converter(self) -> &'static str {
         match self {
             Self::Amd => "frc_amf",
             Self::Nvidia => "fruc_vulkan",
+            Self::Apple => "vtfrc",
         }
+    }
+    /// The converter takes frames in memory, so the decoding copies them
+    /// back while it is in the chain (AMD, NVIDIA). Apple's takes
+    /// VideoToolbox frames as they are (and frames in memory too), so the
+    /// decoding stays as it is.
+    fn frames_in_memory(self) -> bool {
+        !matches!(self, Self::Apple)
+    }
+    /// The converter has a faster setting to fall back to before
+    /// `overload` (AMD's downscaled motion search, NVIDIA's fast optical
+    /// flow). Apple's has none below `quality=normal`, which it uses
+    /// already (measured 2026-11-28: nothing faster to ask the system for).
+    fn faster_step(self) -> bool {
+        !matches!(self, Self::Apple)
+    }
+    /// The size rule is learned in the run rather than measured beforehand
+    /// ([`Learned`]): Apple's converter runs on the Mac's own chip, whose
+    /// speed differs from Mac to Mac.
+    fn learns_size(self) -> bool {
+        matches!(self, Self::Apple)
     }
     fn at(self) -> usize {
         self as usize
@@ -120,7 +158,7 @@ impl Engine {
 
 /// One value per engine.
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct PerEngine<T>([T; 2]);
+pub struct PerEngine<T>([T; 3]);
 
 impl<T> std::ops::Index<Engine> for PerEngine<T> {
     type Output = T;
@@ -341,7 +379,73 @@ pub struct Facts<'a> {
     /// The video's storage size (`video-params/w`, `h`); `None` while
     /// unknown.
     pub video: Option<(f64, f64)>,
+    /// What this engine could not keep up with in this run with GPU
+    /// rendering, for this mode (engines that learn their size limit,
+    /// [`Learned`]); `None` with software rendering.
+    pub learned: Option<&'a Learned>,
 }
+
+/// A size this engine fell far behind on in this run, for one mode with GPU
+/// rendering: a video as large or larger (width × height × the frames a
+/// second drawn) is `size` up front, a smaller one is still tried. Apple's
+/// converter learns its limit this way rather than from a table: it runs
+/// on the Mac's own chip, and a limit measured on one Mac would refuse what
+/// a faster one keeps up with. Measured 2026-11-28 on an M2 (A1, 60 s each,
+/// real files): 1280×534 → low-latency, 9 ms a pair, no drop; 1920×800 →
+/// regular, 35–36 ms (41.7 ms is 24 fps), no drop; 3840×1600 113–122 ms a
+/// pair, far behind (in the player's loop headless: 40.8 of 48 frames a
+/// second, the converter passing frames through while it stalls, and 34
+/// frames dropped in 4 s: a third of the frames lost).
+///
+/// 1080p on the M2 has only about 14 % headroom, and a fanless Mac that
+/// throttles, memory swapping or another app on the GPU can push one
+/// window far behind, so one such window never decides it. A size is
+/// learned only from [`Strike`]s, `overload`s far behind ([`FAR_BEHIND`])
+/// in a window without a stall of the converter (its "has not answered"
+/// warning), with GPU rendering (software rendering's overload is the CPU
+/// drawing, not the converter), on two playbacks (two sources opened) of
+/// about the same size ([`SAME_SIZE`]); the limit is the smaller of the two.
+/// It holds until a plugin sets a mode of this engine again (the user
+/// retrying) or the player restarts. Every other `overload` is for that
+/// video only.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Learned {
+    /// Width × height × frames a second drawn of the video that fell behind.
+    pub load: f64,
+    /// That video, said: `3840×1600 at 24 fps`.
+    pub words: String,
+}
+
+/// Above this share of the doubled frames lost (the output's shortfall plus
+/// the frames dropped, each as a share of the doubled rate) an `overload`
+/// is far behind: the size is learned ([`Learned`]). 4K on the M2 lost
+/// about a third (15 % short, 18 % dropped); the fallback's own bar is 10 %
+/// short or 5 % dropped, so a video near the edge or a passing slowdown
+/// stays `overload` for that video only.
+pub const FAR_BEHIND: f64 = 0.25;
+
+/// Two strikes are of about the same size when the larger load is at most
+/// this many times the smaller (1080p and 1200p are; 1080p and 4K are not).
+pub const SAME_SIZE: f64 = 1.5;
+
+/// One `overload` far behind that counts towards a [`Learned`] size: the
+/// playback (source generation) it happened on and its load.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Strike {
+    pub generation: u64,
+    pub load: f64,
+    pub words: String,
+}
+
+/// How long Apple's converter may take to say its session is ready
+/// (`… interpolator ready for …`) before its output is judged all the same:
+/// it passes frames through until then (0.35–0.65 s measured, the first
+/// session after a restart of the Mac several seconds). A converter that
+/// never gets ready (a session start the system never answers, as on a
+/// virtual Mac) is judged all the same once this has passed: passing
+/// frames through is half the doubled rate, so the fallback takes the
+/// filter out with `overload` instead of leaving it waiting.
+pub const APPLE_READY: Duration = Duration::from_secs(15);
 
 /// First failure wins: the system's check, the filter, the renderer (Match
 /// Display), AI upscaling, this video's failure, the rate. `Off` always
@@ -366,6 +470,9 @@ pub fn check(facts: &Facts<'_>, mode: Mode) -> Result<(), Reason> {
                 ),
                 Engine::Nvidia => format!(
                     "NVIDIA's frame-rate converter cannot start on this system ({error}); it needs the NVIDIA driver's Vulkan support (573.38 or newer) on an RTX 30 or newer GPU, and is not tried again until the player restarts"
+                ),
+                Engine::Apple => format!(
+                    "Apple's frame interpolation cannot start on this Mac ({error}); it needs Apple silicon and macOS 15.4 or newer, and is not tried again until the player restarts"
                 ),
             },
         });
@@ -406,9 +513,14 @@ pub fn check(facts: &Facts<'_>, mode: Mode) -> Result<(), Reason> {
     }
     rate(facts, mode)?;
     if let Some(format) = &facts.format {
-        return Err(Reason::Format(format!(
-            "this video is {format}; motion smoothing is offered for 8-bit SDR video, the formats measured"
-        )));
+        return Err(Reason::Format(match facts.engine {
+            Engine::Apple => {
+                format!("this video is {format}; Apple's frame interpolation takes SDR video only")
+            }
+            Engine::Amd | Engine::Nvidia => format!(
+                "this video is {format}; motion smoothing is offered for 8-bit SDR video, the formats measured"
+            ),
+        }));
     }
     size(facts, mode)
 }
@@ -450,29 +562,57 @@ fn size(facts: &Facts<'_>, mode: Mode) -> Result<(), Reason> {
     let (Some((width, height)), Some(fps)) = (facts.video, facts.source_fps) else {
         return Ok(());
     };
+    if facts.engine.learns_size() {
+        let Some(learned) = facts.learned else {
+            return Ok(());
+        };
+        if width * height * drawn(facts, mode, fps) < learned.load {
+            return Ok(());
+        }
+        return Err(Reason::Size(format!(
+            "this video ({}) is too large for {} motion smoothing on this computer: videos of about {} fell far behind twice in this run; smaller videos are still tried, and choosing the mode again tries this size again",
+            said(width, height, fps),
+            facts.engine.vendor(),
+            learned.words
+        )));
+    }
     let (limit, words, renderer) = match (facts.gpu_now, mode) {
         (false, _) => (SOFTWARE_LIMIT.0, SOFTWARE_LIMIT.1, "software rendering"),
         (true, Mode::Display) => (GPU_DISPLAY_LIMIT.0, GPU_DISPLAY_LIMIT.1, "Match Display"),
         (true, _) => (GPU_DOUBLE_LIMIT.0, GPU_DOUBLE_LIMIT.1, "GPU rendering"),
     };
     let (limit, words) = match facts.engine {
-        Engine::Amd => (limit, words),
         Engine::Nvidia => NVIDIA_LIMIT,
+        Engine::Amd | Engine::Apple => (limit, words),
     };
-    let drawn = if facts.gpu_now && mode == Mode::Display {
-        facts.display_fps
-    } else {
-        fps * 2.
-    };
-    if width * height * drawn <= limit {
+    if width * height * drawn(facts, mode, fps) <= limit {
         return Ok(());
     }
     Err(Reason::Size(format!(
-        "this video ({}×{} at {} fps) is too large for motion smoothing with {renderer}; it works up to {words}",
+        "this video ({}) is too large for motion smoothing with {renderer}; it works up to {words}",
+        said(width, height, fps)
+    )))
+}
+
+/// The frames a second the renderer draws with this mode: the doubled rate,
+/// or with Match Display the display's refresh rate, which it interpolates
+/// to.
+fn drawn(facts: &Facts<'_>, mode: Mode, fps: f64) -> f64 {
+    if facts.gpu_now && mode == Mode::Display {
+        facts.display_fps
+    } else {
+        fps * 2.
+    }
+}
+
+/// A video's size and rate for people: `1920×1080 at 24 fps`.
+fn said(width: f64, height: f64, fps: f64) -> String {
+    format!(
+        "{}×{} at {} fps",
         number(width),
         number(height),
         number(fps)
-    )))
+    )
 }
 
 /// The video's storage size (`video-params/w`, `h`), when mpv knows it.
@@ -563,6 +703,9 @@ struct Watch {
     window: Option<(Instant, i64)>,
     /// `estimated-vf-fps` at each look in the window.
     samples: Vec<f64>,
+    /// The converter said it stalled in this window (Apple's `vtfrc`: "the
+    /// processor has not answered"): such a window is not a [`Strike`].
+    stalled: bool,
 }
 
 /// The control worker's motion smoothing: who asked for what, the system's
@@ -631,6 +774,18 @@ pub struct Motion {
     /// of the run; [`device_failure`]).
     failures: BTreeMap<(Engine, String), u32>,
     broken: PerEngine<Option<String>>,
+    /// What each engine that learns its size limit fell far behind on with
+    /// GPU rendering, by mode (Match Display or not): [`Learned`], from the
+    /// [`Strike`]s so far.
+    learned: BTreeMap<(Engine, bool), Learned>,
+    strikes: BTreeMap<(Engine, bool), Vec<Strike>>,
+    /// When the filter went in, and whether its converter said its session
+    /// is ready (Apple's; the others are judged from the warm-up on).
+    added: Option<Instant>,
+    converter_ready: bool,
+    /// How long Apple's converter may take to be ready ([`APPLE_READY`];
+    /// tests shorten it).
+    apple_ready: Duration,
     /// The renderer's publish gate (`follow_gate`; none: always open).
     gate: Option<Arc<AtomicBool>>,
     /// The gate as the last look saw it: a change is looked at at once.
@@ -642,24 +797,29 @@ impl Default for Motion {
         Self::with_probes(
             || platform::motion_probe(Engine::Amd),
             || platform::motion_probe(Engine::Nvidia),
+            || platform::motion_probe(Engine::Apple),
         )
     }
 }
 
 impl Motion {
-    /// With another system check, the same for both engines (tests).
+    /// With another system check, the same for every engine (tests).
     #[cfg(test)]
     pub fn with_probe(run_probe: fn() -> MotionProbe) -> Self {
-        Self::with_probes(run_probe, run_probe)
+        Self::with_probes(run_probe, run_probe, run_probe)
     }
 
-    /// With other system checks (AMD's, NVIDIA's).
-    pub fn with_probes(amd: fn() -> MotionProbe, nvidia: fn() -> MotionProbe) -> Self {
+    /// With other system checks (AMD's, NVIDIA's, Apple's).
+    pub fn with_probes(
+        amd: fn() -> MotionProbe,
+        nvidia: fn() -> MotionProbe,
+        apple: fn() -> MotionProbe,
+    ) -> Self {
         Self {
             owners: BTreeMap::new(),
             holder: None,
             probe: PerEngine::default(),
-            run_probe: PerEngine([amd, nvidia]),
+            run_probe: PerEngine([amd, nvidia, apple]),
             filter: platform::motion_filter,
             applied: None,
             refused: PerEngine::default(),
@@ -684,6 +844,11 @@ impl Motion {
             doubling: false,
             failures: BTreeMap::new(),
             broken: PerEngine::default(),
+            learned: BTreeMap::new(),
+            strikes: BTreeMap::new(),
+            added: None,
+            converter_ready: false,
+            apple_ready: APPLE_READY,
             gate: None,
             gate_seen: true,
         }
@@ -768,7 +933,9 @@ impl Motion {
                     .and_then(Engine::from_name)
                     .is_none() =>
             {
-                let result = Err(RpcError::invalid(r#"engine must be "amd" or "nvidia""#));
+                let result = Err(RpcError::invalid(
+                    r#"engine must be "amd", "nvidia" or "apple""#,
+                ));
                 let _ = events.send(Event::Reply(command.reply.clone(), result));
                 true
             }
@@ -821,6 +988,7 @@ impl Motion {
                     format!("motion smoothing cannot work here: {}", reason.message()),
                 ));
             }
+            self.forget(engine);
             self.owners.insert(owner, (engine, mode));
         }
         self.update(mpv, render, effects, Instant::now());
@@ -894,13 +1062,17 @@ impl Motion {
     /// One of mpv's log lines (every line the worker gets): while the
     /// filter is in the chain, mpv disabling it (`Disabling filter
     /// vestra-motion because it has failed.`) and the converter's error
-    /// before it (`AMFFRC->Init() failed with error 4`). Cheap for every
+    /// before it (`AMFFRC->Init() failed with error 4`; Apple's `vtfrc`
+    /// logs under its own name), and Apple's session ready (`regular
+    /// interpolator ready for 1920x800 after 410 ms`). Cheap for every
     /// other line.
     pub fn log(&mut self, prefix: &str, level: &str, text: &str) {
         // NVIDIA's converter creates its Vulkan device when the filter is
         // created, so a device that cannot be had makes mpv refuse the
         // `vf add`; its reason comes after, in this line: `runtime`
-        // rather than `filter` (this player has the converter).
+        // rather than `filter` (this player has the converter). Apple's
+        // refuses to be created where the system has no frame
+        // interpolation, the same way.
         if let Some(engine) = self.refusing
             && matches!(level, "error" | "fatal")
             && device_failure(engine, text, 1)
@@ -919,12 +1091,26 @@ impl Motion {
         if self.applied.is_none() {
             return;
         }
-        if prefix == "vf" && text.contains("Disabling filter") && text.contains(LABEL) {
+        let vtfrc = prefix == Engine::Apple.converter();
+        if vtfrc && text.contains("starting a session for") {
+            // A new session (the first frame, a new video, another size or
+            // format): frames pass through until it is ready, so the
+            // warm-up waits for it again.
+            self.converter_ready = false;
+            self.added = Some(Instant::now());
+            self.watch = Watch::default();
+        } else if vtfrc && level == "info" && text.contains("interpolator ready for") {
+            diag!("motion: {}", text.trim());
+            self.converter_ready = true;
+        } else if vtfrc && text.contains("has not answered") {
+            self.watch.stalled = true;
+            diag!("motion: {}", text.trim());
+        } else if prefix == "vf" && text.contains("Disabling filter") && text.contains(LABEL) {
             self.disabled = true;
             // Looked at at once.
             self.checked = None;
         } else if matches!(level, "error" | "fatal" | "warn")
-            && (prefix.starts_with("ffmpeg") || prefix == "lavfi")
+            && (prefix.starts_with("ffmpeg") || prefix == "lavfi" || vtfrc)
             && !ffmpeg_noise(text)
         {
             // The converter's own line comes before the graph's summary:
@@ -1030,6 +1216,7 @@ impl Motion {
             return Ok(());
         };
         let (gpu_now, render_reason) = render.now();
+        let gpu_now = gpu_now && render.gpu().is_some();
         // This video's failure and fallback are the converter's that ran on
         // it.
         let this_video = self.video_engine.is_none_or(|e| e == engine);
@@ -1040,13 +1227,13 @@ impl Motion {
                 has_filter: (self.filter)(engine, false, false).is_some(),
                 other: self.holder.filter(|holder| *holder != engine),
                 refused: self.refused[engine].as_deref(),
-                gpu_now: gpu_now && render.gpu().is_some(),
+                gpu_now,
                 render_reason: &render_reason,
                 rendering,
                 upscaling: self.upscaling,
                 doubling: self.doubling,
                 broken: self.broken[engine].as_deref(),
-                format: unmeasured_format(mpv),
+                format: unmeasured_format(mpv, engine),
                 failed: self.failed.as_deref().filter(|_| this_video),
                 overload: self.overload.as_deref().filter(|_| this_video),
                 source_fps: self.rate_in(mpv),
@@ -1054,6 +1241,9 @@ impl Motion {
                 any_rate: self.any_rate,
                 any_size: self.any_size,
                 video: video_size(mpv),
+                learned: gpu_now
+                    .then(|| self.learned.get(&(engine, mode == Mode::Display)))
+                    .flatten(),
             },
             mode,
         )
@@ -1287,9 +1477,11 @@ impl Motion {
             // own thread, and a Direct3D 11 frame reaching the converter
             // before it fails the graph (measured in the player: "failed to
             // configure the filter graph" right after the switch). Looked at
-            // again at the next turn.
-            self.hold(effects, true);
-            if self.applied.is_none() && !frames_ready(mpv) {
+            // again at the next turn. Apple's converter takes the frames as
+            // they are decoded.
+            let in_memory = engine.frames_in_memory();
+            self.hold(effects, in_memory);
+            if in_memory && self.applied.is_none() && !frames_ready(mpv) {
                 // Again in 50 ms (not at once: the worker would spin).
                 self.checked = now.checked_sub(CHECK_EVERY - READY_EVERY);
                 if !self.waiting {
@@ -1311,14 +1503,18 @@ impl Motion {
             self.keep_last(mpv, effects, next);
         }
         self.resample(effects, (mode == Mode::Display).then(|| render.refresh()));
-        if let Some(behind) = self.watch(mpv, now) {
+        if let Some((behind, lost, stalled)) = self.watch(mpv, now) {
             self.watch = Watch::default();
-            if self.performance {
+            if self.performance || !engine.faster_step() {
                 diag!(
-                    "motion: still behind with the faster motion search ({behind}); off for this video"
+                    "motion: still behind with the {} converter's fastest setting ({behind}); off for this video",
+                    engine.as_str()
                 );
                 let gpu_rendering = render.now().0 && render.gpu().is_some();
-                self.overload = Some(overload_message(gpu_rendering, &behind));
+                self.overload = Some(overload_message(engine, gpu_rendering, &behind));
+                if gpu_rendering && !stalled {
+                    self.strike(mpv, engine, (mode, render.refresh()), lost);
+                }
                 self.remove(mpv, effects);
             } else {
                 diag!("motion: behind ({behind}); the faster motion search");
@@ -1329,13 +1525,23 @@ impl Motion {
         }
     }
 
-    /// The output since the warm-up: `Some(what)` when a full window was
-    /// behind the doubled rate or dropped too many frames.
-    fn watch(&mut self, mpv: &Mpv, now: Instant) -> Option<String> {
+    /// The output since the warm-up: `Some((what, lost, stalled))` when a
+    /// full window was behind the doubled rate or dropped too many frames,
+    /// with the share of the doubled frames lost ([`FAR_BEHIND`]) and
+    /// whether the converter stalled in it.
+    fn watch(&mut self, mpv: &Mpv, now: Instant) -> Option<(String, f64, bool)> {
         let flag = |name: &str| mpv.get_property::<bool>(name).unwrap_or(false);
         let playing = !flag("core-idle") && !flag("seeking") && !flag("pause");
         let fps = self.rate_in(mpv);
-        let (true, Some(fps)) = (playing, fps) else {
+        // Apple's converter passes frames through until its session is
+        // ready: the warm-up starts then (or after `APPLE_READY` all the
+        // same).
+        let starting = self.applied.is_some_and(|a| a.engine == Engine::Apple)
+            && !self.converter_ready
+            && self
+                .added
+                .is_some_and(|at| now.saturating_duration_since(at) < self.apple_ready);
+        let (true, false, Some(fps)) = (playing, starting, fps) else {
             self.watch = Watch::default();
             return None;
         };
@@ -1350,6 +1556,7 @@ impl Motion {
         let Some((start, base)) = self.watch.window else {
             self.watch.window = Some((now, dropped));
             self.watch.samples.clear();
+            self.watch.stalled = false;
             return None;
         };
         if let Ok(output) = mpv.get_property::<f64>("estimated-vf-fps")
@@ -1363,7 +1570,84 @@ impl Motion {
         }
         self.watch.window = Some((now, dropped));
         let samples = std::mem::take(&mut self.watch.samples);
-        judge(fps * 2., &samples, (dropped - base).max(0), seconds)
+        let stalled = std::mem::take(&mut self.watch.stalled);
+        let (target, dropped) = (fps * 2., (dropped - base).max(0));
+        let mean = samples.iter().sum::<f64>() / samples.len().max(1) as f64;
+        let lost = (1. - mean / target).max(0.) + dropped as f64 / (target * seconds);
+        judge(target, &samples, dropped, seconds).map(|behind| (behind, lost, stalled))
+    }
+
+    /// An `overload` far behind ([`FAR_BEHIND`]) with GPU rendering and no
+    /// stall in its window, on an engine that learns its size limit: a
+    /// [`Strike`] for this mode. A second one on another playback of about
+    /// the same size ([`SAME_SIZE`]) makes the smaller load the limit
+    /// ([`Learned`]; the lowest one learned stays).
+    fn strike(&mut self, mpv: &Mpv, engine: Engine, (mode, refresh): (Mode, f64), lost: f64) {
+        if !engine.learns_size() || lost <= FAR_BEHIND {
+            return;
+        }
+        let (Some((width, height)), Some(fps), Some(generation)) =
+            (video_size(mpv), self.rate_in(mpv), self.generation)
+        else {
+            return;
+        };
+        let display = mode == Mode::Display;
+        let load = width * height * if display { refresh } else { fps * 2. };
+        let words = said(width, height, fps);
+        let key = (engine, display);
+        let strikes = self.strikes.entry(key).or_default();
+        let pair = strikes
+            .iter()
+            .filter(|other| other.generation != generation)
+            .filter(|other| other.load.max(load) <= other.load.min(load) * SAME_SIZE)
+            .map(|other| {
+                if other.load <= load {
+                    (other.load, other.words.clone())
+                } else {
+                    (load, words.clone())
+                }
+            })
+            .min_by(|a, b| a.0.total_cmp(&b.0));
+        // One strike per playback: its latest.
+        strikes.retain(|other| other.generation != generation);
+        strikes.push(Strike {
+            generation,
+            load,
+            words: words.clone(),
+        });
+        let Some((limit, limit_words)) = pair else {
+            diag!(
+                "motion: {words} fell far behind on the {} converter ({:.0} % of the frames lost); a second playback of about this size makes it this computer's limit",
+                engine.as_str(),
+                lost * 100.
+            );
+            return;
+        };
+        if self
+            .learned
+            .get(&key)
+            .is_some_and(|known| known.load <= limit)
+        {
+            return;
+        }
+        diag!(
+            "motion: {limit_words} and larger are too large for the {} converter on this computer (far behind on two playbacks); not tried again until a plugin sets the mode again",
+            engine.as_str()
+        );
+        self.learned.insert(
+            key,
+            Learned {
+                load: limit,
+                words: limit_words,
+            },
+        );
+    }
+
+    /// A plugin set a mode of this engine (the user trying again): what was
+    /// learned about its size limit goes.
+    fn forget(&mut self, engine: Engine) {
+        self.learned.retain(|(e, _), _| *e != engine);
+        self.strikes.retain(|(e, _), _| *e != engine);
     }
 
     /// Put the filter in the chain: in place when it is there (`vf add`
@@ -1378,6 +1662,8 @@ impl Motion {
         match mpv.command(&["vf", "add", &format!("@{LABEL}:{filter}")]) {
             Ok(()) => {
                 diag!("motion: {filter} ({})", next.mode.as_str());
+                self.added = Some(Instant::now());
+                self.converter_ready = false;
                 self.applied = Some(next);
                 self.move_last(mpv, &filter);
                 true
@@ -1470,7 +1756,8 @@ fn ffmpeg_noise(text: &str) -> bool {
         || text.contains("This is a bug in one of FFmpeg libraries used")
 }
 
-/// The engine a request names (checked before: `amd` or `nvidia`).
+/// The engine a request names (checked before: `amd`, `nvidia` or
+/// `apple`).
 fn engine_of(params: &Value) -> Engine {
     params["engine"]
         .as_str()
@@ -1517,17 +1804,24 @@ fn frames_ready(mpv: &Mpv) -> bool {
         }
 }
 
-/// The video's format when it is one motion smoothing was not measured on:
-/// 10-bit (or deeper) or HDR (PQ, HLG), said for the reason; `None` for
-/// 8-bit SDR video or while unknown.
-fn unmeasured_format(mpv: &Mpv) -> Option<String> {
+/// The video's format when it is one this engine's converter was not
+/// measured on or does not take: HDR (PQ, HLG) for every engine (Apple's
+/// `vtfrc` fails on it), and 10-bit or deeper for AMD and NVIDIA (Apple's
+/// takes 10-bit SDR, P010); said for the reason; `None` for the rest or
+/// while unknown.
+fn unmeasured_format(mpv: &Mpv, engine: Engine) -> Option<String> {
     let text = |name: &str| mpv.get_property::<String>(name).unwrap_or_default();
     let hdr = matches!(text("video-params/gamma").as_str(), "pq" | "hlg");
     let depth = stream_depth(
         &text("video-params/pixelformat"),
         &text("video-params/hw-pixelformat"),
     );
-    match (depth > 8, hdr) {
+    format_reason(engine, depth, hdr)
+}
+
+/// [`unmeasured_format`]'s rule, from the bits per component and HDR.
+pub fn format_reason(engine: Engine, depth: u32, hdr: bool) -> Option<String> {
+    match (depth > 8 && engine != Engine::Apple, hdr) {
         (_, true) => Some("HDR".into()),
         (true, false) => Some(format!("{depth}-bit")),
         _ => None,
@@ -1563,9 +1857,13 @@ pub fn bit_depth(format: &str) -> u32 {
 /// With software rendering that is the player's CPU copying and drawing
 /// them, not the converter (measured 2026-11-23, NVIDIA 4K30 → 60: 300–500
 /// frames dropped in 20 s with the GPU 25–40 % busy), so it names that and
-/// what helps; with GPU rendering it is the GPU. The same for either engine.
-pub fn overload_message(gpu_rendering: bool, behind: &str) -> String {
-    if gpu_rendering {
+/// what helps; with GPU rendering it is the converter's GPU (AMD, NVIDIA,
+/// after the faster motion search) or the Mac's frame interpolation (Apple,
+/// which has no faster setting).
+pub fn overload_message(engine: Engine, gpu_rendering: bool, behind: &str) -> String {
+    if gpu_rendering && !engine.faster_step() {
+        format!("this computer's frame interpolation could not keep up with this video: {behind}")
+    } else if gpu_rendering {
         format!(
             "the GPU could not keep up with this video, even with the faster motion search: {behind}"
         )
@@ -1594,6 +1892,15 @@ pub fn overload_message(gpu_rendering: bool, behind: &str) -> String {
 /// installed or updated, a restart of the player tries again.
 pub fn device_failure(engine: Engine, error: &str, count: u32) -> bool {
     match engine {
+        // `vtfrc` refuses to be created where the system has no frame
+        // interpolation (`VTFrameRateConversionConfiguration.isSupported`
+        // and the low-latency one are false): not a matter of the video.
+        // A size the system cannot interpolate (`frame interpolation
+        // unavailable for WxH`) or an HDR video stays per video.
+        Engine::Apple => {
+            error.contains("frame interpolation")
+                && error.contains("is not available on this system")
+        }
         Engine::Amd => count >= 2 && error.contains("AMFFRC->Init() failed"),
         Engine::Nvidia => [
             "could not create hwdevice",

@@ -529,7 +529,7 @@ const enabledOf = new WeakMap();
 /** The modes `VideoMotion.set` accepts. */
 const MOTION_MODES = ["off", "double", "display"];
 /** The engines `plugin.video.motion(engine)` accepts. */
-const MOTION_ENGINES = ["amd", "nvidia"];
+const MOTION_ENGINES = ["amd", "nvidia", "apple"];
 /**
  * `plugin.video.motion(engine)`: both requests
  * name the engine; the event names it too and leaves out each plugin's own
@@ -538,7 +538,7 @@ const MOTION_ENGINES = ["amd", "nvidia"];
  */
 export const videoMotion = (scope, engine) => {
     if (typeof engine !== "string" || !MOTION_ENGINES.includes(engine))
-        throw failure("invalid", 'engine must be "amd" or "nvidia"');
+        throw failure("invalid", 'engine must be "amd", "nvidia" or "apple"');
     const modes = () => {
         let map = modeOf.get(scope.runtime);
         if (!map)

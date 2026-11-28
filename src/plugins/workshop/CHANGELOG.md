@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.52
+
+- The vendored SDK is 1.11.5 (`npm run vendor:sdk`): `MotionEngine` gains `"apple"` (Apple's frame interpolation on macOS) and `TestHost.appleMotion`, so the documentation tree, the types the AI's tools check against and `llms.txt` know the Apple engine. Who must change: nobody.
+
 ## 2.2.51
 
 - The vendored SDK is 1.11.4 (`npm run vendor:sdk`): the built-in command list puts Window: Picture-in-Picture under Tools ▸ in the right-click menu (it was in the command palette only), so the documentation tree and `llms.txt` describe the menu the player shows. Who must change: nobody.
