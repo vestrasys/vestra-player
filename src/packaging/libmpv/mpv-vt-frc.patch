@@ -51,7 +51,7 @@
  extern const struct mp_user_filter_entry vf_gpu;
 --- a/video/filter/vf_vtfrc.m
 +++ b/video/filter/vf_vtfrc.m
-@@ -0,0 +1,1253 @@
+@@ -0,0 +1,1307 @@
 +/*
 + * This file is part of mpv.
 + *
@@ -139,7 +139,8 @@
 +// Interpolation failures in a row before the filter gives up.
 +#define MAX_FAILURES 5
 +// Failed low-latency calls whose buffers are leaked on purpose (see
-+// leak_failed_call) before the filter gives up, per filter instance.
++// leak_failed_call), per process: after this many the low-latency
++// interpolator is not used again in this process.
 +#define MAX_LEAKS 5
 +// Consecutive frames further apart than this are not interpolated (a
 +// discontinuity rather than a frame step).
@@ -351,16 +352,28 @@
 +                 destinationFrames:@[dst]] autorelease];
 +}
 +
-+// On macOS 26.2 a failing low-latency call (-19740) releases buffers it does
-+// not own: the retain count of the previous frame's buffer dropped while our
-+// references and the frame objects were alive, and frames shown later
-+// crashed in mpv's renderer. Not seen with the regular processor. After a
-+// failed low-latency call everything the call saw is leaked on purpose
-+// (three buffers and the frame objects); the filter counts these and gives
-+// up after MAX_LEAKS, so the leak stays bounded.
++// On macOS 26.2 a failing low-latency call releases buffers it does not
++// own: with -19740 (unpadded frames) the previous frame's buffer lost a
++// reference while ours and the frame objects were alive (2 -> 1), and
++// releasing ours afterwards crashed. The size refusal -19730 ("Processor is
++// not initialized", the probe's expected answer above the size limit) does
++// not: counts unchanged and 30 refused sessions released cleanly. Not seen
++// with the regular processor. So after a failed low-latency call with any
++// other code everything the call saw is leaked on purpose (three buffers and
++// the frame objects); ll_leaks counts these for the process, and from
++// MAX_LEAKS on the low-latency interpolator is not used again.
++#define LL_REFUSED_SIZE (-19730)
++static atomic_int ll_leaks;
++
++static bool ll_leaks_left(void)
++{
++    return atomic_load(&ll_leaks) < MAX_LEAKS;
++}
++
 +static void leak_failed_call(CVPixelBufferRef a, CVPixelBufferRef b,
 +                             CVPixelBufferRef d, id fa, id fb, id fd, id params)
 +{
++    atomic_fetch_add(&ll_leaks, 1);
 +    CFRetain(a);
 +    CFRetain(b);
 +    CFRetain(d);
@@ -396,8 +409,9 @@
 +            snprintf(what, sizeof(what), "%dx%d refused on the first frame",
 +                     s->w, s->h);
 +            describe(why, size, what, err);
-+            if (params && s->engine == ENGINE_LOWLATENCY)
-+                leak_failed_call(a, b, d, fa, fb, fd, params); // once per session
++            if (params && s->engine == ENGINE_LOWLATENCY &&
++                (!err || err.code != LL_REFUSED_SIZE))
++                leak_failed_call(a, b, d, fa, fb, fd, params);
 +        }
 +    } else {
 +        snprintf(why, size, "could not allocate %dx%d frames", s->w, s->h);
@@ -443,6 +457,38 @@
 +    return true;
 +}
 +
++// Sizes the low-latency interpolator refused (any failure at its start or
++// probe), for the process: each size is tried once, so removing and adding
++// the filter does not start and probe a session again for every add.
++static pthread_mutex_t refused_lock = PTHREAD_MUTEX_INITIALIZER;
++static struct { int w, h; char why[256]; } refused[32];
++static int num_refused;
++
++static bool ll_refused(int w, int h, char *why, size_t size)
++{
++    bool found = false;
++    pthread_mutex_lock(&refused_lock);
++    for (int n = 0; n < num_refused && !found; n++) {
++        if (refused[n].w == w && refused[n].h == h) {
++            snprintf(why, size, "%s (known from an earlier session)", refused[n].why);
++            found = true;
++        }
++    }
++    pthread_mutex_unlock(&refused_lock);
++    return found;
++}
++
++static void ll_remember_refusal(int w, int h, const char *why)
++{
++    pthread_mutex_lock(&refused_lock);
++    int n = num_refused < MP_ARRAY_SIZE(refused) ? num_refused++
++                                                 : (int)(MP_ARRAY_SIZE(refused) - 1);
++    refused[n].w = w;
++    refused[n].h = h;
++    snprintf(refused[n].why, sizeof(refused[n].why), "%s", why);
++    pthread_mutex_unlock(&refused_lock);
++}
++
 +static void session_start(struct session *s)
 +{
 +    @autoreleasepool {
@@ -452,7 +498,12 @@
 +        if (s->engine_opt != ENGINE_REGULAR) {
 +#if HAVE_LOWLATENCY_SDK
 +            if (@available(macOS 26.0, *)) {
-+                if (VTLowLatencyFrameInterpolationConfiguration.isSupported) {
++                if (!ll_leaks_left()) {
++                    snprintf(why_ll, sizeof(why_ll), "not used after %d failures "
++                             "in this process", MAX_LEAKS);
++                } else if (ll_refused(s->w, s->h, why_ll, sizeof(why_ll))) {
++                    // tried before
++                } else if (VTLowLatencyFrameInterpolationConfiguration.isSupported) {
 +                    id c = [[[VTLowLatencyFrameInterpolationConfiguration alloc]
 +                        initWithFrameWidth:s->w frameHeight:s->h
 +                        numberOfInterpolatedFrames:1] autorelease];
@@ -460,6 +511,8 @@
 +                    ok = c ? open_processor(s, c, why_ll, sizeof(why_ll)) : false;
 +                    if (!c)
 +                        snprintf(why_ll, sizeof(why_ll), "%dx%d configuration refused", s->w, s->h);
++                    if (!ok && !atomic_load(&s->cancel))
++                        ll_remember_refusal(s->w, s->h, why_ll);
 +                } else {
 +                    snprintf(why_ll, sizeof(why_ll), "not supported on this Mac");
 +                }
@@ -725,7 +778,8 @@
 +            } else if (![(VTFrameProcessor *)s->processor
 +                            processWithParameters:params error:&err]) {
 +                describe(j->error, sizeof(j->error), "interpolation failed", err);
-+                if (s->engine == ENGINE_LOWLATENCY) {
++                if (s->engine == ENGINE_LOWLATENCY &&
++                    (!err || err.code != LL_REFUSED_SIZE)) {
 +                    leak_failed_call(j->pa, j->pb, j->dst, fa, fb, fd, params);
 +                    j->leaked = true;
 +                }
@@ -817,7 +871,6 @@
 +    struct mp_image *out[2];
 +    int num_out;
 +    bool eof;
-+    int leaks;               // failed low-latency calls leaked, for the filter's life
 +
 +    // statistics (of the current session)
 +    long long pairs, interpolated, cuts, randoms, failures, failures_in_row;
@@ -1066,14 +1119,15 @@
 +    } else {
 +        p->failures++;
 +        p->failures_in_row++;
-+        p->leaks += j->leaked;
++
 +        const char *why = NULL;
 +        char msg[64];
 +        if (p->failures_in_row >= MAX_FAILURES) {
 +            snprintf(msg, sizeof(msg), "%d times in a row", MAX_FAILURES);
 +            why = msg;
-+        } else if (p->leaks >= MAX_LEAKS) {
-+            snprintf(msg, sizeof(msg), "%d low-latency failures in all", MAX_LEAKS);
++        } else if (j->leaked && !ll_leaks_left()) {
++            snprintf(msg, sizeof(msg), "%d low-latency failures in this process",
++                     MAX_LEAKS);
 +            why = msg;
 +        }
 +        if (why) {
