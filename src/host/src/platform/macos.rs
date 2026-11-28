@@ -717,15 +717,7 @@ pub fn os_facts() -> OsFacts {
     } else {
         format!("{}.{}", v.majorVersion, v.minorVersion)
     };
-    let model = Command::new("/usr/sbin/sysctl")
-        .args(["-n", "hw.model"])
-        .stdin(Stdio::null())
-        .stderr(Stdio::null())
-        .output()
-        .ok()
-        .filter(|output| output.status.success())
-        .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_owned())
-        .filter(|model| !model.is_empty());
+    let model = sysctl("hw.model");
     OsFacts {
         os: "macos",
         name: "macOS".into(),
@@ -733,6 +725,19 @@ pub fn os_facts() -> OsFacts {
         build: build_of(&info.operatingSystemVersionString().to_string()),
         model,
     }
+}
+
+/// One `sysctl -n` value, trimmed; `None` when it is not there.
+fn sysctl(name: &str) -> Option<String> {
+    Command::new("/usr/sbin/sysctl")
+        .args(["-n", name])
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_owned())
+        .filter(|value| !value.is_empty())
 }
 
 /// Installed physical memory, in bytes (`NSProcessInfo.physicalMemory`).
@@ -957,19 +962,6 @@ fn apple_motion_verdict(
     Ok(super::MotionGpu {
         name: chip.unwrap_or_else(|| "Apple silicon".into()),
     })
-}
-
-/// One `sysctl -n` value, trimmed; `None` when it is not there.
-fn sysctl(name: &str) -> Option<String> {
-    Command::new("/usr/sbin/sysctl")
-        .args(["-n", name])
-        .stdin(Stdio::null())
-        .stderr(Stdio::null())
-        .output()
-        .ok()
-        .filter(|output| output.status.success())
-        .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_owned())
-        .filter(|value| !value.is_empty())
 }
 
 /// Nothing to prepare: `vtfrc` needs no environment of its own.

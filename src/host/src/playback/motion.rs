@@ -55,8 +55,9 @@
 //!   setting, so it goes straight to `overload`); behind again:
 //!   the filter goes for this video, with an `overload` reason. Apple's
 //!   converter is judged only once it says its session is ready (it passes
-//!   frames through until then; [`APPLE_READY`]), and an `overload` far
-//!   behind is remembered as this Mac's size limit for the run ([`Learned`]). mpv
+//!   frames through until then, and again after each new session it starts;
+//!   [`APPLE_READY`]), and `overload`s far behind on two playbacks of about
+//!   the same size become this Mac's size limit ([`Learned`]). mpv
 //!   disabling the filter (its log line) takes it out with `failed` and the
 //!   converter's own error; a converter that cannot start on this system
 //!   ([`device_failure`]) is `runtime` for the rest of the run.
@@ -378,25 +379,35 @@ pub struct Facts<'a> {
     /// The video's storage size (`video-params/w`, `h`); `None` while
     /// unknown.
     pub video: Option<(f64, f64)>,
-    /// What this engine could not keep up with in this run, for this
-    /// renderer and mode (engines that learn their size limit, [`Learned`]).
+    /// What this engine could not keep up with in this run with GPU
+    /// rendering, for this mode (engines that learn their size limit,
+    /// [`Learned`]); `None` with software rendering.
     pub learned: Option<&'a Learned>,
 }
 
-/// A size this engine fell far behind on in this run (`overload` losing more
-/// than [`FAR_BEHIND`] of the doubled frames), for one renderer and mode: a
-/// video as large or larger (width × height × the frames a second drawn) is
-/// `size` up front for the rest of the run, a smaller one is still tried.
-/// Apple's converter learns its limit this way rather than from a table:
-/// it runs on the Mac's own chip, and a limit measured on one Mac would
-/// refuse what a faster one keeps up with. Measured 2026-11-28 on an M2
-/// (A1, 60 s each, real files): 1280×534 → low-latency, 9 ms a pair, no
-/// drop; 1920×800 → regular, 35–36 ms (41.7 ms is 24 fps), no drop;
-/// 3840×1600 113–122 ms a pair, far behind (in the player's loop headless:
-/// 40.8 of 48 frames a second, the converter passing frames through while
-/// it stalls, and 34 frames dropped in 4 s: a third of the frames lost). A slower Mac falls behind earlier
-/// and learns a lower limit; a passing slowdown (behind, but not far) is
-/// `overload` for that video only.
+/// A size this engine fell far behind on in this run, for one mode with GPU
+/// rendering: a video as large or larger (width × height × the frames a
+/// second drawn) is `size` up front, a smaller one is still tried. Apple's
+/// converter learns its limit this way rather than from a table: it runs
+/// on the Mac's own chip, and a limit measured on one Mac would refuse what
+/// a faster one keeps up with. Measured 2026-11-28 on an M2 (A1, 60 s each,
+/// real files): 1280×534 → low-latency, 9 ms a pair, no drop; 1920×800 →
+/// regular, 35–36 ms (41.7 ms is 24 fps), no drop; 3840×1600 113–122 ms a
+/// pair, far behind (in the player's loop headless: 40.8 of 48 frames a
+/// second, the converter passing frames through while it stalls, and 34
+/// frames dropped in 4 s: a third of the frames lost).
+///
+/// 1080p on the M2 has only about 14 % headroom, and a fanless Mac that
+/// throttles, memory swapping or another app on the GPU can push one
+/// window far behind, so one such window never decides it. A size is
+/// learned only from [`Strike`]s, `overload`s far behind ([`FAR_BEHIND`])
+/// in a window without a stall of the converter (its "has not answered"
+/// warning), with GPU rendering (software rendering's overload is the CPU
+/// drawing, not the converter), on two playbacks (two sources opened) of
+/// about the same size ([`SAME_SIZE`]); the limit is the smaller of the two.
+/// It holds until a plugin sets a mode of this engine again (the user
+/// retrying) or the player restarts. Every other `overload` is for that
+/// video only.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Learned {
     /// Width × height × frames a second drawn of the video that fell behind.
@@ -412,6 +423,19 @@ pub struct Learned {
 /// short or 5 % dropped, so a video near the edge or a passing slowdown
 /// stays `overload` for that video only.
 pub const FAR_BEHIND: f64 = 0.25;
+
+/// Two strikes are of about the same size when the larger load is at most
+/// this many times the smaller (1080p and 1200p are; 1080p and 4K are not).
+pub const SAME_SIZE: f64 = 1.5;
+
+/// One `overload` far behind that counts towards a [`Learned`] size: the
+/// playback (source generation) it happened on and its load.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Strike {
+    pub generation: u64,
+    pub load: f64,
+    pub words: String,
+}
 
 /// How long Apple's converter may take to say its session is ready
 /// (`… interpolator ready for …`) before its output is judged all the same:
@@ -542,7 +566,7 @@ fn size(facts: &Facts<'_>, mode: Mode) -> Result<(), Reason> {
             return Ok(());
         }
         return Err(Reason::Size(format!(
-            "this video ({}) is too large for {} motion smoothing on this computer: {} could not keep up in this run; smaller videos are still tried",
+            "this video ({}) is too large for {} motion smoothing on this computer: videos of about {} fell far behind twice in this run; smaller videos are still tried, and choosing the mode again tries this size again",
             said(width, height, fps),
             facts.engine.vendor(),
             learned.words
@@ -675,6 +699,9 @@ struct Watch {
     window: Option<(Instant, i64)>,
     /// `estimated-vf-fps` at each look in the window.
     samples: Vec<f64>,
+    /// The converter said it stalled in this window (Apple's `vtfrc`: "the
+    /// processor has not answered"): such a window is not a [`Strike`].
+    stalled: bool,
 }
 
 /// The control worker's motion smoothing: who asked for what, the system's
@@ -743,10 +770,11 @@ pub struct Motion {
     /// of the run; [`device_failure`]).
     failures: BTreeMap<(Engine, String), u32>,
     broken: PerEngine<Option<String>>,
-    /// What each engine that learns its size limit fell far behind on in
-    /// this run, by renderer (GPU rendering now) and mode (Match Display):
-    /// [`Learned`].
-    learned: BTreeMap<(Engine, bool, bool), Learned>,
+    /// What each engine that learns its size limit fell far behind on with
+    /// GPU rendering, by mode (Match Display or not): [`Learned`], from the
+    /// [`Strike`]s so far.
+    learned: BTreeMap<(Engine, bool), Learned>,
+    strikes: BTreeMap<(Engine, bool), Vec<Strike>>,
     /// When the filter went in, and whether its converter said its session
     /// is ready (Apple's; the others are judged from the warm-up on).
     added: Option<Instant>,
@@ -810,6 +838,7 @@ impl Motion {
             failures: BTreeMap::new(),
             broken: PerEngine::default(),
             learned: BTreeMap::new(),
+            strikes: BTreeMap::new(),
             added: None,
             converter_ready: false,
             gate: None,
@@ -951,6 +980,7 @@ impl Motion {
                     format!("motion smoothing cannot work here: {}", reason.message()),
                 ));
             }
+            self.forget(engine);
             self.owners.insert(owner, (engine, mode));
         }
         self.update(mpv, render, effects, Instant::now());
@@ -1054,9 +1084,19 @@ impl Motion {
             return;
         }
         let vtfrc = prefix == Engine::Apple.converter();
-        if vtfrc && level == "info" && text.contains("interpolator ready for") {
+        if vtfrc && text.contains("starting a session for") {
+            // A new session (the first frame, a new video, another size or
+            // format): frames pass through until it is ready, so the
+            // warm-up waits for it again.
+            self.converter_ready = false;
+            self.added = Some(Instant::now());
+            self.watch = Watch::default();
+        } else if vtfrc && level == "info" && text.contains("interpolator ready for") {
             diag!("motion: {}", text.trim());
             self.converter_ready = true;
+        } else if vtfrc && text.contains("has not answered") {
+            self.watch.stalled = true;
+            diag!("motion: {}", text.trim());
         } else if prefix == "vf" && text.contains("Disabling filter") && text.contains(LABEL) {
             self.disabled = true;
             // Looked at at once.
@@ -1193,7 +1233,9 @@ impl Motion {
                 any_rate: self.any_rate,
                 any_size: self.any_size,
                 video: video_size(mpv),
-                learned: self.learned.get(&(engine, gpu_now, mode == Mode::Display)),
+                learned: gpu_now
+                    .then(|| self.learned.get(&(engine, mode == Mode::Display)))
+                    .flatten(),
             },
             mode,
         )
@@ -1453,7 +1495,7 @@ impl Motion {
             self.keep_last(mpv, effects, next);
         }
         self.resample(effects, (mode == Mode::Display).then(|| render.refresh()));
-        if let Some((behind, lost)) = self.watch(mpv, now) {
+        if let Some((behind, lost, stalled)) = self.watch(mpv, now) {
             self.watch = Watch::default();
             if self.performance || !engine.faster_step() {
                 diag!(
@@ -1462,7 +1504,9 @@ impl Motion {
                 );
                 let gpu_rendering = render.now().0 && render.gpu().is_some();
                 self.overload = Some(overload_message(engine, gpu_rendering, &behind));
-                self.learn(mpv, engine, (gpu_rendering, mode, render.refresh()), lost);
+                if gpu_rendering && !stalled {
+                    self.strike(mpv, engine, (mode, render.refresh()), lost);
+                }
                 self.remove(mpv, effects);
             } else {
                 diag!("motion: behind ({behind}); the faster motion search");
@@ -1473,10 +1517,11 @@ impl Motion {
         }
     }
 
-    /// The output since the warm-up: `Some((what, lost))` when a full
-    /// window was behind the doubled rate or dropped too many frames, with
-    /// the share of the doubled frames lost ([`FAR_BEHIND`]).
-    fn watch(&mut self, mpv: &Mpv, now: Instant) -> Option<(String, f64)> {
+    /// The output since the warm-up: `Some((what, lost, stalled))` when a
+    /// full window was behind the doubled rate or dropped too many frames,
+    /// with the share of the doubled frames lost ([`FAR_BEHIND`]) and
+    /// whether the converter stalled in it.
+    fn watch(&mut self, mpv: &Mpv, now: Instant) -> Option<(String, f64, bool)> {
         let flag = |name: &str| mpv.get_property::<bool>(name).unwrap_or(false);
         let playing = !flag("core-idle") && !flag("seeking") && !flag("pause");
         let fps = self.rate_in(mpv);
@@ -1503,6 +1548,7 @@ impl Motion {
         let Some((start, base)) = self.watch.window else {
             self.watch.window = Some((now, dropped));
             self.watch.samples.clear();
+            self.watch.stalled = false;
             return None;
         };
         if let Ok(output) = mpv.get_property::<f64>("estimated-vf-fps")
@@ -1516,45 +1562,84 @@ impl Motion {
         }
         self.watch.window = Some((now, dropped));
         let samples = std::mem::take(&mut self.watch.samples);
+        let stalled = std::mem::take(&mut self.watch.stalled);
         let (target, dropped) = (fps * 2., (dropped - base).max(0));
         let mean = samples.iter().sum::<f64>() / samples.len().max(1) as f64;
         let lost = (1. - mean / target).max(0.) + dropped as f64 / (target * seconds);
-        judge(target, &samples, dropped, seconds).map(|behind| (behind, lost))
+        judge(target, &samples, dropped, seconds).map(|behind| (behind, lost, stalled))
     }
 
-    /// An `overload` far behind ([`FAR_BEHIND`]) on an engine that learns
-    /// its size limit: this video's load is the limit for this renderer
-    /// and mode for the rest of the run (the lowest one learned stays).
-    fn learn(
-        &mut self,
-        mpv: &Mpv,
-        engine: Engine,
-        (gpu_rendering, mode, refresh): (bool, Mode, f64),
-        lost: f64,
-    ) {
+    /// An `overload` far behind ([`FAR_BEHIND`]) with GPU rendering and no
+    /// stall in its window, on an engine that learns its size limit: a
+    /// [`Strike`] for this mode. A second one on another playback of about
+    /// the same size ([`SAME_SIZE`]) makes the smaller load the limit
+    /// ([`Learned`]; the lowest one learned stays).
+    fn strike(&mut self, mpv: &Mpv, engine: Engine, (mode, refresh): (Mode, f64), lost: f64) {
         if !engine.learns_size() || lost <= FAR_BEHIND {
             return;
         }
-        let (Some((width, height)), Some(fps)) = (video_size(mpv), self.rate_in(mpv)) else {
+        let (Some((width, height)), Some(fps), Some(generation)) =
+            (video_size(mpv), self.rate_in(mpv), self.generation)
+        else {
             return;
         };
-        let display = gpu_rendering && mode == Mode::Display;
+        let display = mode == Mode::Display;
         let load = width * height * if display { refresh } else { fps * 2. };
-        let key = (engine, gpu_rendering, display);
+        let words = said(width, height, fps);
+        let key = (engine, display);
+        let strikes = self.strikes.entry(key).or_default();
+        let pair = strikes
+            .iter()
+            .filter(|other| other.generation != generation)
+            .filter(|other| other.load.max(load) <= other.load.min(load) * SAME_SIZE)
+            .map(|other| {
+                if other.load <= load {
+                    (other.load, other.words.clone())
+                } else {
+                    (load, words.clone())
+                }
+            })
+            .min_by(|a, b| a.0.total_cmp(&b.0));
+        // One strike per playback: its latest.
+        strikes.retain(|other| other.generation != generation);
+        strikes.push(Strike {
+            generation,
+            load,
+            words: words.clone(),
+        });
+        let Some((limit, limit_words)) = pair else {
+            diag!(
+                "motion: {words} fell far behind on the {} converter ({:.0} % of the frames lost); a second playback of about this size makes it this computer's limit",
+                engine.as_str(),
+                lost * 100.
+            );
+            return;
+        };
         if self
             .learned
             .get(&key)
-            .is_some_and(|known| known.load <= load)
+            .is_some_and(|known| known.load <= limit)
         {
             return;
         }
-        let words = said(width, height, fps);
         diag!(
-            "motion: {words} is too large for the {} converter on this computer ({:.0} % of the frames lost); it and larger videos are not tried again in this run",
-            engine.as_str(),
-            lost * 100.
+            "motion: {limit_words} and larger are too large for the {} converter on this computer (far behind on two playbacks); not tried again until a plugin sets the mode again",
+            engine.as_str()
         );
-        self.learned.insert(key, Learned { load, words });
+        self.learned.insert(
+            key,
+            Learned {
+                load: limit,
+                words: limit_words,
+            },
+        );
+    }
+
+    /// A plugin set a mode of this engine (the user trying again): what was
+    /// learned about its size limit goes.
+    fn forget(&mut self, engine: Engine) {
+        self.learned.retain(|(e, _), _| *e != engine);
+        self.strikes.retain(|(e, _), _| *e != engine);
     }
 
     /// Put the filter in the chain: in place when it is there (`vf add`

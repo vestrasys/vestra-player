@@ -1727,7 +1727,7 @@ fn apples_size_limit_is_what_fell_far_behind_in_this_run() {
     assert!(!error.fixed());
     assert_eq!(
         error.message(),
-        "this video (3840×2160 at 24 fps) is too large for Apple motion smoothing on this computer: 3840×1600 at 24 fps could not keep up in this run; smaller videos are still tried"
+        "this video (3840×2160 at 24 fps) is too large for Apple motion smoothing on this computer: videos of about 3840×1600 at 24 fps fell far behind twice in this run; smaller videos are still tried, and choosing the mode again tries this size again"
     );
     assert_eq!(
         check(&at((3840., 1600.), Some(&learned)), Mode::Double)
@@ -1741,31 +1741,95 @@ fn apples_size_limit_is_what_fell_far_behind_in_this_run() {
     );
 }
 
+/// A size is learned only from two far-behind playbacks of about that
+/// size with GPU rendering, never from one window, a passing slowdown, a
+/// much smaller or larger video, or AMD's and NVIDIA's (measured tables);
+/// a plugin setting the mode again forgets it.
 #[test]
-fn an_apple_overload_far_behind_is_learned_a_passing_one_is_not() {
+fn an_apple_size_is_learned_from_two_playbacks_far_behind_and_forgotten_on_a_retry() {
     let _one = one_mpv_at_a_time();
     let mpv = mpv();
     play(&mpv, 30);
-    let render = software();
     let mut motion = with_stand_in();
     motion.probe[Engine::Apple] = Some(apple_m2());
-    // Behind but not far (a passing slowdown): this video only.
-    motion.learn(&mpv, Engine::Apple, (false, Mode::Double, 60.), 0.15);
-    assert!(motion.learned.is_empty());
+    let key = (Engine::Apple, false);
+    // Behind but not far (a passing slowdown): no strike.
+    motion.strike(&mpv, Engine::Apple, (Mode::Double, 60.), 0.15);
+    assert!(motion.strikes.is_empty());
     // AMD and NVIDIA keep their measured tables.
-    motion.learn(&mpv, Engine::Amd, (false, Mode::Double, 60.), 0.4);
+    motion.strike(&mpv, Engine::Amd, (Mode::Double, 60.), 0.4);
+    assert!(motion.strikes.is_empty());
+    // Far behind once: a strike, nothing learned.
+    motion.strike(&mpv, Engine::Apple, (Mode::Double, 60.), 0.33);
+    assert_eq!(motion.strikes[&key].len(), 1);
     assert!(motion.learned.is_empty());
-    // Far behind: 320×240 at 30 fps is now this run's limit for software
-    // rendering's Double.
-    motion.learn(&mpv, Engine::Apple, (false, Mode::Double, 60.), 0.33);
-    let learned = &motion.learned[&(Engine::Apple, false, false)];
+    // Far behind again on the same playback: still one strike.
+    motion.strike(&mpv, Engine::Apple, (Mode::Double, 60.), 0.4);
+    assert_eq!(motion.strikes[&key].len(), 1);
+    assert!(motion.learned.is_empty());
+    // A much larger video on another playback is not about the same size.
+    motion.strikes.get_mut(&key).unwrap()[0].load *= 4.;
+    motion.generation = Some(2);
+    motion.strike(&mpv, Engine::Apple, (Mode::Double, 60.), 0.33);
+    assert!(motion.learned.is_empty());
+    // About the same size on a third playback: learned, the smaller load.
+    motion.generation = Some(3);
+    motion.strike(&mpv, Engine::Apple, (Mode::Double, 60.), 0.33);
+    let learned = &motion.learned[&key];
     assert_eq!(learned.words, "320×240 at 30 fps");
-    let error = motion
-        .check_now(&mpv, &render, &Value::Null, Engine::Apple, Mode::Double)
-        .unwrap_err();
-    assert_eq!(error.code(), "size", "{}", error.message());
-    // Match Display with GPU rendering is another limit, not learned yet.
-    assert!(!motion.learned.contains_key(&(Engine::Apple, true, true)));
+    assert_eq!(learned.load, 320. * 240. * 60.);
+    // Match Display is another limit, not learned.
+    assert!(!motion.learned.contains_key(&(Engine::Apple, true)));
+    // Only with GPU rendering: software rendering does not apply it.
+    let error = motion.check_now(&mpv, &software(), &Value::Null, Engine::Apple, Mode::Double);
+    assert_ne!(error.err().map(|e| e.code()), Some("size"));
+    // The user tries again: a plugin sets the mode, and the limit goes.
+    let (events, received) = mpsc::channel();
+    let on = command(
+        1,
+        "video.motion.set",
+        json!({"engine":"apple","mode":"double"}),
+    );
+    let mut effects = Recorded::default();
+    motion.command(&mpv, &software(), &on, &events, &mut effects);
+    assert!(reply(&received).is_ok());
+    assert!(motion.learned.is_empty());
+    assert!(motion.strikes.is_empty());
+}
+
+/// A window in which `vtfrc` said it stalled, or one with software
+/// rendering, is no strike (the apply path decides that before `strike`).
+#[test]
+fn a_stalled_window_is_marked_and_a_new_session_waits_for_ready_again() {
+    let mut motion = with_stand_in();
+    motion.applied = Some(Applied {
+        engine: Engine::Apple,
+        mode: Mode::Double,
+        large: false,
+        performance: false,
+    });
+    motion.log(
+        "vtfrc",
+        "warn",
+        "the processor has not answered for 1000 ms: frames pass through until it does",
+    );
+    assert!(motion.watch.stalled);
+    // A ready session, then a new one (another video or size): the gate
+    // applies again, the warm-up starts afresh.
+    motion.converter_ready = true;
+    motion.watch.since = Some(Instant::now());
+    motion.log(
+        "vtfrc",
+        "v",
+        "starting a session for 1280x534 nv12 (videotoolbox)",
+    );
+    assert!(!motion.converter_ready);
+    assert!(
+        motion
+            .added
+            .is_some_and(|at| at.elapsed() < Duration::from_secs(1))
+    );
+    assert!(motion.watch.since.is_none() && !motion.watch.stalled);
 }
 
 #[test]
@@ -1916,6 +1980,20 @@ fn apples_converter_doubles_in_mpv_without_copy_back() {
     let state = motion.state(&mpv, &render, 1, Engine::Apple, &Value::Null);
     assert_eq!(state["searchMode"], "native", "{state}");
     assert_eq!(state["inChain"], true, "{state}");
+    // The next video, another size, with the filter left in the chain:
+    // vtfrc starts a new session, and the warm-up waits for it again.
+    mpv.command(&["loadfile", "av://lavfi:testsrc=size=640x360:rate=30"])
+        .unwrap();
+    let until = Instant::now() + Duration::from_secs(8);
+    let (mut restarted, mut ready_again) = (false, false);
+    while Instant::now() < until && !ready_again {
+        feed(&mut motion);
+        restarted |= !motion.converter_ready;
+        ready_again = restarted && motion.converter_ready;
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    assert!(restarted, "the new session put the gate back");
+    assert!(ready_again, "and its ready line opened it");
     let off = command(
         1,
         "video.motion.set",
