@@ -4,9 +4,13 @@
 # attaches (and prints in its summary) as src/packaging/deps.json; CI and
 # the packages then use exactly these bytes.
 #
-#   macOS   Homebrew mpv + ffmpeg bottles → collect-macos-deps.mjs (dylib
-#           closure, @rpath, ad-hoc signed, components.json, licenses) and the
-#           source archives of every formula (GPL source offer).
+#   macOS   our libmpv (src/packaging/libmpv/build-macos.sh: the mpv commit
+#           and patches of the Windows build plus the VideoToolbox frame
+#           interpolation filter) against Homebrew's FFmpeg and libraries
+#           (bottles) → collect-macos-deps.mjs --libmpv (dylib closure,
+#           @rpath, ad-hoc signed, components.json, licenses) and the source
+#           archives of mpv (with the patches and build files) and of every
+#           formula (GPL source offer).
 #   Windows deps.json "upstream" pins (our libmpv build from src/packaging/libmpv, BtbN ffmpeg) →
 #           collect-windows-deps.mjs, plus mpv.lib for MSVC.
 name: deps
@@ -38,10 +42,12 @@ concurrency:
 
 jobs:
   macos:
-    name: macOS arm64 (Homebrew)
+    name: macOS arm64 (our libmpv, Homebrew)
     # Homebrew no longer bottles macOS 14 (only sequoia and newer), so the
     # bottles come from macos-15 and the package's minimum is 15.0
-    # (components.json min_macos); see doc/process/ci.md.
+    # (components.json min_macos); see doc/process/ci.md. libmpv is built
+    # here with the macOS 26 SDK (the low-latency interpolator) for
+    # macOS 15.0 (MACOSX_DEPLOYMENT_TARGET in build-macos.sh).
     if: inputs.platforms != 'windows'
     runs-on: macos-15
     timeout-minutes: 60
@@ -54,19 +60,35 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "26"
-      - name: brew install mpv ffmpeg
+      - name: brew install mpv's dependencies, ffmpeg
+        # mpv's libraries as bottles (Homebrew's mpv itself is not used) and
+        # pkgconf for mpv's meson; meson and ninja come from build-macos.sh's
+        # pinned wheels.
         env:
           HOMEBREW_NO_AUTO_UPDATE: "1"
           HOMEBREW_NO_INSTALL_CLEANUP: "1"
           HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: "1"
         run: |
-          brew install mpv ffmpeg
-          brew list --versions mpv ffmpeg
+          brew install --only-dependencies mpv
+          brew install ffmpeg pkgconf
+          brew deps mpv | xargs brew list --versions ffmpeg
+      - name: Xcode with the macOS 26 SDK
+        run: |
+          xcode=$(find /Applications -maxdepth 1 -name 'Xcode_26*.app' | sort -V | tail -1)
+          if [ -z "$xcode" ]; then
+            echo "::error::no Xcode 26 on this runner (the low-latency interpolator needs the macOS 26 SDK)"
+            find /Applications -maxdepth 1 -name 'Xcode*.app'
+            exit 1
+          fi
+          echo "DEVELOPER_DIR=$xcode/Contents/Developer" >> "$GITHUB_ENV"
+          DEVELOPER_DIR="$xcode/Contents/Developer" xcrun --sdk macosx --show-sdk-version
+      - name: Build libmpv
+        run: src/packaging/libmpv/build-macos.sh "$RUNNER_TEMP/libmpv" mpv
       - name: Collect the closure
         env:
           SOURCES: ${{ inputs.sources }}
         run: |
-          args=(--out "$RUNNER_TEMP/deps")
+          args=(--out "$RUNNER_TEMP/deps" --libmpv "$RUNNER_TEMP/libmpv/stage/usr/local")
           if [ "$SOURCES" = true ]; then args+=(--sources "$RUNNER_TEMP/sources"); fi
           node src/packaging/collect-macos-deps.mjs "${args[@]}"
           mkdir -p "$RUNNER_TEMP/out"
@@ -83,6 +105,24 @@ jobs:
             echo "::error::a reference outside the closure is left"
             exit 1
           fi
+      - name: libmpv has the filter and loads on macOS 15.0
+        # vtfrc checks macOS 15.4 / 26 at run time; VideoToolbox's frame
+        # processor classes must be weak imports, or libmpv fails to load
+        # on macOS before 15.4.
+        run: |
+          lib="$RUNNER_TEMP/deps/lib/libmpv.2.dylib"
+          otool -l "$lib" | grep -A4 LC_BUILD_VERSION | grep -E 'minos|sdk'
+          minos=$(otool -l "$lib" | awk '/LC_BUILD_VERSION/ {f=1} f && $1 == "minos" {print $2; exit}')
+          [ "${minos%%.*}" -le 15 ] || { echo "::error::libmpv needs macOS $minos"; exit 1; }
+          nm -m "$lib" | grep -E "_OBJC_CLASS_[$]_VT(FrameProcessor|FrameRateConversion|LowLatency)" | tee "$RUNNER_TEMP/vt.txt"
+          grep -q VTLowLatencyFrameInterpolationConfiguration "$RUNNER_TEMP/vt.txt" || { echo "::error::built without the low-latency interpolator"; exit 1; }
+          if grep -v 'weak external' "$RUNNER_TEMP/vt.txt"; then
+            echo "::error::VideoToolbox frame processor classes not weakly imported"
+            exit 1
+          fi
+          strings "$lib" > "$RUNNER_TEMP/strings.txt"
+          grep -q 'VideoToolbox frame interpolation' "$RUNNER_TEMP/strings.txt" || { echo "::error::vtfrc is missing"; exit 1; }
+          jq -r '.min_macos, (.components[] | select(.name == "mpv") | "\(.name) \(.version)")' "$RUNNER_TEMP/deps/components.json"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: deps-macos

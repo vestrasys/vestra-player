@@ -20,12 +20,23 @@
  * every formula is fetched (`brew fetch -s`) into <dir> for the GPL source
  * offer, and its SHA-256 recorded.
  *
- *   node packaging/collect-macos-deps.mjs --out <dir> [--sources <dir>]
+ * With --libmpv <prefix> the libmpv is ours (libmpv/build-macos.sh: the mpv
+ * commit and patches of the Windows build plus the VideoToolbox frame
+ * interpolation filter, linked against Homebrew's FFmpeg and libraries)
+ * instead of Homebrew's mpv: <prefix>/lib/libmpv.2.dylib and
+ * <prefix>/include/mpv; its component entry comes from
+ * <prefix>/vestra-libmpv.json (version, license, source, patches), its
+ * license files from <prefix>/licenses, and with --sources its source archive
+ * and patches are copied (not fetched). Its dependencies are still
+ * Homebrew's, collected as before.
+ *
+ *   node packaging/collect-macos-deps.mjs --out <dir> [--sources <dir>] [--libmpv <prefix>]
  */
 import {
   chmod,
   copyFile,
   mkdir,
+  readFile,
   readdir,
   realpath,
   symlink,
@@ -48,8 +59,22 @@ import {
 reportErrors();
 const options = parseArgs(process.argv.slice(2));
 if (!options.out)
-  fail("usage: collect-macos-deps.mjs --out <dir> [--sources <dir>]");
+  fail(
+    "usage: collect-macos-deps.mjs --out <dir> [--sources <dir>] [--libmpv <prefix>]",
+  );
 const out = resolve(options.out);
+// Our own libmpv build (libmpv/build-macos.sh) instead of Homebrew's mpv.
+const own = options.libmpv
+  ? {
+      prefix: await realpath(resolve(options.libmpv)),
+      ...JSON.parse(
+        await readFile(
+          join(resolve(options.libmpv), "vestra-libmpv.json"),
+          "utf8",
+        ),
+      ),
+    }
+  : null;
 const prefix = capture("brew", ["--prefix"]).trim();
 const cellar = capture("brew", ["--cellar"]).trim();
 
@@ -102,6 +127,8 @@ function resolveReference(reference, from, info) {
 }
 
 const formulaOf = (real) => {
+  if (own && real.startsWith(`${own.prefix}/`))
+    return { name: own.name, version: own.version, keg: own.prefix, own: true };
   if (!real.startsWith(`${cellar}/`))
     throw new Error(`${real} is not in the Homebrew Cellar`);
   const [name, version] = real.slice(cellar.length + 1).split("/");
@@ -111,7 +138,13 @@ const formulaOf = (real) => {
 // ------------------------------------------------------------ closure
 
 const seeds = [
-  { path: join(prefix, "opt/mpv/lib/libmpv.2.dylib"), kind: "lib" },
+  {
+    path: join(
+      own ? own.prefix : join(prefix, "opt/mpv"),
+      "lib/libmpv.2.dylib",
+    ),
+    kind: "lib",
+  },
   { path: join(prefix, "opt/ffmpeg/bin/ffmpeg"), kind: "bin" },
   { path: join(prefix, "opt/ffmpeg/bin/ffprobe"), kind: "bin" },
 ];
@@ -211,12 +244,20 @@ for (const entry of files.values()) {
     if (!isSystem(reference) && !reference.startsWith("@rpath/"))
       throw new Error(`${entry.name} still references ${reference}`);
 }
-await copy(join(prefix, "opt/mpv/include/mpv"), join(out, "include/mpv"));
+await copy(
+  join(own ? own.prefix : join(prefix, "opt/mpv"), "include/mpv"),
+  join(out, "include/mpv"),
+);
 
 // ------------------------------------------------------------ components
 
 const formulae = new Map();
+let ownFiles = [];
 for (const entry of files.values()) {
+  if (entry.formula.own) {
+    ownFiles.push(`${entry.kind}/${entry.name}`);
+    continue;
+  }
   const { name, version, keg } = entry.formula;
   const formula = formulae.get(name) ?? { name, version, keg, files: [] };
   formula.files.push(`${entry.kind}/${entry.name}`);
@@ -330,6 +371,66 @@ for (const item of info) {
   if (!component.license_files.length) {
     missing++;
     console.warn(`warning: ${item.name} has no license file`);
+  }
+  components.push(component);
+}
+if (own) {
+  // Our libmpv: license files and patches from its prefix; with --sources
+  // the mpv archive it was built from (checked) and the patches.
+  const licenseDir = join(out, "licenses", own.name);
+  await copy(join(own.prefix, "licenses"), licenseDir);
+  await copy(join(own.prefix, "patches"), join(licenseDir, "patches"));
+  const listed = (await readdir(licenseDir)).filter(
+    (file) => file !== "patches",
+  );
+  const component = {
+    name: own.name,
+    version: own.version,
+    license: own.license,
+    homepage: own.homepage,
+    source: {
+      url: own.source.url,
+      sha256: own.source.sha256,
+      tag: null,
+      revision: own.source.revision,
+      patches: own.patches,
+      build: own.build,
+    },
+    files: ownFiles.sort(),
+    license_files: [
+      ...listed.map((file) => `licenses/${own.name}/${file}`),
+      ...own.patches.map(
+        (patch) => `licenses/${own.name}/patches/${patch.file}`,
+      ),
+    ].sort(),
+  };
+  if (options.sources) {
+    const dir = resolve(options.sources);
+    await mkdir(dir, { recursive: true });
+    const file = `${own.name}-${basename(own.source.archive_path)}`;
+    await copyFile(own.source.archive_path, join(dir, file));
+    const sha = await sha256File(join(dir, file));
+    if (sha !== own.source.sha256)
+      throw new Error(`${file}: SHA-256 ${sha}, expected ${own.source.sha256}`);
+    for (const patch of own.patches)
+      await copyFile(
+        join(own.prefix, "patches", patch.file),
+        join(dir, `${own.name}-${patch.file}`),
+      );
+    // How it was built: build-macos.sh and its README.
+    const build = exists(join(own.prefix, "build"))
+      ? await readdir(join(own.prefix, "build"))
+      : [];
+    for (const file of build)
+      await copyFile(
+        join(own.prefix, "build", file),
+        join(dir, `${own.name}-build-${file}`),
+      );
+    component.source.build_files = build.map(
+      (file) => `${own.name}-build-${file}`,
+    );
+    component.source.archive = file;
+    component.source.archive_sha256 = sha;
   }
   components.push(component);
 }

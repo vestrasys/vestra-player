@@ -1,10 +1,10 @@
 {
   "repository": "vestrasys/vestra-player",
-  "release": "deps-20261122.1",
+  "release": "deps-20261128.1",
   "assets": {
     "macos-arm64": {
       "file": "vestra-deps-macos-arm64.tar.xz",
-      "sha256": "ff033d84465ee606f67058045bdf37aab0e1137bbf35b7632badf5acea9541ce"
+      "sha256": "07eb817d83bf323d25495dc7ea8f7343d168b47652798a8fcf0231581791bb4c"
     },
     "windows-x64": {
       "file": "vestra-deps-windows-x64.zip",
@@ -12,7 +12,7 @@
     },
     "macos-arm64-sources": {
       "file": "vestra-deps-macos-arm64-sources.tar",
-      "sha256": "be200a0e4204ad0d3126e7339f8af4eac70a428802bdb4f42b34e08a2a57d7b4"
+      "sha256": "e708a62924daf71dfee8281b077d9b6cf35e10f881a0d229f835181ef1342fdf"
     }
   },
   "upstream": {
