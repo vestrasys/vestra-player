@@ -417,6 +417,18 @@ if (own) {
         join(own.prefix, "patches", patch.file),
         join(dir, `${own.name}-${patch.file}`),
       );
+    // How it was built: build-macos.sh and its README.
+    const build = exists(join(own.prefix, "build"))
+      ? await readdir(join(own.prefix, "build"))
+      : [];
+    for (const file of build)
+      await copyFile(
+        join(own.prefix, "build", file),
+        join(dir, `${own.name}-build-${file}`),
+      );
+    component.source.build_files = build.map(
+      (file) => `${own.name}-build-${file}`,
+    );
     component.source.archive = file;
     component.source.archive_sha256 = sha;
   }

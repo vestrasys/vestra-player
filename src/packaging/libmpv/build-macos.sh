@@ -81,6 +81,15 @@ tools() {
 
 build_mpv() {
   command -v meson > /dev/null || tools
+  # The low-latency interpolator (VTLowLatencyFrameInterpolation) is only in
+  # the macOS 26 SDK: an older SDK builds the filter without it, and 720p
+  # then gets the regular interpolator, which does not keep up (README.md).
+  # (DEVELOPER_DIR picks the Xcode; the deployment target stays 15.0.)
+  local sdk; sdk=$(xcrun --sdk macosx --show-sdk-version)
+  if [ "${sdk%%.*}" -lt 26 ] && [ -z "${ALLOW_OLD_SDK:-}" ]; then
+    echo "macOS SDK $sdk: the low-latency interpolator needs the macOS 26 SDK (Xcode 26); ALLOW_OLD_SDK=1 builds without it"
+    exit 1
+  fi
   fetch "$MPV_URL" "$MPV_SHA256" "$WORK/dl/mpv-$MPV_COMMIT.tar.gz"
   local src=$WORK/src/mpv-$MPV_COMMIT
   if [ ! -d "$src" ]; then
@@ -112,9 +121,11 @@ build_mpv() {
   grep -q 'hwdevice' <<< "$help" || { echo "lavfi has no hwdevice option"; exit 1; }
   # What collect-macos-deps.mjs --libmpv needs to list this libmpv as a
   # component (components.json): version, license, source and patches.
-  mkdir -p "$PREFIX/licenses" "$PREFIX/patches"
+  # The build files go with the source archive (--sources: GPL source offer).
+  mkdir -p "$PREFIX/licenses" "$PREFIX/patches" "$PREFIX/build"
   cp "$src"/{LICENSE.GPL,LICENSE.LGPL,Copyright} "$PREFIX/licenses/"
   cp "${PATCHES[@]/#/$HERE/}" "$PREFIX/patches/"
+  cp "$HERE/build-macos.sh" "$HERE/README.md" "$PREFIX/build/"
   local version; version="$(sed 's/-UNKNOWN$//' "$src/MPV_VERSION")+${MPV_COMMIT:0:10}"
   {
     echo "{"
@@ -141,6 +152,7 @@ build_mpv() {
       echo "$patch $(shasum -a 256 "$HERE/$patch" | cut -d' ' -f1)"
     done
     echo "build-macos.sh $(shasum -a 256 "$HERE/build-macos.sh" | cut -d' ' -f1)"
+    echo "macOS SDK $sdk ($(xcode-select -p))"
     echo "homebrew $(brew --version | head -1)"
     brew list --versions $(brew deps mpv) | sed 's/^/  /'
     echo "MACOSX_DEPLOYMENT_TARGET $MACOSX_DEPLOYMENT_TARGET"

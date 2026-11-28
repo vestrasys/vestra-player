@@ -58,11 +58,24 @@ Why we build it: motion smoothing's Apple engine needs the `vtfrc` filter, and H
 
 **Size of the change.** About 1,200 lines: one new file, `video/filter/vf_vtfrc.m` (Objective-C, manual reference counting as the rest of mpv), and 16 lines in `meson.build`, `meson.options` (`-Dvideotoolbox-frc`) and `filters/user_filters.{c,h}`, against mpv `e471496c56` with `mpv-lavfi-hwdevice.patch` applied first.
 
+## Log lines the player relies on
+
+The host (`src/host/src/playback/motion.rs`) reads these `vtfrc` log lines (prefix `vtfrc`); a change to the patch must keep their wording, level and meaning, or change the host with it:
+
+| Level | Text (start of line) | When |
+| --- | --- | --- |
+| error | `VideoToolbox frame interpolation (<engine>) is not available on this system` | at `vf add`: no engine on this Mac or system (before macOS 15.4, Intel); the filter is not created |
+| v (verbose) | `starting a session for <W>x<H> <format>` | a new session starts (first frame, new size or format); frames pass through until it is ready |
+| info | `<engine> interpolator ready for <W>x<H> after <N> ms` | the session is ready; doubling starts |
+| warn | `the processor has not answered for <N> ms: frames pass through until it does` | a stall (above) |
+
 ## Building and packaging
 
 `./build-macos.sh <work dir> all` (or the steps `tools`, `mpv`, `package`): meson and ninja from pinned wheels into `<work dir>/venv`; mpv fetched, checked, patched, configured with Homebrew's meson options (lua=luajit, javascript, libarchive, uchardet, vulkan; no build date, no docs) and installed into `<work dir>/stage/usr/local` (`lib/libmpv.2.dylib`, `include/mpv`, `bin/mpv`, `BUILD-INFO.txt`, and `vestra-libmpv.json`, `licenses/`, `patches/` for the packaging). The binaries name the neutral prefix `/usr/local`, and source paths are mapped, so the work directory is not in them (one `__FILE__` from a header compiled through Swift's importer still is). `MACOSX_DEPLOYMENT_TARGET` defaults to 15.0; the filter checks for macOS 15.4 and 26 at run time. It needs the Xcode command line tools, Homebrew with mpv's dependencies (`brew deps mpv`) and python3; nothing is installed into the system.
 
-`package` runs `collect-macos-deps.mjs --libmpv <work dir>/stage/usr/local --out <work dir>/deps`: the same relocatable deps directory as from Homebrew's mpv (dylib closure with `@rpath`, ad-hoc signed, Homebrew's `ffmpeg` and `ffprobe`, `components.json`), with this libmpv as the seed. Its `mpv` component comes from `vestra-libmpv.json` (version `0.41.0+e471496c56`, license, the source archive's URL and SHA-256, the patches and their SHA-256), with mpv's license files and both patches under `licenses/mpv/`; with `--sources <dir>` the mpv archive (checked) and the patches are copied there instead of `brew fetch`. Without `--libmpv` the collector does what it did. To ship it, `deps.yml` would build with this script before the collector (or a pinned prebuilt prefix, as on Windows); not done yet.
+`package` runs `collect-macos-deps.mjs --libmpv <work dir>/stage/usr/local --out <work dir>/deps`: the same relocatable deps directory as from Homebrew's mpv (dylib closure with `@rpath`, ad-hoc signed, Homebrew's `ffmpeg` and `ffprobe`, `components.json`), with this libmpv as the seed. Its `mpv` component comes from `vestra-libmpv.json` (version `0.41.0+e471496c56`, license, the source archive's URL and SHA-256, the patches and their SHA-256), with mpv's license files and both patches under `licenses/mpv/`; with `--sources <dir>` the mpv archive (checked) and the patches are copied there instead of `brew fetch`. Without `--libmpv` the collector does what it did.
+
+**Shipping it.** `deps.yml` (job `macos`, on `macos-15`) builds with this script and collects with `--libmpv`: Homebrew bottles for mpv's dependencies and FFmpeg, the runner's Xcode 26 for the macOS 26 SDK (`build-macos.sh` refuses an older SDK unless `ALLOW_OLD_SDK=1`: without it the filter has no low-latency interpolator), deployment target 15.0. With `--sources` the sources tar also carries mpv's archive, both patches and `build-macos.sh` with this README (`mpv-build-*`, listed in `components.json` as `source.build_files`). The job then checks that the shipped libmpv has `vtfrc`, targets macOS 15 and imports `VTFrameProcessor`, `VTFrameRateConversion*` and `VTLowLatencyFrameInterpolation*` weakly: libmpv loads on macOS 15.0, and the filter checks the system when it is created (`@available`): before 15.4 it is not created ("not available on this system", the `vf add` is refused); 15.4 to 25 have only the regular interpolator.
 
 ## Measurements (M2 MacBook Air, 8 GB, macOS 26.2, 2026-11-28)
 
@@ -85,6 +98,5 @@ Without the filter the 1080p video decodes at 9 % CPU and 5 % GPU. Session start
 ## Known limits (follow-ups)
 
 - A cancelled session start (the filter removed while its session starts) still runs to completion on its queue before the session is freed.
-- The build is not byte-reproducible: one source path (a header's `__FILE__` compiled through Swift's importer) is in the binary, the Homebrew libraries are not pinned, and `min_macos` follows the local bottles (26.0 here; 15.x from a macOS 15 builder).
-- `collect-macos-deps.mjs --sources` copies the mpv archive and the patches, not the build scripts.
+- The build is not byte-reproducible: one source path (a header's `__FILE__` compiled through Swift's importer) is in the binary, the Homebrew libraries are not pinned, and `min_macos` follows the bottles (26.0 from a local macOS 26 Homebrew; 15.x on `deps.yml`'s macOS 15 runner).
 - Full-range NV12 (`420f`) is converted to video range (`420v`) for the low-latency interpolator and back, so its in-between frames lose precision in the range conversion; not measured.
